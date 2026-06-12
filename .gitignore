@@ -1,0 +1,72 @@
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+out/
+
+# NuGet
+*.nupkg
+/packages/
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/*
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Debugging
+*.log
+*.vspscc
+
+# Resharper
+_ReSharper*/
+*.DotSettings.user
+
+# DotCover
+*.dotCover
+
+# Test result
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Publish
+publish/
+wwwroot/
+
+# User secrets
+secrets.json
+secrets/*.json
+
+# Mono
+.mono/
+
+# Azure Functions
+.local.settings.json
+
+# Node
+node_modules/
+npm-debug.log
+yarn.lock
+package-lock.json
+
+# Generated files
+*.generated.cs
