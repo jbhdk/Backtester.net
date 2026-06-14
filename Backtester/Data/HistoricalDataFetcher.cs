@@ -16,7 +16,7 @@ namespace Backtester.Data
         private readonly string _dataFolder;
         private readonly TimeSpan _freshnessWindow = TimeSpan.FromDays(7);
 
-        public HistoricalDataFetcher(IHistoricalDataProvider provider, string? dataFolder = null)
+        public HistoricalDataFetcher(IHistoricalDataProvider provider, string dataFolder = null)
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _csv = new CsvBarLoader();

@@ -14,7 +14,7 @@ namespace Backtester.Data
     {
         private readonly HttpClient _http;
 
-        public YahooHistoricalDataProvider(HttpClient? http = null)
+        public YahooHistoricalDataProvider(HttpClient http = null)
         {
             _http = http ?? new HttpClient();
         }
@@ -44,7 +44,7 @@ namespace Backtester.Data
             using var sr = new StringReader(csv);
             var header = sr.ReadLine();
             var list = new List<Candle>();
-            string? line;
+            string line;
             while ((line = sr.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line))
