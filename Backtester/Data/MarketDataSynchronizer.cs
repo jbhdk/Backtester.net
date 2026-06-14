@@ -1,6 +1,6 @@
 using System;
 
-namespace Backtester.Engine
+namespace Backtester.Data
 {
     public class MarketDataSynchronizer
     {

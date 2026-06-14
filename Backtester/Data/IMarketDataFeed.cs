@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Backtester.Engine
+namespace Backtester.Data
 {
     using Core;
 
