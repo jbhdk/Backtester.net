@@ -70,9 +70,9 @@ namespace Backtester.Data
             using (var w = new StreamWriter(tmp, false))
             {
                 w.WriteLine(Header);
-                foreach (var c in candles.OrderBy(c => c.Timestamp))
+                foreach (var candle in candles.OrderBy(candle => candle.Timestamp))
                 {
-                    w.WriteLine(Format(c));
+                    w.WriteLine(Format(candle));
                 }
             }
 
@@ -86,9 +86,9 @@ namespace Backtester.Data
             var existing = ReadAll(path).ToList();
             existing.AddRange(additional);
             var merged = existing
-                .GroupBy(c => c.Timestamp)
+                .GroupBy(candle => candle.Timestamp)
                 .Select(g => g.Last())
-                .OrderBy(c => c.Timestamp)
+                .OrderBy(candle => candle.Timestamp)
                 .ToList();
 
             WriteAll(path, merged);
@@ -99,7 +99,7 @@ namespace Backtester.Data
             var list = ReadAll(path);
             if (list.Count == 0)
                 return null;
-            return list.Max(c => c.Timestamp);
+            return list.Max(candle => candle.Timestamp);
         }
 
         private static string Format(Candle c)

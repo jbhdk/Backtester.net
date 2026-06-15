@@ -34,11 +34,11 @@ namespace Backtester.Data
             var existing = _csv.ReadAll(filename).ToList();
 
             // If latest candle is recent enough and covers requested range, return filtered
-            var latest = existing.Count == 0 ? (DateTime?)null : existing.Max(c => c.Timestamp);
+            var latest = existing.Count == 0 ? (DateTime?)null : existing.Max(candle => candle.Timestamp);
             var now = DateTime.UtcNow;
             if (latest != null && latest >= now - _freshnessWindow && CoversRange(existing, fromUtc, toUtc))
             {
-                return existing.Where(c => c.Timestamp >= fromUtc && c.Timestamp <= toUtc).ToList();
+                return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).ToList();
             }
 
             // Need to fetch missing data
@@ -55,7 +55,7 @@ namespace Backtester.Data
             if (nextNeeded > toUtc)
             {
                 // existing data covers range but was stale by time; still return filtered
-                return existing.Where(c => c.Timestamp >= fromUtc && c.Timestamp <= toUtc).ToList();
+                return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).ToList();
             }
 
             var fetchedMore = (await _provider.FetchAsync(symbol, nextNeeded, toUtc, interval, ct).ConfigureAwait(false)).ToList();
@@ -65,14 +65,14 @@ namespace Backtester.Data
                 existing.AddRange(fetchedMore);
             }
 
-            return existing.Where(c => c.Timestamp >= fromUtc && c.Timestamp <= toUtc).OrderBy(c => c.Timestamp).ToList();
+            return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
         }
 
         private static bool CoversRange(List<Candle> list, DateTime fromUtc, DateTime toUtc)
         {
             if (list.Count == 0) return false;
-            var min = list.Min(c => c.Timestamp);
-            var max = list.Max(c => c.Timestamp);
+            var min = list.Min(candle => candle.Timestamp);
+            var max = list.Max(candle => candle.Timestamp);
             return min <= fromUtc && max >= toUtc;
         }
 

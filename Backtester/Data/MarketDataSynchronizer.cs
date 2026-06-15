@@ -17,8 +17,11 @@ namespace Backtester.Data
         private class InMemoryMarketDataFeed : IMarketDataFeed
         {
             private readonly List<DateTime> _timeline;
+            // Key: symbol/ticker (string) -> sequence of historical candles for that symbol
             private readonly Dictionary<string, IReadOnlyList<Candle>> _series;
+            // Key: symbol/ticker (string) -> current index into the series for that symbol
             private readonly Dictionary<string, int> _indices;
+            // Key: symbol/ticker (string) -> history buffer (list of candles) for that symbol
             private readonly Dictionary<string, List<Candle>> _historyBuffers;
             private int _pos = -1;
 
@@ -43,23 +46,23 @@ namespace Backtester.Data
             {
                 if (_pos + 1 >= _timeline.Count) return false;
                 _pos++;
-                var t = _timeline[_pos];
+                var currentTime = _timeline[_pos];
 
                 // for each symbol, advance index while next bar timestamp <= t
                 foreach (var sym in _series.Keys)
                 {
-                    var list = _series[sym];
-                    var idx = _indices[sym];
-                    while (idx < list.Count && DateTime.SpecifyKind(list[idx].Timestamp, DateTimeKind.Utc) <= t)
-                        idx++;
-                    // idx now points to first bar > t; last <= t is idx-1
-                    _indices[sym] = idx;
-                    var lastIdx = idx - 1;
-                    if (lastIdx >= 0)
+                    var seriesList = _series[sym];
+                    var index = _indices[sym];
+                    while (index < seriesList.Count && DateTime.SpecifyKind(seriesList[index].Timestamp, DateTimeKind.Utc) <= currentTime)
+                        index++;
+                    // index now points to first bar > currentTime; last <= currentTime is index-1
+                    _indices[sym] = index;
+                    var lastIndex = index - 1;
+                    if (lastIndex >= 0)
                     {
-                        var bar = list[lastIdx];
+                        var latestBar = seriesList[lastIndex];
                         // append copy to history buffer
-                        _historyBuffers[sym].Add(bar);
+                        _historyBuffers[sym].Add(latestBar);
                     }
                 }
 
@@ -68,32 +71,33 @@ namespace Backtester.Data
 
             public MarketSlice GetCurrentSlice()
             {
-                var dict = new Dictionary<string, Candle>();
-                var t = CurrentTime;
+                // Key: symbol/ticker (string) -> latest Candle at current timestamp (may be null)
+                var barsBySymbol = new Dictionary<string, Candle>();
+                var currentTime = CurrentTime;
                 foreach (var sym in _series.Keys)
                 {
-                    var idx = _indices[sym];
-                    var lastIdx = idx - 1;
-                    Candle bar = null;
-                    if (lastIdx >= 0)
+                    var index = _indices[sym];
+                    var lastIndex = index - 1;
+                    Candle latestBar = null;
+                    if (lastIndex >= 0)
                     {
-                        var candidate = _series[sym][lastIdx];
-                        if (DateTime.SpecifyKind(candidate.Timestamp, DateTimeKind.Utc) <= t)
-                            bar = candidate;
+                        var candidateBar = _series[sym][lastIndex];
+                        if (DateTime.SpecifyKind(candidateBar.Timestamp, DateTimeKind.Utc) <= currentTime)
+                            latestBar = candidateBar;
                     }
-                    dict[sym] = bar;
+                    barsBySymbol[sym] = latestBar;
                 }
 
-                return new MarketSlice { Timestamp = t, BarsBySymbol = dict };
+                return new MarketSlice { Timestamp = currentTime, BarsBySymbol = barsBySymbol };
             }
 
             public IReadOnlyList<Candle> GetLookback(string symbol, int lookback)
             {
                 if (!_historyBuffers.ContainsKey(symbol)) return Array.Empty<Candle>();
-                var buf = _historyBuffers[symbol];
+                var buffer = _historyBuffers[symbol];
                 if (lookback <= 0) return Array.Empty<Candle>();
-                var take = Math.Min(lookback, buf.Count);
-                var result = buf.Skip(Math.Max(0, buf.Count - take)).ToList();
+                var take = Math.Min(lookback, buffer.Count);
+                var result = buffer.Skip(Math.Max(0, buffer.Count - take)).ToList();
                 // return newest-first as contract said
                 result.Reverse();
                 return result;

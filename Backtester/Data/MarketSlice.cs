@@ -10,7 +10,7 @@ namespace Backtester.Data
         // The timestamp (UTC) for this slice
         public required DateTime Timestamp { get; set; }
 
-        // Mapping of symbol -> latest available bar at `Timestamp` (may be null if absent)
+        // Mapping of symbol/ticker (string) -> latest available bar at `Timestamp` (may be null if absent)
         public required IReadOnlyDictionary<string, Candle> BarsBySymbol { get; set; }
 
         // Helper: whether a bar exists for a symbol in this slice

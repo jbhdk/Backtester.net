@@ -85,7 +85,7 @@ namespace Backtester.Data
                 });
             }
 
-            return list.OrderBy(c => c.Timestamp).ToList();
+            return list.OrderBy(candle => candle.Timestamp).ToList();
         }
     }
 }
