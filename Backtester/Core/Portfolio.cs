@@ -7,7 +7,7 @@ namespace Backtester.Core
     {
         public decimal Cash { get; private set; }
         public decimal ReservedCash { get; private set; }
-        public List<Position> Positions { get; } = new List<Position>();
+        public List<Position> Positions { get; } = new();
 
         public Portfolio(decimal startingCash)
         {

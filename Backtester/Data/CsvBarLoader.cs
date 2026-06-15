@@ -16,8 +16,8 @@ namespace Backtester.Data
             if (!File.Exists(path))
                 return Array.Empty<Candle>();
 
-            var lines = File.ReadAllLines(path);
-            var result = new List<Candle>(lines.Length);
+            string[] lines = File.ReadAllLines(path);
+            List<Candle> result = new List<Candle>(lines.Length);
 
             int start = 0;
             if (lines.Length > 0 && lines[0].StartsWith("Timestamp", StringComparison.OrdinalIgnoreCase))
@@ -25,26 +25,26 @@ namespace Backtester.Data
 
             for (int i = start; i < lines.Length; i++)
             {
-                var line = lines[i].Trim();
+                string line = lines[i].Trim();
                 if (string.IsNullOrEmpty(line))
                     continue;
 
-                var parts = line.Split(',');
+                string[] parts = line.Split(',');
                 if (parts.Length < 6)
                     continue;
 
-                if (!DateTime.TryParse(parts[0], null, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var ts))
+                if (!DateTime.TryParse(parts[0], null, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime ts))
                     continue;
 
-                if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var open))
+                if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal open))
                     continue;
-                if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out var high))
+                if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal high))
                     continue;
-                if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out var low))
+                if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal low))
                     continue;
-                if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out var close))
+                if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal close))
                     continue;
-                if (!decimal.TryParse(parts[5], NumberStyles.Any, CultureInfo.InvariantCulture, out var vol))
+                if (!decimal.TryParse(parts[5], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal vol))
                     vol = 0m;
 
                 result.Add(new Candle
@@ -63,14 +63,14 @@ namespace Backtester.Data
 
         public void WriteAll(string path, IEnumerable<Candle> candles)
         {
-            var dir = Path.GetDirectoryName(path) ?? ".";
+            string dir = Path.GetDirectoryName(path) ?? ".";
             Directory.CreateDirectory(dir);
 
-            var tmp = Path.GetTempFileName();
-            using (var w = new StreamWriter(tmp, false))
+            string tmp = Path.GetTempFileName();
+            using (StreamWriter w = new StreamWriter(tmp, false))
             {
                 w.WriteLine(Header);
-                foreach (var candle in candles.OrderBy(candle => candle.Timestamp))
+                foreach (Candle candle in candles.OrderBy(candle => candle.Timestamp))
                 {
                     w.WriteLine(Format(candle));
                 }
@@ -83,9 +83,9 @@ namespace Backtester.Data
 
         public void AppendAndMerge(string path, IEnumerable<Candle> additional)
         {
-            var existing = ReadAll(path).ToList();
+            List<Candle> existing = ReadAll(path).ToList();
             existing.AddRange(additional);
-            var merged = existing
+            List<Candle> merged = existing
                 .GroupBy(candle => candle.Timestamp)
                 .Select(g => g.Last())
                 .OrderBy(candle => candle.Timestamp)
@@ -96,7 +96,7 @@ namespace Backtester.Data
 
         public DateTime? GetLatestTimestamp(string path)
         {
-            var list = ReadAll(path);
+            IReadOnlyList<Candle> list = ReadAll(path);
             if (list.Count == 0)
                 return null;
             return list.Max(candle => candle.Timestamp);

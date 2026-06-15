@@ -9,7 +9,7 @@ namespace Backtester.Core
         public string Symbol { get; set; }
         public int Quantity { get; set; }
         public decimal AveragePrice { get; set; }
-        public List<Trade> Trades { get; } = new List<Trade>();
+        public List<Trade> Trades { get; } = new();
         public PositionMetadata Metadata { get; set; }
 
         public void AddTrade(Trade trade)

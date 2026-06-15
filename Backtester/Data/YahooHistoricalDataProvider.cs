@@ -23,48 +23,46 @@ namespace Backtester.Data
         {
             // Yahoo public CSV download supports daily/weekly/monthly intervals and also intraday hourly data (limited to ~730 days).
             // For unsupported intervals we surface an error so caller can select another provider.
-            var supported = new[] { "1d", "1wk", "1mo", "1h", "60m" };
+            string[] supported = new[] { "1d", "1wk", "1mo", "1h", "60m" };
             if (!supported.Contains(interval))
                 throw new NotSupportedException($"Yahoo provider does not support interval '{interval}'. Supported: {string.Join(',', supported)}.");
 
             // Convert to unix timestamps (seconds)
-            var period1 = ((DateTimeOffset)fromUtc).ToUnixTimeSeconds();
-            var period2 = ((DateTimeOffset)toUtc).ToUnixTimeSeconds();
+            long period1 = ((DateTimeOffset)fromUtc).ToUnixTimeSeconds();
+            long period2 = ((DateTimeOffset)toUtc).ToUnixTimeSeconds();
 
-            var url = $"https://query1.finance.yahoo.com/v7/finance/download/{Uri.EscapeDataString(symbol)}?period1={period1}&period2={period2}&interval={interval}&events=history&includeAdjustedClose=true";
+            string url = $"https://query1.finance.yahoo.com/v7/finance/download/{Uri.EscapeDataString(symbol)}?period1={period1}&period2={period2}&interval={interval}&events=history&includeAdjustedClose=true";
 
-            using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
+            using HttpResponseMessage resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
-                var text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                string text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 throw new InvalidOperationException($"Yahoo provider HTTP error {resp.StatusCode}: {text}");
             }
 
-            var csv = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            using var sr = new StringReader(csv);
-            var header = sr.ReadLine();
-            var list = new List<Candle>();
+            string csv = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using StringReader sr = new StringReader(csv);
+            string header = sr.ReadLine();
+            List<Candle> list = new();
             string line;
             while ((line = sr.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
-                var parts = line.Split(',');
+                string[] parts = line.Split(',');
                 // Expected: Date,Open,High,Low,Close,Adj Close,Volume
                 if (parts.Length < 6)
                     continue;
-
-                if (!DateTime.TryParse(parts[0], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dt))
+                if (!DateTime.TryParse(parts[0], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
                     continue;
-
-                if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var open))
+                if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal open))
                     continue;
-                if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out var high))
+                if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal high))
                     continue;
-                if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out var low))
+                if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal low))
                     continue;
-                if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out var close))
+                if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal close))
                     continue;
 
                 decimal vol = 0m;
