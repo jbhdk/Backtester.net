@@ -19,9 +19,8 @@
 
 - Single source of truth: `Portfolio` owns cash, positions, and risk exposure.
 - Separation of concerns: `Strategy` => emits `Signal` / `OrderRequest`; `BrokerSimulator` => executes orders; `Engine` => orchestrates event loop; `MarketData` => supplies bars.
-- Testability: pure logic in small, interface-based components; deterministic fill models. Use SOLID principles.
+- Testability: pure logic in small, interface-based components; deterministic fill models.
 - Extensible: clear interfaces for commission, slippage, sizing, fill logic and data feeds.
-- One file, one class.
 
 ## Proposed project layout
 

@@ -7,8 +7,16 @@ namespace Backtester.Data
 
     public interface IMarketDataFeed
     {
+        // Current global cursor (UTC)
         DateTime CurrentTime { get; }
-        bool MoveNext();
-        IReadOnlyList<Candle> GetBars(string symbol, int lookback);
+
+        // Advance the feed to the next timestamp. Returns false at end-of-data.
+        bool Advance();
+
+        // Return a snapshot representing the current time cursor.
+        MarketSlice GetCurrentSlice();
+
+        // Return the last `lookback` bars for `symbol`, newest-first.
+        IReadOnlyList<Candle> GetLookback(string symbol, int lookback);
     }
 }
