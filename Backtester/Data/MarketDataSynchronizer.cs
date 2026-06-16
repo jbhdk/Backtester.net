@@ -32,9 +32,9 @@ namespace Backtester.Data
                 _historyBuffers = _series.Keys.ToDictionary(k => k, v => new List<Candle>());
 
                 // build outer-join timeline
-                HashSet<DateTime> times = new();
-                foreach (IReadOnlyList<Candle> list in _series.Values)
-                    foreach (Candle candle in list)
+                var times = new HashSet<DateTime>();
+                foreach (var list in _series.Values)
+                    foreach (var candle in list)
                         times.Add(DateTime.SpecifyKind(candle.Timestamp, DateTimeKind.Utc));
 
                 _timeline = times.OrderBy(t => t).ToList();
@@ -46,21 +46,21 @@ namespace Backtester.Data
             {
                 if (_pos + 1 >= _timeline.Count) return false;
                 _pos++;
-                DateTime currentTime = _timeline[_pos];
+                var currentTime = _timeline[_pos];
 
                 // for each symbol, advance index while next bar timestamp <= t
-                foreach (string sym in _series.Keys)
+                foreach (var sym in _series.Keys)
                 {
-                    IReadOnlyList<Candle> seriesList = _series[sym];
-                    int index = _indices[sym];
+                    var seriesList = _series[sym];
+                    var index = _indices[sym];
                     while (index < seriesList.Count && DateTime.SpecifyKind(seriesList[index].Timestamp, DateTimeKind.Utc) <= currentTime)
                         index++;
                     // index now points to first bar > currentTime; last <= currentTime is index-1
                     _indices[sym] = index;
-                    int lastIndex = index - 1;
+                    var lastIndex = index - 1;
                     if (lastIndex >= 0)
                     {
-                        Candle latestBar = seriesList[lastIndex];
+                        var latestBar = seriesList[lastIndex];
                         // append copy to history buffer
                         _historyBuffers[sym].Add(latestBar);
                     }
@@ -72,16 +72,16 @@ namespace Backtester.Data
             public MarketSlice GetCurrentSlice()
             {
                 // Key: symbol/ticker (string) -> latest Candle at current timestamp (may be null)
-                Dictionary<string, Candle> barsBySymbol = new Dictionary<string, Candle>();
-                DateTime currentTime = CurrentTime;
-                foreach (string sym in _series.Keys)
+                var barsBySymbol = new Dictionary<string, Candle>();
+                var currentTime = CurrentTime;
+                foreach (var sym in _series.Keys)
                 {
-                    int index = _indices[sym];
-                    int lastIndex = index - 1;
+                    var index = _indices[sym];
+                    var lastIndex = index - 1;
                     Candle latestBar = null;
                     if (lastIndex >= 0)
                     {
-                        Candle candidateBar = _series[sym][lastIndex];
+                        var candidateBar = _series[sym][lastIndex];
                         if (DateTime.SpecifyKind(candidateBar.Timestamp, DateTimeKind.Utc) <= currentTime)
                             latestBar = candidateBar;
                     }
@@ -94,10 +94,10 @@ namespace Backtester.Data
             public IReadOnlyList<Candle> GetLookback(string symbol, int lookback)
             {
                 if (!_historyBuffers.ContainsKey(symbol)) return Array.Empty<Candle>();
-                List<Candle> buffer = _historyBuffers[symbol];
+                var buffer = _historyBuffers[symbol];
                 if (lookback <= 0) return Array.Empty<Candle>();
-                int take = Math.Min(lookback, buffer.Count);
-                List<Candle> result = buffer.Skip(Math.Max(0, buffer.Count - take)).ToList();
+                var take = Math.Min(lookback, buffer.Count);
+                var result = buffer.Skip(Math.Max(0, buffer.Count - take)).ToList();
                 // return newest-first as contract said
                 result.Reverse();
                 return result;

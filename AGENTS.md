@@ -52,3 +52,17 @@
 - Check that everything compiles.
 - Always add a comment to Dictionary declarations describing what the key and the value.
 - Don't use one character variable names unless it's for simple and obvoius uses, like: for (int i = 0; i < 10; i++>).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live on GitHub Issues for this repository. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical triage labels follow the defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Repository uses a single-context layout (single `CONTEXT.md` at repo root if present). See `docs/agents/domain.md`.

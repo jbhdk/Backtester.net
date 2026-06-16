@@ -23,7 +23,7 @@ namespace BacktesterTests.Data.Tests
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
                 .Returns(Task.FromResult<IEnumerable<Candle>>(new[] { new Candle { Timestamp = now, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } }));
 
-            HistoricalDataFetcher fetcher = new HistoricalDataFetcher(provider, tmp);
+            HistoricalDataFetcher fetcher = new(provider, tmp);
             IReadOnlyList<Candle> res = await fetcher.FetchAsync("AAPL", now, now, "1h");
 
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
@@ -42,11 +42,11 @@ namespace BacktesterTests.Data.Tests
             string path = Path.Combine(tmp, "AAPL_1h.csv");
 
             CsvBarLoader loader = new();
-            Candle[] candles = new[] { new Candle { Timestamp = now, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } };
+            Candle[] candles = { new Candle { Timestamp = now, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } };
             loader.WriteAll(path, candles);
 
             IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
-            HistoricalDataFetcher fetcher = new HistoricalDataFetcher(provider, tmp);
+            HistoricalDataFetcher fetcher = new(provider, tmp);
 
             IReadOnlyList<Candle> res = await fetcher.FetchAsync("AAPL", now, now, "1h");
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
@@ -76,7 +76,7 @@ namespace BacktesterTests.Data.Tests
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
                 .Returns(Task.FromResult<IEnumerable<Candle>>(more));
 
-            HistoricalDataFetcher fetcher = new HistoricalDataFetcher(provider, tmp);
+            HistoricalDataFetcher fetcher = new(provider, tmp);
             IReadOnlyList<Candle> res = await fetcher.FetchAsync("AAPL", baseTime, baseTime.AddHours(1), "1h");
 
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
@@ -93,7 +93,7 @@ namespace BacktesterTests.Data.Tests
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
                 .ThrowsAsync(new NotSupportedException("interval not supported"));
 
-            HistoricalDataFetcher fetcher = new HistoricalDataFetcher(provider, tmp);
+            HistoricalDataFetcher fetcher = new(provider, tmp);
 
             await Assert.ThrowsAsync<NotSupportedException>(async () => await fetcher.FetchAsync("AAPL", DateTime.UtcNow.AddDays(-1), DateTime.UtcNow, "1h"));
         }
