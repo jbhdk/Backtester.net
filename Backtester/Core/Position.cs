@@ -14,7 +14,17 @@ namespace Backtester.Core
 
         public void AddTrade(Trade trade)
         {
-            throw new System.NotImplementedException();
+            Trades.Add(trade);
+            if (trade.Side == OrderSide.Buy)
+            {
+                var totalCost = AveragePrice * Quantity + trade.Price * trade.Quantity;
+                Quantity += trade.Quantity;
+                AveragePrice = totalCost / Quantity;
+            }
+            else
+            {
+                Quantity -= trade.Quantity;
+            }
         }
 
         public void UpdateWithBar(Candle bar)

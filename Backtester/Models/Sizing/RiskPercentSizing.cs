@@ -8,7 +8,8 @@ namespace Backtester.Models.Sizing
 
         public int Size(OrderRequest request, Portfolio portfolio)
         {
-            throw new System.NotImplementedException();
+            if (request.Price is null or 0m) return 0;
+            return (int)(portfolio.Cash * RiskPercent / request.Price.Value);
         }
     }
 }

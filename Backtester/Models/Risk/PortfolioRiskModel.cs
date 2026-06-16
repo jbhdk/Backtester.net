@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace Backtester.Models.Risk
 {
     using Backtester.Core;
@@ -8,7 +10,20 @@ namespace Backtester.Models.Risk
 
         public bool Accept(OrderRequest request, Portfolio portfolio)
         {
-            throw new System.NotImplementedException();
+            if (request.Price.HasValue)
+            {
+                var estimatedCost = request.Price.Value * request.Quantity;
+                if (estimatedCost > portfolio.Cash) return false;
+
+                var openNotional = portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
+                var totalEquity = portfolio.Cash + openNotional;
+                if (totalEquity > 0)
+                {
+                    var heatAfter = (openNotional + estimatedCost) / totalEquity;
+                    if (heatAfter > MaxPortfolioHeatPercent) return false;
+                }
+            }
+            return true;
         }
     }
 }
