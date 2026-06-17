@@ -5,10 +5,10 @@ namespace Backtester.Models.Sizing
     /// <summary>
     /// Sizes positions by allocating a fixed percentage of available cash per trade.
     /// </summary>
-    public class RiskPercentSizing : ISizingModel
+    public class PercentNotionalSizing : ISizingModel
     {
-        /// <summary>Gets or sets the fraction of cash to risk per trade (e.g. 0.02 for 2%).</summary>
-        public decimal RiskPercent { get; set; }
+        /// <summary>Gets or sets the fraction of cash to allocate per trade (e.g. 0.10 for 10%).</summary>
+        public decimal Percent { get; set; }
 
         /// <summary>
         /// Returns the number of shares that fit within the cash allocation at the order's price.
@@ -17,7 +17,7 @@ namespace Backtester.Models.Sizing
         public int Size(OrderRequest request, Portfolio portfolio)
         {
             if (request.Price is null or 0m) return 0;
-            return (int)(portfolio.Cash * RiskPercent / request.Price.Value);
+            return (int)(portfolio.Cash * Percent / request.Price.Value);
         }
     }
 }

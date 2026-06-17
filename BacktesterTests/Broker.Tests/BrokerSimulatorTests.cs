@@ -142,7 +142,7 @@ namespace BacktesterTests.Broker.Tests
         {
             // 10% of $10,000 at $100/share = 10 shares, regardless of the 1 in the request
             Portfolio portfolio = new Portfolio(10_000m);
-            RiskPercentSizing sizing = new RiskPercentSizing { RiskPercent = 0.10m };
+            PercentNotionalSizing sizing = new PercentNotionalSizing { Percent = 0.10m };
             BrokerSimulator broker = new BrokerSimulator(portfolio, sizingModel: sizing);
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 1 });

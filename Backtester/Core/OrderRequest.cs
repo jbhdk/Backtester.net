@@ -22,6 +22,9 @@ namespace Backtester.Core
         /// <summary>Gets or sets the requested number of shares or contracts.</summary>
         public int Quantity { get; set; }
 
+        /// <summary>Gets or sets the intended stop-loss price for risk-per-trade sizing.</summary>
+        public decimal? StopPrice { get; set; }
+
         /// <summary>Gets or sets the priority for order processing (higher = sooner).</summary>
         public int Priority { get; set; }
 
