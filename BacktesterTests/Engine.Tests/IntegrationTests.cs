@@ -73,5 +73,68 @@ namespace BacktesterTests.Engine.Tests
             decimal finalEquity = portfolio.EquityHistory.Last().MarkedEquity;
             Assert.NotEqual(10_000m, finalEquity);
         }
+
+        [Fact]
+        public void AtrBracket_TwoSymbols_OneEntersOnce_OtherEntersTwice()
+        {
+            // AAPL — flat throughout (H=103, L=97). ATR=6, stop=94, target=112. Neither ever hit.
+            //   1 trade (entry fill only); position open at end; 0 round trips.
+            //
+            // MSFT — flat bars 0–9 (ATR=6, stop=194, target=212), spike at bar 10 (H=220→target hits),
+            //   re-entry on bar 10 at Close=215 (stop2=209, target2=227), spike at bar 14 (H=235→target2 hits).
+            //   4 trades (entry1+target1+entry2+target2); 2 round trips.
+
+            static Candle MakeBar(DateTime ts, decimal o, decimal h, decimal l, decimal c) => new()
+            {
+                Timestamp = ts,
+                Open = o,
+                High = h,
+                Low = l,
+                Close = c,
+                Volume = 10_000
+            };
+
+            Candle[] aaplBars = Enumerable.Range(0, 15)
+                .Select(i => MakeBar(T0.AddDays(i), 100m, 103m, 97m, 100m))
+                .ToArray();
+
+            Candle[] msftBars = Enumerable.Range(0, 15)
+                .Select(i => i switch
+                {
+                    10 => MakeBar(T0.AddDays(i), 200m, 220m, 197m, 215m),
+                    11 => MakeBar(T0.AddDays(i), 215m, 218m, 212m, 215m),
+                    12 => MakeBar(T0.AddDays(i), 215m, 218m, 212m, 215m),
+                    13 => MakeBar(T0.AddDays(i), 215m, 218m, 212m, 215m),
+                    14 => MakeBar(T0.AddDays(i), 215m, 235m, 212m, 230m),
+                    _ => MakeBar(T0.AddDays(i), 200m, 203m, 197m, 200m)
+                })
+                .ToArray();
+
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 1 });
+
+            AtrBracketStrategy strategy = new(atrPeriod: 5);
+            IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
+                new Dictionary<string, IReadOnlyList<Candle>>
+                {
+                    ["AAPL"] = aaplBars,
+                    ["MSFT"] = msftBars
+                });
+
+            BacktestEngine engine = new(feed, strategy, broker, portfolio);
+            engine.Start();
+
+            // AAPL entered once, position still open
+            Assert.Equal(1, portfolio.Trades.Count(t => t.Symbol == "AAPL"));
+            Assert.Contains(portfolio.Positions, p => p.Symbol == "AAPL" && p.Quantity > 0);
+
+            // MSFT entered twice: 2 entry fills + 2 target fills
+            Assert.Equal(4, portfolio.Trades.Count(t => t.Symbol == "MSFT"));
+
+            // Two MSFT round trips in performance stats
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+            Assert.Equal(2, stats.Trades);
+            Assert.True(stats.NetProfit > 0);
+        }
     }
 }
