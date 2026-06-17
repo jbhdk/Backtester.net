@@ -21,18 +21,21 @@ namespace BacktesterTests.Engine.Tests
                 new Dictionary<string, IReadOnlyList<Candle>> { [symbol] = candles });
         }
 
-        private static Candle Bar(DateTime ts, decimal close) =>
-            new() { Timestamp = ts, Open = close, High = close + 2, Low = close - 2, Close = close, Volume = 1000 };
+        private static Candle Bar(DateTime ts, decimal close)
+        {
+            return new() { Timestamp = ts, Open = close, High = close + 2, Low = close - 2, Close = close, Volume = 1000 };
+        }
+
 
         [Fact]
         public void Start_InvokesOnStart_BeforeFirstOnBar()
         {
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 100m));
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
-            CallOrderTrackingStrategy strategy = new CallOrderTrackingStrategy();
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            CallOrderTrackingStrategy strategy = new();
 
-            BacktestEngine engine = new BacktestEngine(feed, strategy, broker, portfolio);
+            BacktestEngine engine = new(feed, strategy, broker, portfolio);
             engine.Start();
 
             Assert.True(strategy.OnStartWasCalled);
@@ -45,11 +48,11 @@ namespace BacktesterTests.Engine.Tests
             Candle bar1 = Bar(T0, 100m);
             Candle bar2 = Bar(T0.AddDays(1), 101m);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
-            CallOrderTrackingStrategy strategy = new CallOrderTrackingStrategy();
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            CallOrderTrackingStrategy strategy = new();
 
-            BacktestEngine engine = new BacktestEngine(feed, strategy, broker, portfolio);
+            BacktestEngine engine = new(feed, strategy, broker, portfolio);
             engine.Start();
 
             Assert.NotNull(strategy.ReceivedHistory);
@@ -60,10 +63,10 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_OrderEmittedOnBarN_DoesNotFillOnSameBar()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -74,12 +77,12 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_MarketOrderEmittedOnBar1_FillsAtBar2Open()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
-            Candle bar1 = new Candle { Timestamp = T0, Open = 100m, High = 110m, Low = 90m, Close = 105m, Volume = 1000 };
-            Candle bar2 = new Candle { Timestamp = T0.AddDays(1), Open = 120m, High = 130m, Low = 115m, Close = 125m, Volume = 1000 };
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            Candle bar1 = new() { Timestamp = T0, Open = 100m, High = 110m, Low = 90m, Close = 105m, Volume = 1000 };
+            Candle bar2 = new() { Timestamp = T0.AddDays(1), Open = 120m, High = 130m, Low = 115m, Close = 125m, Volume = 1000 };
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
-            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -93,12 +96,12 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StubStrategyBuys_CreatesPositionAndReducesCash()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL",
                 Bar(T0, 150m),
                 Bar(T0.AddDays(1), 155m));
-            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -113,11 +116,11 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StrategyReceivesSnapshot_WithCurrentCash()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            SnapshotCapturingStrategy spy = new SnapshotCapturingStrategy();
-            BacktestEngine engine = new BacktestEngine(feed, spy, broker, portfolio);
+            SnapshotCapturingStrategy spy = new();
+            BacktestEngine engine = new(feed, spy, broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -129,10 +132,10 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StrategyReturnsNoOrders_PortfolioUnchanged()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            BacktestEngine engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
+            BacktestEngine engine = new(feed, new DoNothingStrategy(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -144,8 +147,8 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Start_TwoSymbolFiveBars_BuyOnBar1_FinalSnapshotReflectsPosition()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
             Candle[] aaplBars = Enumerable.Range(0, 5)
                 .Select(i => Bar(T0.AddDays(i), 100m + i))
@@ -161,7 +164,7 @@ namespace BacktesterTests.Engine.Tests
                     ["MSFT"] = msftBars
                 });
 
-            BacktestEngine engine = new BacktestEngine(feed, new BuyAaplOnFirstBarOnly(), broker, portfolio);
+            BacktestEngine engine = new(feed, new BuyAaplOnFirstBarOnly(), broker, portfolio);
 
             engine.Start();
 
@@ -176,13 +179,13 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Start_ThreeBarFeed_EquityHistoryHasThreeEntries()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL",
                 Bar(T0, 100m),
                 Bar(T0.AddDays(1), 101m),
                 Bar(T0.AddDays(2), 102m));
-            BacktestEngine engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
+            BacktestEngine engine = new(feed, new DoNothingStrategy(), broker, portfolio);
 
             engine.Start();
 
@@ -192,15 +195,15 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Stop_HaltsLoopAfterCurrentTick()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL",
                 Bar(T0, 100m),
                 Bar(T0.AddDays(1), 101m),
                 Bar(T0.AddDays(2), 102m));
 
-            StopAfterOneBarStrategy stopAfterFirstBar = new StopAfterOneBarStrategy();
-            BacktestEngine engine = new BacktestEngine(feed, stopAfterFirstBar, broker, portfolio);
+            StopAfterOneBarStrategy stopAfterFirstBar = new();
+            BacktestEngine engine = new(feed, stopAfterFirstBar, broker, portfolio);
             stopAfterFirstBar.Engine = engine;
 
             engine.Start();

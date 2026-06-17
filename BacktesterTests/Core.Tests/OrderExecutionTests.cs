@@ -11,25 +11,38 @@ namespace BacktesterTests.Core.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 9, 30, 0, DateTimeKind.Utc);
 
-        private static Order MakeOrder(OrderType type, OrderSide side, decimal? price = null, int qty = 10) => new()
+        private static Order MakeOrder(OrderType type, OrderSide side, decimal? price = null, int qty = 10)
         {
-            Id = "order-1",
-            Symbol = "AAPL",
-            Type = type,
-            Side = side,
-            Price = price,
-            Quantity = qty,
-            SubmittedAt = T0
-        };
+            return new()
+            {
+                Id = "order-1",
+                Symbol = "AAPL",
+                Type = type,
+                Side = side,
+                Price = price,
+                Quantity = qty,
+                SubmittedAt = T0
+            };
+        }
 
-        private static Candle Bar(decimal open, decimal high, decimal low, decimal close) => new()
+        private static Candle Bar(decimal open, decimal high, decimal low, decimal close)
         {
-            Timestamp = T0,
-            Open = open, High = high, Low = low, Close = close, Volume = 1000
-        };
+            return new()
+            {
+                Timestamp = T0,
+                Open = open,
+                High = high,
+                Low = low,
+                Close = close,
+                Volume = 1000
+            };
+        }
 
-        private static IReadOnlyList<FillResult> Fill(Order order, Candle bar) =>
-            new FillModel_OHLCHeuristic().DetermineFills(new[] { order }, bar).ToList();
+        private static IReadOnlyList<FillResult> Fill(Order order, Candle bar)
+        {
+            return new FillModel_OHLCHeuristic().DetermineFills(new[] { order }, bar).ToList();
+        }
+
 
         [Fact]
         public void Market_FillsAtBarOpen()

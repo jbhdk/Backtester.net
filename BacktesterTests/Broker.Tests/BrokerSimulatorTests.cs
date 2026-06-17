@@ -16,27 +16,34 @@ namespace BacktesterTests.Broker.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 9, 30, 0, DateTimeKind.Utc);
 
-        private static MarketSlice SliceWithBar(string symbol, decimal close) => new()
+        private static MarketSlice SliceWithBar(string symbol, decimal close)
         {
-            Timestamp = T0,
-            BarsBySymbol = new Dictionary<string, Candle>
+            return new()
             {
-                [symbol] = new Candle { Timestamp = T0, Open = close, High = close, Low = close, Close = close, Volume = 1000 }
-            }
-        };
+                Timestamp = T0,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbol] = new Candle { Timestamp = T0, Open = close, High = close, Low = close, Close = close, Volume = 1000 }
+                }
+            };
+        }
 
-        private static OrderRequest MarketBuy(string symbol, int qty) => new()
+        private static OrderRequest MarketBuy(string symbol, int qty)
         {
-            Symbol = symbol,
-            Side = OrderSide.Buy,
-            Type = OrderType.Market,
-            Quantity = qty
-        };
+            return new()
+            {
+                Symbol = symbol,
+                Side = OrderSide.Buy,
+                Type = OrderType.Market,
+                Quantity = qty
+            };
+        }
+
 
         [Fact]
         public void ProcessBar_WithNoOrders_ReturnsEmpty()
         {
-            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new(new Portfolio(10_000m));
 
             IEnumerable<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 150m));
 
@@ -46,7 +53,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitOrder_DoesNotThrow()
         {
-            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new(new Portfolio(10_000m));
 
             string id = broker.SubmitOrder(MarketBuy("AAPL", 10));
 
@@ -56,8 +63,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_MarketBuy_FillsAtClose_ReturnsTrade()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 10));
 
             List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 102m)).ToList();
@@ -72,8 +79,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_AppliesTrade_PortfolioUpdated()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 10));
 
             broker.ProcessBar(SliceWithBar("AAPL", 100m));
@@ -85,7 +92,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_DrainsPendingOrders_DoesNotRefillNextBar()
         {
-            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new(new Portfolio(10_000m));
             broker.SubmitOrder(MarketBuy("AAPL", 10));
             broker.ProcessBar(SliceWithBar("AAPL", 100m));
 
@@ -97,8 +104,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_MultipleOrders_FillsAll()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 5));
             broker.SubmitOrder(MarketBuy("AAPL", 3));
 
@@ -111,14 +118,15 @@ namespace BacktesterTests.Broker.Tests
         public void ProcessBar_WithCommissionAndSlippage_TradeCarriesNonZeroValues()
         {
             // Market buy at Open=100; 1% slippage → fill at 101; 0.5% commission on notional 101×10 = $5.05
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(
                 portfolio,
                 commissionModel: new PercentCommission { Percent = 0.005m },
                 slippageModel: new PercentSlippage { Percent = 0.01m });
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 });
-            MarketSlice slice = new MarketSlice
+            MarketSlice slice = new()
+
             {
                 Timestamp = T0,
                 BarsBySymbol = new Dictionary<string, Candle>
@@ -141,9 +149,9 @@ namespace BacktesterTests.Broker.Tests
         public void SubmitOrder_WithSizingModel_OverridesRequestedQuantity()
         {
             // 10% of $10,000 at $100/share = 10 shares, regardless of the 1 in the request
-            Portfolio portfolio = new Portfolio(10_000m);
-            PercentNotionalSizing sizing = new PercentNotionalSizing { Percent = 0.10m };
-            BrokerSimulator broker = new BrokerSimulator(portfolio, sizingModel: sizing);
+            Portfolio portfolio = new(10_000m);
+            PercentNotionalSizing sizing = new() { Percent = 0.10m };
+            BrokerSimulator broker = new(portfolio, sizingModel: sizing);
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 1 });
             List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
@@ -156,9 +164,9 @@ namespace BacktesterTests.Broker.Tests
         public void SubmitOrder_RejectedByRiskModel_ProducesNoTrade()
         {
             // portfolio $500, risk model blocks orders costing > cash, buying 10@$100 = $1000 → rejected
-            Portfolio portfolio = new Portfolio(500m);
-            PortfolioRiskModel risk = new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m };
-            BrokerSimulator broker = new BrokerSimulator(portfolio, riskModel: risk);
+            Portfolio portfolio = new(500m);
+            PortfolioRiskModel risk = new() { MaxPortfolioHeatPercent = 1.0m };
+            BrokerSimulator broker = new(portfolio, riskModel: risk);
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 10 });
             List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
@@ -169,8 +177,9 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitOrder_AfterProcessBar_SubmittedAtReflectsBarTimestamp()
         {
-            DateTime barTime = new DateTime(2020, 6, 1, 9, 30, 0, DateTimeKind.Utc);
-            MarketSlice slice = new MarketSlice
+            DateTime barTime = new(2020, 6, 1, 9, 30, 0, DateTimeKind.Utc);
+            MarketSlice slice = new()
+
             {
                 Timestamp = barTime,
                 BarsBySymbol = new Dictionary<string, Candle>
@@ -179,8 +188,8 @@ namespace BacktesterTests.Broker.Tests
                 }
             };
 
-            CapturingFillModel capture = new CapturingFillModel();
-            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m), fillModel: capture);
+            CapturingFillModel capture = new();
+            BrokerSimulator broker = new(new Portfolio(10_000m), fillModel: capture);
 
             broker.ProcessBar(slice);
             broker.SubmitOrder(MarketBuy("AAPL", 1));
@@ -193,11 +202,12 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void BrokerSimulator_DefaultModel_MarketOrder_FillsAtOpen_NotClose()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 1));
 
-            MarketSlice slice = new MarketSlice
+            MarketSlice slice = new()
+
             {
                 Timestamp = T0,
                 BarsBySymbol = new Dictionary<string, Candle>
@@ -213,20 +223,24 @@ namespace BacktesterTests.Broker.Tests
 
         // --- Resting order book ---
 
-        private static MarketSlice SliceAt(string symbol, decimal open, decimal high, decimal low, decimal close, DateTime ts) => new()
+        private static MarketSlice SliceAt(string symbol, decimal open, decimal high, decimal low, decimal close, DateTime ts)
         {
-            Timestamp = ts,
-            BarsBySymbol = new Dictionary<string, Candle>
+            return new()
             {
-                [symbol] = new Candle { Timestamp = ts, Open = open, High = high, Low = low, Close = close, Volume = 1000 }
-            }
-        };
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbol] = new Candle { Timestamp = ts, Open = open, High = high, Low = low, Close = close, Volume = 1000 }
+                }
+            };
+        }
+
 
         [Fact]
         public void ProcessBar_StopNotTriggeredOnBar1_PersistsAndFillsOnBar2()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 110m, Quantity = 1 });
 
             // Bar 1: High=105, stop at 110 → no trigger
@@ -241,7 +255,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Cancel_WorkingOrder_NeverFills()
         {
-            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new(new Portfolio(10_000m));
             string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 110m, Quantity = 1 });
 
             broker.Cancel(id);
@@ -253,8 +267,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Modify_WorkingOrder_SubsequentFillUsesNewPrice()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
             string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 110m, Quantity = 1 });
 
             broker.Modify(id, 120m);
@@ -274,8 +288,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitBracket_EntryFills_StopSubsequentlyFills()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
             broker.SubmitBracket(new BracketRequest
             {
@@ -298,8 +312,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitBracket_BarSpansBothLegs_ExactlyOneFillsAndSiblingCancelled()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
             broker.SubmitBracket(new BracketRequest
             {
@@ -320,8 +334,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitBracket_ModifyStop_TrailingStopFillsAtNewPrice()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
             BracketHandle handle = broker.SubmitBracket(new BracketRequest
             {

@@ -18,15 +18,19 @@ namespace BacktesterTests.Engine.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 9, 30, 0, DateTimeKind.Utc);
 
-        private static Candle Bar(DateTime ts, decimal close) => new()
+        private static Candle Bar(DateTime ts, decimal close)
         {
-            Timestamp = ts,
-            Open = close,
-            High = close + 2m,
-            Low = close - 2m,
-            Close = close,
-            Volume = 10_000
-        };
+            return new()
+            {
+                Timestamp = ts,
+                Open = close,
+                High = close + 2m,
+                Low = close - 2m,
+                Close = close,
+                Volume = 10_000
+            };
+        }
+
 
         [Fact]
         public void MovingAverageCross_FullStack_ProducesTradesAndEquityHistory()
@@ -38,19 +42,19 @@ namespace BacktesterTests.Engine.Tests
                 .Select((c, i) => Bar(T0.AddDays(i), c))
                 .ToArray();
 
-            Portfolio portfolio = new Portfolio(10_000m);
-            BrokerSimulator broker = new BrokerSimulator(
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(
                 portfolio,
                 commissionModel: new FixedCommission { Amount = 5m },
                 slippageModel: new FixedSlippage { Amount = 0.10m },
                 sizingModel: new FixedSizeModel { FixedSize = 10 },
                 riskModel: new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m });
 
-            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
             IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
                 new Dictionary<string, IReadOnlyList<Candle>> { ["AAPL"] = candles });
 
-            BacktestEngine engine = new BacktestEngine(feed, strategy, broker, portfolio);
+            BacktestEngine engine = new(feed, strategy, broker, portfolio);
             engine.Start();
 
             // One entry per bar

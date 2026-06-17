@@ -16,7 +16,12 @@ namespace Backtester.Models.Sizing
         /// </summary>
         public int Size(OrderRequest request, Portfolio portfolio)
         {
-            if (request.Price is null or 0m) return 0;
+            if (request.Price is null or 0m)
+            {
+                return 0;
+            }
+
+
             return (int)(portfolio.Cash * Percent / request.Price.Value);
         }
     }

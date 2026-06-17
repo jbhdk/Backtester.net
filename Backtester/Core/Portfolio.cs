@@ -76,7 +76,10 @@ namespace Backtester.Core
                 Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
                 int effectiveQty = Math.Min(trade.Quantity, position?.Quantity ?? 0);
                 if (effectiveQty == 0)
+                {
                     return;
+                }
+
 
                 Trade effective = effectiveQty == trade.Quantity ? trade : new Trade
                 {

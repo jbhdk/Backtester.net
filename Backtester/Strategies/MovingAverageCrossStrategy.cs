@@ -37,7 +37,10 @@ namespace Backtester.Strategies
         public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
         {
             foreach ((string symbol, IReadOnlyList<Candle> bars) in history)
+            {
                 ComputeSignals(symbol, bars);
+            }
+
         }
 
         /// <summary>
@@ -75,9 +78,15 @@ namespace Backtester.Strategies
                 }
 
                 if (!lastFastAboveSlow.Value && fastAboveSlow)
+                {
                     _buySignals.Add((symbol, bars[i].Timestamp));
+                }
+
                 else if (lastFastAboveSlow.Value && !fastAboveSlow)
+                {
                     _sellSignals.Add((symbol, bars[i].Timestamp));
+                }
+
 
                 lastFastAboveSlow = fastAboveSlow;
             }

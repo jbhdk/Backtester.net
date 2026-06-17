@@ -10,40 +10,50 @@ namespace BacktesterTests.Core.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 9, 30, 0, DateTimeKind.Utc);
 
-        private static Trade Buy(string symbol, decimal price, int qty, DateTime ts) => new()
+        private static Trade Buy(string symbol, decimal price, int qty, DateTime ts)
         {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = symbol,
-            Side = OrderSide.Buy,
-            Price = price,
-            Quantity = qty,
-            Timestamp = ts
-        };
-
-        private static Trade Sell(string symbol, decimal price, int qty, DateTime ts) => new()
-        {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = symbol,
-            Side = OrderSide.Sell,
-            Price = price,
-            Quantity = qty,
-            Timestamp = ts
-        };
-
-        private static MarketSlice Slice(string symbol, decimal markPrice, DateTime ts) => new()
-        {
-            Timestamp = ts,
-            BarsBySymbol = new Dictionary<string, Candle>
+            return new()
             {
-                [symbol] = new Candle { Timestamp = ts, Open = markPrice, High = markPrice, Low = markPrice, Close = markPrice, Volume = 1 }
-            }
-        };
+                Id = Guid.NewGuid().ToString(),
+                Symbol = symbol,
+                Side = OrderSide.Buy,
+                Price = price,
+                Quantity = qty,
+                Timestamp = ts
+            };
+        }
+
+        private static Trade Sell(string symbol, decimal price, int qty, DateTime ts)
+        {
+            return new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = symbol,
+                Side = OrderSide.Sell,
+                Price = price,
+                Quantity = qty,
+                Timestamp = ts
+            };
+        }
+
+        private static MarketSlice Slice(string symbol, decimal markPrice, DateTime ts)
+        {
+            return new()
+            {
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbol] = new Candle { Timestamp = ts, Open = markPrice, High = markPrice, Low = markPrice, Close = markPrice, Volume = 1 }
+                }
+            };
+        }
+
 
         [Fact]
         public void GetPerformanceStats_SingleWinningRoundTrip_NetProfitCorrect()
         {
             // Buy 10@$100, sell 10@$120 → realized PnL = (120-100)*10 = $200
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
             portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
@@ -58,7 +68,7 @@ namespace BacktesterTests.Core.Tests
         public void GetPerformanceStats_SingleRoundTrip_BarsHeldCorrect()
         {
             // Entry at bar 0 (T0), one interim bar, exit at bar 2 (T0+2d) → BarsHeld = 2
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0.AddDays(1)));
@@ -76,7 +86,7 @@ namespace BacktesterTests.Core.Tests
         {
             // Win:  buy 10@$100, sell 10@$110 → PnL = +$100
             // Loss: buy 10@$110, sell 10@$100 → PnL = -$100
-            Portfolio portfolio = new Portfolio(20_000m);
+            Portfolio portfolio = new(20_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
             portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
@@ -102,7 +112,7 @@ namespace BacktesterTests.Core.Tests
             // Bar at $200: MarkedEquity = $20,000 + 100*$200 = $40,000 (peak)
             // Bar at $100: MarkedEquity = $20,000 + 100*$100 = $30,000 (trough)
             // MaxDrawdown = ($40,000 - $30,000) / $40,000 = 25%
-            Portfolio portfolio = new Portfolio(30_000m);
+            Portfolio portfolio = new(30_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));
             portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(1)));
@@ -116,7 +126,7 @@ namespace BacktesterTests.Core.Tests
         public void GetPerformanceStats_MaxConsecLosses_LongestLosingStreak()
         {
             // Three round trips: loss, loss, win → MaxConsecLosses = 2
-            Portfolio portfolio = new Portfolio(50_000m);
+            Portfolio portfolio = new(50_000m);
             DateTime ts = T0;
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 1, ts));

@@ -18,26 +18,38 @@ namespace Backtester.Broker
             foreach (Order order in orders)
             {
                 FillResult fill = TryFill(order, bar);
-                if (fill != null) yield return fill;
+                if (fill != null)
+                {
+                    yield return fill;
+                }
+
             }
         }
 
-        private static FillResult TryFill(Order order, Candle bar) => (order.Type, order.Side) switch
+        private static FillResult TryFill(Order order, Candle bar)
         {
-            (OrderType.Market, _)                                                    => Fill(order, bar.Open),
-            (OrderType.Limit,  OrderSide.Buy)  when bar.Low  <= order.Price         => Fill(order, order.Price!.Value),
-            (OrderType.Limit,  OrderSide.Sell) when bar.High >= order.Price         => Fill(order, order.Price!.Value),
-            (OrderType.Stop,   OrderSide.Buy)  when bar.High >= order.Price         => Fill(order, order.Price!.Value),
-            (OrderType.Stop,   OrderSide.Sell) when bar.Low  <= order.Price         => Fill(order, order.Price!.Value),
-            _                                                                        => null
-        };
+            return (order.Type, order.Side) switch
+            {
+                (OrderType.Market, _) => Fill(order, bar.Open),
+                (OrderType.Limit, OrderSide.Buy) when bar.Low <= order.Price => Fill(order, order.Price!.Value),
+                (OrderType.Limit, OrderSide.Sell) when bar.High >= order.Price => Fill(order, order.Price!.Value),
+                (OrderType.Stop, OrderSide.Buy) when bar.High >= order.Price => Fill(order, order.Price!.Value),
+                (OrderType.Stop, OrderSide.Sell) when bar.Low <= order.Price => Fill(order, order.Price!.Value),
+                _ => null
+            };
+        }
 
-        private static FillResult Fill(Order order, decimal price) => new()
+
+        private static FillResult Fill(Order order, decimal price)
         {
-            OrderId  = order.Id,
-            TradeId  = Guid.NewGuid().ToString(),
-            Price    = price,
-            Quantity = order.Quantity
-        };
+            return new()
+            {
+                OrderId = order.Id,
+                TradeId = Guid.NewGuid().ToString(),
+                Price = price,
+                Quantity = order.Quantity
+            };
+        }
+
     }
 }

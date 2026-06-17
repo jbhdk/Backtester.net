@@ -32,9 +32,12 @@ namespace Backtester.Data
             IEnumerable<Candle>[] results = await Task.WhenAll(fetches);
 
             // Key: symbol/ticker (string) -> fetched candle list for that symbol
-            Dictionary<string, IReadOnlyList<Candle>> series = new Dictionary<string, IReadOnlyList<Candle>>();
+            Dictionary<string, IReadOnlyList<Candle>> series = new();
             for (int i = 0; i < symbols.Length; i++)
+            {
                 series[symbols[i]] = results[i].ToList();
+            }
+
 
             return CreateFromSeries(series);
         }
@@ -66,10 +69,16 @@ namespace Backtester.Data
                 _historyBuffers = _series.Keys.ToDictionary(k => k, v => new List<Candle>());
 
                 // build outer-join timeline
-                HashSet<DateTime> times = new HashSet<DateTime>();
+                HashSet<DateTime> times = new();
                 foreach (IReadOnlyList<Candle> list in _series.Values)
+                {
+
                     foreach (Candle candle in list)
+                    {
                         times.Add(DateTime.SpecifyKind(candle.Timestamp, DateTimeKind.Utc));
+                    }
+                }
+
 
                 _timeline = times.OrderBy(t => t).ToList();
             }
@@ -78,7 +87,12 @@ namespace Backtester.Data
 
             public bool Advance()
             {
-                if (_pos + 1 >= _timeline.Count) return false;
+                if (_pos + 1 >= _timeline.Count)
+                {
+                    return false;
+                }
+
+
                 _pos++;
                 DateTime currentTime = _timeline[_pos];
 
@@ -88,8 +102,11 @@ namespace Backtester.Data
                     IReadOnlyList<Candle> seriesList = _series[sym];
                     int index = _indices[sym];
                     while (index < seriesList.Count && DateTime.SpecifyKind(seriesList[index].Timestamp, DateTimeKind.Utc) <= currentTime)
+                    {
                         index++;
+                    }
                     // index now points to first bar > currentTime; last <= currentTime is index-1
+
                     _indices[sym] = index;
                     int lastIndex = index - 1;
                     if (lastIndex >= 0)
@@ -106,7 +123,7 @@ namespace Backtester.Data
             public MarketSlice GetCurrentSlice()
             {
                 // Key: symbol/ticker (string) -> latest Candle at current timestamp (may be null)
-                Dictionary<string, Candle> barsBySymbol = new Dictionary<string, Candle>();
+                Dictionary<string, Candle> barsBySymbol = new();
                 DateTime currentTime = CurrentTime;
                 foreach (string sym in _series.Keys)
                 {
@@ -117,7 +134,10 @@ namespace Backtester.Data
                     {
                         Candle candidateBar = _series[sym][lastIndex];
                         if (DateTime.SpecifyKind(candidateBar.Timestamp, DateTimeKind.Utc) <= currentTime)
+                        {
                             latestBar = candidateBar;
+                        }
+
                     }
                     barsBySymbol[sym] = latestBar;
                 }
@@ -127,9 +147,19 @@ namespace Backtester.Data
 
             public IReadOnlyList<Candle> GetLookback(string symbol, int lookback)
             {
-                if (!_historyBuffers.ContainsKey(symbol)) return Array.Empty<Candle>();
+                if (!_historyBuffers.ContainsKey(symbol))
+                {
+                    return Array.Empty<Candle>();
+                }
+
+
                 List<Candle> buffer = _historyBuffers[symbol];
-                if (lookback <= 0) return Array.Empty<Candle>();
+                if (lookback <= 0)
+                {
+                    return Array.Empty<Candle>();
+                }
+
+
                 int take = Math.Min(lookback, buffer.Count);
                 List<Candle> result = buffer.Skip(Math.Max(0, buffer.Count - take)).ToList();
                 // return newest-first as contract said

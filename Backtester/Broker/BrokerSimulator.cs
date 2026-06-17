@@ -57,14 +57,24 @@ namespace Backtester.Broker
             if (_sizingModel != null)
             {
                 int sized = _sizingModel.Size(request, _portfolio);
-                if (sized == 0) return null;
+                if (sized == 0)
+                {
+                    return null;
+                }
+
+
                 request.Quantity = sized;
             }
 
             if (_riskModel != null && !_riskModel.Accept(request, _portfolio))
-                return null;
+            {
 
-            Order order = new Order
+                return null;
+            }
+
+
+            Order order = new()
+
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = request.Symbol,
@@ -81,7 +91,11 @@ namespace Backtester.Broker
         /// <summary>
         /// Queues a single order for fill processing. Returns the assigned order ID, or null if rejected.
         /// </summary>
-        public string Submit(OrderRequest request) => SubmitOrder(request);
+        public string Submit(OrderRequest request)
+        {
+            return SubmitOrder(request);
+        }
+
 
         /// <summary>
         /// Queues an entry order with attached stop-loss and take-profit. Returns a handle whose
@@ -90,9 +104,14 @@ namespace Backtester.Broker
         public BracketHandle SubmitBracket(BracketRequest request)
         {
             string entryId = SubmitOrder(request.Entry);
-            if (entryId == null) return null;
+            if (entryId == null)
+            {
+                return null;
+            }
+
+
             int quantity = _orderBook[entryId].Quantity;
-            BracketHandle handle = new BracketHandle { EntryOrderId = entryId };
+            BracketHandle handle = new() { EntryOrderId = entryId };
             _pendingBrackets[entryId] = (request.StopPrice, request.TargetPrice, quantity, handle);
             return handle;
         }
@@ -112,14 +131,20 @@ namespace Backtester.Broker
             {
                 string symbol = symbolGroup.Key;
                 if (!slice.HasBar(symbol))
+                {
                     continue;
+                }
+
 
                 Candle candle = slice.BarsBySymbol[symbol];
                 IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
                 foreach (FillResult fill in fills)
                 {
                     if (!_orderBook.ContainsKey(fill.OrderId))
+                    {
                         continue;
+                    }
+
 
                     Order filledOrder = _orderBook[fill.OrderId];
                     _orderBook.Remove(fill.OrderId);
@@ -136,7 +161,8 @@ namespace Backtester.Broker
                     decimal slippageAmount = Math.Abs(adjustedPrice - rawPrice);
                     decimal commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
 
-                    Trade trade = new Trade
+                    Trade trade = new()
+
                     {
                         Id = fill.TradeId,
                         OrderId = fill.OrderId,
@@ -168,7 +194,8 @@ namespace Backtester.Broker
 
         private string ArmBracketLeg(string symbol, OrderType type, decimal price, int quantity)
         {
-            Order order = new Order
+            Order order = new()
+
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = symbol,
@@ -185,7 +212,11 @@ namespace Backtester.Broker
         /// <summary>
         /// Removes a working order from the book so it will never fill. No-ops if the order has already filled or is unknown.
         /// </summary>
-        public void Cancel(string orderId) => _orderBook.Remove(orderId);
+        public void Cancel(string orderId)
+        {
+            _orderBook.Remove(orderId);
+        }
+
 
         /// <summary>
         /// Updates the trigger price of a working order. No-ops if the order has already filled or is unknown.
@@ -193,7 +224,11 @@ namespace Backtester.Broker
         public void Modify(string orderId, decimal newPrice)
         {
             if (_orderBook.TryGetValue(orderId, out Order order))
+            {
+
                 order.Price = newPrice;
+            }
+
         }
     }
 }

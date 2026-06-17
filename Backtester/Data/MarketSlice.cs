@@ -17,6 +17,10 @@ namespace Backtester.Data
         public required IReadOnlyDictionary<string, Candle> BarsBySymbol { get; set; }
 
         /// <summary>Returns true if a non-null bar exists for the given symbol in this slice.</summary>
-        public bool HasBar(string symbol) => BarsBySymbol != null && BarsBySymbol.ContainsKey(symbol) && BarsBySymbol[symbol] != null;
+        public bool HasBar(string symbol)
+        {
+            return BarsBySymbol != null && BarsBySymbol.ContainsKey(symbol) && BarsBySymbol[symbol] != null;
+        }
+
     }
 }

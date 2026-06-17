@@ -35,7 +35,12 @@ namespace Backtester.Data
         /// </summary>
         public async Task<IReadOnlyList<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(symbol)) throw new ArgumentNullException(nameof(symbol));
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                throw new ArgumentNullException(nameof(symbol));
+            }
+
+
             symbol = symbol.Trim().ToUpperInvariant();
 
             Directory.CreateDirectory(_dataFolder);
@@ -80,7 +85,12 @@ namespace Backtester.Data
 
         private static bool CoversRange(List<Candle> list, DateTime fromUtc, DateTime toUtc)
         {
-            if (list.Count == 0) return false;
+            if (list.Count == 0)
+            {
+                return false;
+            }
+
+
             DateTime min = list.Min(candle => candle.Timestamp);
             DateTime max = list.Max(candle => candle.Timestamp);
             return min <= fromUtc && max >= toUtc;
@@ -88,7 +98,12 @@ namespace Backtester.Data
 
         private static DateTime AddInterval(DateTime ts, string interval)
         {
-            if (string.IsNullOrWhiteSpace(interval)) throw new ArgumentNullException(nameof(interval));
+            if (string.IsNullOrWhiteSpace(interval))
+            {
+                throw new ArgumentNullException(nameof(interval));
+            }
+
+
             interval = interval.Trim().ToLowerInvariant();
             if (interval.EndsWith("h") && int.TryParse(interval.Substring(0, interval.Length - 1), out int hours))
             {

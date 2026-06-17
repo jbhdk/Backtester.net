@@ -21,14 +21,22 @@ namespace Backtester.Models.Risk
             if (request.Price.HasValue)
             {
                 decimal estimatedCost = request.Price.Value * request.Quantity;
-                if (estimatedCost > portfolio.Cash) return false;
+                if (estimatedCost > portfolio.Cash)
+                {
+                    return false;
+                }
+
 
                 decimal openNotional = portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
                 decimal totalEquity = portfolio.Cash + openNotional;
                 if (totalEquity > 0)
                 {
                     decimal heatAfter = (openNotional + estimatedCost) / totalEquity;
-                    if (heatAfter > MaxPortfolioHeatPercent) return false;
+                    if (heatAfter > MaxPortfolioHeatPercent)
+                    {
+                        return false;
+                    }
+
                 }
             }
             return true;

@@ -1,4 +1,3 @@
-using System;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
@@ -35,7 +34,10 @@ namespace Backtester.Engine
             _stopRequested = false;
             _strategy.OnStart(_feed.GetFullHistory());
             while (!_stopRequested && _feed.Advance())
+            {
                 RunOnce();
+            }
+
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
@@ -57,7 +59,12 @@ namespace Backtester.Engine
             PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
-                if (bar == null) continue;
+                if (bar == null)
+                {
+                    continue;
+                }
+
+
                 _strategy.OnBar(symbol, bar, snapshot, _broker);
             }
         }

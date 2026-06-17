@@ -21,38 +21,62 @@ namespace Backtester.Data
         public IReadOnlyList<Candle> ReadAll(string path)
         {
             if (!File.Exists(path))
+            {
                 return Array.Empty<Candle>();
+            }
 
             string[] lines = File.ReadAllLines(path);
-            List<Candle> result = new List<Candle>(lines.Length);
+            List<Candle> result = new(lines.Length);
 
             int start = 0;
             if (lines.Length > 0 && lines[0].StartsWith("Timestamp", StringComparison.OrdinalIgnoreCase))
+            {
                 start = 1;
+            }
 
             for (int i = start; i < lines.Length; i++)
             {
                 string line = lines[i].Trim();
                 if (string.IsNullOrEmpty(line))
+                {
                     continue;
+                }
 
                 string[] parts = line.Split(',');
                 if (parts.Length < 6)
+                {
                     continue;
+                }
 
                 if (!DateTime.TryParse(parts[0], null, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime ts))
+                {
                     continue;
+                }
 
                 if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal open))
+                {
                     continue;
+                }
+
                 if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal high))
+                {
                     continue;
+                }
+
                 if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal low))
+                {
                     continue;
+                }
+
                 if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal close))
+                {
                     continue;
+                }
+
                 if (!decimal.TryParse(parts[5], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal vol))
+                {
                     vol = 0m;
+                }
 
                 result.Add(new Candle
                 {
@@ -77,7 +101,7 @@ namespace Backtester.Data
             Directory.CreateDirectory(dir);
 
             string tmp = Path.GetTempFileName();
-            using (StreamWriter writer = new StreamWriter(tmp, false))
+            using (StreamWriter writer = new(tmp, false))
             {
                 writer.WriteLine(Header);
                 foreach (Candle candle in candles.OrderBy(candle => candle.Timestamp))
@@ -114,7 +138,10 @@ namespace Backtester.Data
         {
             IReadOnlyList<Candle> list = ReadAll(path);
             if (list.Count == 0)
+            {
                 return null;
+            }
+
             return list.Max(candle => candle.Timestamp);
         }
 

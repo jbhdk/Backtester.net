@@ -11,7 +11,10 @@ namespace Backtester.Models.Slippage
         public decimal Amount { get; set; }
 
         /// <summary>Returns the fill price adjusted by the fixed slippage amount.</summary>
-        public decimal Apply(decimal price, OrderSide side) =>
-            side == OrderSide.Buy ? price + Amount : price - Amount;
+        public decimal Apply(decimal price, OrderSide side)
+        {
+            return side == OrderSide.Buy ? price + Amount : price - Amount;
+        }
+
     }
 }

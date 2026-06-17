@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Core;
@@ -42,7 +41,7 @@ namespace BacktesterTests.Data.Tests
             string path = Path.Combine(tmp, "AAPL_1h.csv");
 
             CsvBarLoader loader = new();
-            Candle[] candles = { new Candle { Timestamp = now, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } };
+            Candle[] candles = { new() { Timestamp = now, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } };
             loader.WriteAll(path, candles);
 
             IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();

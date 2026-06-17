@@ -6,32 +6,39 @@ namespace BacktesterTests.Core.Tests
 {
     public class PositionTests
     {
-        private static Trade Buy(decimal price, int qty, decimal commission = 0m) => new()
+        private static Trade Buy(decimal price, int qty, decimal commission = 0m)
         {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = "AAPL",
-            Side = OrderSide.Buy,
-            Price = price,
-            Quantity = qty,
-            Commission = commission,
-            Timestamp = DateTime.UtcNow
-        };
+            return new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = "AAPL",
+                Side = OrderSide.Buy,
+                Price = price,
+                Quantity = qty,
+                Commission = commission,
+                Timestamp = DateTime.UtcNow
+            };
+        }
 
-        private static Trade Sell(decimal price, int qty, decimal commission = 0m) => new()
+        private static Trade Sell(decimal price, int qty, decimal commission = 0m)
         {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = "AAPL",
-            Side = OrderSide.Sell,
-            Price = price,
-            Quantity = qty,
-            Commission = commission,
-            Timestamp = DateTime.UtcNow
-        };
+            return new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = "AAPL",
+                Side = OrderSide.Sell,
+                Price = price,
+                Quantity = qty,
+                Commission = commission,
+                Timestamp = DateTime.UtcNow
+            };
+        }
+
 
         [Fact]
         public void AddTrade_FirstBuy_SetsQuantityAndAveragePrice()
         {
-            Position position = new Position { Symbol = "AAPL" };
+            Position position = new() { Symbol = "AAPL" };
 
             position.AddTrade(Buy(100m, 10));
 
@@ -42,7 +49,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void AddTrade_SecondBuy_AccumulatesQuantityAndUpdatesVwap()
         {
-            Position position = new Position { Symbol = "AAPL" };
+            Position position = new() { Symbol = "AAPL" };
             position.AddTrade(Buy(100m, 10));
 
             position.AddTrade(Buy(110m, 10));
@@ -54,7 +61,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void AddTrade_Sell_ReducesQuantityAndKeepsCostBasis()
         {
-            Position position = new Position { Symbol = "AAPL" };
+            Position position = new() { Symbol = "AAPL" };
             position.AddTrade(Buy(100m, 10));
 
             position.AddTrade(Sell(120m, 5));

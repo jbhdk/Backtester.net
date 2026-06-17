@@ -40,7 +40,10 @@ namespace Backtester.Core
                 else
                 {
                     if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx) pos))
+                    {
                         continue;
+                    }
+
 
                     int exitBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
                     trips.Add(new RoundTrip
@@ -55,9 +58,14 @@ namespace Backtester.Core
 
                     int remaining = pos.qty - trade.Quantity;
                     if (remaining <= 0)
+                    {
                         open.Remove(trade.Symbol);
+                    }
                     else
+                    {
                         open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx);
+                    }
+
                 }
             }
 
@@ -114,23 +122,44 @@ namespace Backtester.Core
         private static int BarIndexAt(IReadOnlyList<EquitySnapshot> history, DateTime ts)
         {
             for (int i = 0; i < history.Count; i++)
+            {
+
                 if (history[i].Timestamp >= ts)
+                {
                     return i;
+                }
+            }
+
+
             return history.Count;
         }
 
         private static decimal ComputeMaxDrawdown(IReadOnlyList<EquitySnapshot> history)
         {
-            if (history.Count == 0) return 0m;
+            if (history.Count == 0)
+            {
+                return 0m;
+            }
+
+
             decimal peak = history[0].MarkedEquity;
             decimal maxDd = 0m;
             foreach (EquitySnapshot snap in history)
             {
-                if (snap.MarkedEquity > peak) peak = snap.MarkedEquity;
+                if (snap.MarkedEquity > peak)
+                {
+                    peak = snap.MarkedEquity;
+                }
+
+
                 if (peak > 0m)
                 {
                     decimal dd = (peak - snap.MarkedEquity) / peak;
-                    if (dd > maxDd) maxDd = dd;
+                    if (dd > maxDd)
+                    {
+                        maxDd = dd;
+                    }
+
                 }
             }
             return maxDd;
@@ -138,27 +167,56 @@ namespace Backtester.Core
 
         private static decimal ComputeCagr(IReadOnlyList<EquitySnapshot> history, decimal startingCash)
         {
-            if (history.Count < 2 || startingCash <= 0m) return 0m;
+            if (history.Count < 2 || startingCash <= 0m)
+            {
+                return 0m;
+            }
+
+
             decimal finalEquity = history[history.Count - 1].MarkedEquity;
             double years = (history[history.Count - 1].Timestamp - history[0].Timestamp).TotalDays / 365.25;
-            if (years <= 0 || finalEquity <= 0m) return 0m;
+            if (years <= 0 || finalEquity <= 0m)
+            {
+                return 0m;
+            }
+
+
             return (decimal)(Math.Pow((double)(finalEquity / startingCash), 1.0 / years) - 1.0);
         }
 
         private static decimal ComputeSharpe(IReadOnlyList<EquitySnapshot> history)
         {
-            if (history.Count < 2) return 0m;
+            if (history.Count < 2)
+            {
+                return 0m;
+            }
+
             List<double> returns = new();
             for (int i = 1; i < history.Count; i++)
             {
                 double prev = (double)history[i - 1].MarkedEquity;
-                if (prev == 0) continue;
+                if (prev == 0)
+                {
+                    continue;
+                }
+
+
                 returns.Add(((double)history[i].MarkedEquity - prev) / prev);
             }
-            if (returns.Count < 2) return 0m;
+            if (returns.Count < 2)
+            {
+                return 0m;
+            }
+
+
             double mean   = returns.Average();
             double stdDev = Math.Sqrt(returns.Sum(r => Math.Pow(r - mean, 2)) / (returns.Count - 1));
-            if (stdDev == 0) return 0m;
+            if (stdDev == 0)
+            {
+                return 0m;
+            }
+
+
             return (decimal)(mean / stdDev * Math.Sqrt(252));
         }
 
@@ -168,8 +226,16 @@ namespace Backtester.Core
             int current = 0;
             foreach (RoundTrip trip in roundTrips)
             {
-                if (trip.RealizedPnL < 0m) { current++; if (current > max) max = current; }
-                else current = 0;
+                if (trip.RealizedPnL < 0m) { current++; if (current > max)
+                    {
+                        max = current;
+                    }
+                }
+                else
+                {
+                    current = 0;
+                }
+
             }
             return max;
         }

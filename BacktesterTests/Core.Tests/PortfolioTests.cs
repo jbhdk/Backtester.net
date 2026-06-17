@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Backtester.Core;
 using Backtester.Data;
 using Xunit;
@@ -11,32 +10,39 @@ namespace BacktesterTests.Core.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 9, 30, 0, DateTimeKind.Utc);
 
-        private static Trade Buy(string symbol, decimal price, int qty, decimal commission = 0m) => new()
+        private static Trade Buy(string symbol, decimal price, int qty, decimal commission = 0m)
         {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = symbol,
-            Side = OrderSide.Buy,
-            Price = price,
-            Quantity = qty,
-            Commission = commission,
-            Timestamp = T0
-        };
+            return new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = symbol,
+                Side = OrderSide.Buy,
+                Price = price,
+                Quantity = qty,
+                Commission = commission,
+                Timestamp = T0
+            };
+        }
 
-        private static Trade Sell(string symbol, decimal price, int qty, decimal commission = 0m) => new()
+        private static Trade Sell(string symbol, decimal price, int qty, decimal commission = 0m)
         {
-            Id = Guid.NewGuid().ToString(),
-            Symbol = symbol,
-            Side = OrderSide.Sell,
-            Price = price,
-            Quantity = qty,
-            Commission = commission,
-            Timestamp = T0
-        };
+            return new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = symbol,
+                Side = OrderSide.Sell,
+                Price = price,
+                Quantity = qty,
+                Commission = commission,
+                Timestamp = T0
+            };
+        }
+
 
         [Fact]
         public void SnapshotAt_FreshPortfolio_ReturnsCashAndTimestamp()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
 
@@ -48,7 +54,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_ReducesCashByNotional()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -58,7 +64,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_DeductsCashByNotionalPlusCommission()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10, commission: 5m));
 
@@ -68,7 +74,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_CreatesPosition()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -80,7 +86,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_SecondBuySameSymbol_UpdatesExistingPosition()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Buy("AAPL", 110m, 5));
@@ -92,7 +98,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_TwoDifferentSymbols_CreatesTwoPositions()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
             portfolio.ApplyTrade(Buy("MSFT", 200m, 5));
@@ -103,7 +109,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Sell_IncreasesCashByNotionalMinusCommission()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 10, commission: 5m));
@@ -115,7 +121,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Sell_ReducesPositionQuantity()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));
@@ -126,7 +132,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void SnapshotAt_AfterTrade_IncludesPosition()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
@@ -140,7 +146,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoCashChange()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
 
@@ -150,7 +156,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoPositionCreated()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
 
@@ -160,7 +166,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_SellLargerThanLong_ClampedToOpenQuantity_QuantityNeverNegative()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 5));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
@@ -172,7 +178,7 @@ namespace BacktesterTests.Core.Tests
         public void ApplyTrade_SellLargerThanLong_CashReflectsClamped()
         {
             // Buy 5@100 → Cash=9500; oversell 10, clamped to 5@120 → Cash=9500+600=10100
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 5));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
@@ -186,7 +192,7 @@ namespace BacktesterTests.Core.Tests
         public void SnapshotAt_ExposesCostBasisEquity_ExcludingUnrealizedPnL()
         {
             // Buy 10@100 → Cash=9000, cost basis = 9000+1000 = 10000 (not mark-to-market)
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
@@ -196,25 +202,32 @@ namespace BacktesterTests.Core.Tests
 
         // --- EquityHistory / RecordEquitySnapshot ---
 
-        private static MarketSlice EmptySlice(DateTime ts) => new()
+        private static MarketSlice EmptySlice(DateTime ts)
         {
-            Timestamp = ts,
-            BarsBySymbol = new Dictionary<string, Candle>()
-        };
-
-        private static MarketSlice SliceWithBar(string symbol, decimal close, DateTime ts) => new()
-        {
-            Timestamp = ts,
-            BarsBySymbol = new Dictionary<string, Candle>
+            return new()
             {
-                [symbol] = new Candle { Timestamp = ts, Open = close, High = close, Low = close, Close = close, Volume = 1000 }
-            }
-        };
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>()
+            };
+        }
+
+        private static MarketSlice SliceWithBar(string symbol, decimal close, DateTime ts)
+        {
+            return new()
+            {
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbol] = new Candle { Timestamp = ts, Open = close, High = close, Low = close, Close = close, Volume = 1000 }
+                }
+            };
+        }
+
 
         [Fact]
         public void EquityHistory_IsEmptyOnConstruction()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             Assert.Empty(portfolio.EquityHistory);
         }
@@ -222,7 +235,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_AppendsOneEntryWithCorrectTimestamp()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
@@ -234,7 +247,7 @@ namespace BacktesterTests.Core.Tests
         public void RecordEquitySnapshot_ExposesMarkedEquity_IncludingUnrealizedPnL()
         {
             // Buy 10@100 → Cash=9000; mark at 110 → position value=1100; MarkedEquity=10100
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 110m, T0));
@@ -245,7 +258,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_NoPositions_CashAndMarkedEquityEqualStartingCash()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
@@ -259,7 +272,7 @@ namespace BacktesterTests.Core.Tests
         {
             // Buy 10 @ $100 → Cash = $9,000; position market value at $110 = $1,100
             // MarkedEquity = $9,000 + $1,100 = $10,100
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 110m, T0));
@@ -274,7 +287,7 @@ namespace BacktesterTests.Core.Tests
         public void RecordEquitySnapshot_SymbolNotInSlice_FallsBackToAveragePrice()
         {
             // Buy 10 @ $100; slice has no bar for AAPL → mark at avg price, UnrealizedPnL = $1,000, MarkedEquity = $10,000
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
@@ -290,7 +303,7 @@ namespace BacktesterTests.Core.Tests
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()
         {
             // Buy 10 @ $100, sell 5 @ $120 → realized gain = (120-100)*5 = $100
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));
@@ -301,7 +314,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_MultipleSells_AccumulatesRealizedPnL()
         {
-            Portfolio portfolio = new Portfolio(20_000m);
+            Portfolio portfolio = new(20_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 3));  // gain = 60
@@ -313,7 +326,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_AfterSell_SnapshotIncludesRealizedPnL()
         {
-            Portfolio portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));  // Cash = 9000+600=9600, realized=100, remaining 5@100
 
