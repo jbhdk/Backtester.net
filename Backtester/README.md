@@ -15,10 +15,14 @@ A bar-by-bar backtesting engine for financial market strategies, written in C# o
 
 ```csharp
 // 1. Build a data feed
-IMarketDataFeed feed = new MarketDataSynchronizer(new Dictionary<string, IHistoricalDataProvider>
-{
-    ["AAPL"] = new YahooHistoricalDataProvider("AAPL", from, to)
-});
+IMarketDataFeed feed = await MarketDataSynchronizer.CreateFromProvidersAsync(
+    new Dictionary<string, IHistoricalDataProvider>
+    {
+        ["AAPL"] = new YahooHistoricalDataProvider()
+    },
+    fromUtc: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    toUtc:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    interval: "1d");
 
 // 2. Implement a strategy
 IStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 10, slowPeriod: 50);

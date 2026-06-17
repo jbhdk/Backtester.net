@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Backtester.Data
 {
@@ -9,6 +11,35 @@ namespace Backtester.Data
     // Minimal in-memory synchronizer producing an IMarketDataFeed
     public class MarketDataSynchronizer
     {
+        /// <summary>
+        /// Fetches candles from each provider concurrently and returns a synchronized feed.
+        /// Inject fakes of IHistoricalDataProvider for testing without network calls.
+        /// </summary>
+        public static async Task<IMarketDataFeed> CreateFromProvidersAsync(
+            IReadOnlyDictionary<string, IHistoricalDataProvider> providers,
+            DateTime fromUtc,
+            DateTime toUtc,
+            string interval,
+            CancellationToken ct = default)
+        {
+            string[] symbols = providers.Keys.ToArray();
+            Task<IEnumerable<Candle>>[] fetches = symbols
+                .Select(symbol => providers[symbol].FetchAsync(symbol, fromUtc, toUtc, interval, ct))
+                .ToArray();
+
+            IEnumerable<Candle>[] results = await Task.WhenAll(fetches);
+
+            Dictionary<string, IReadOnlyList<Candle>> series = new Dictionary<string, IReadOnlyList<Candle>>();
+            for (int i = 0; i < symbols.Length; i++)
+                series[symbols[i]] = results[i].ToList();
+
+            return CreateFromSeries(series);
+        }
+
+        /// <summary>
+        /// Creates a synchronized feed directly from pre-fetched candle series.
+        /// Use this overload in tests to supply candles without a provider.
+        /// </summary>
         public static IMarketDataFeed CreateFromSeries(IReadOnlyDictionary<string, IReadOnlyList<Candle>> series)
         {
             return new InMemoryMarketDataFeed(series);
