@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Core;
@@ -11,7 +10,8 @@ using Backtester.Core;
 namespace Backtester.Data
 {
     /// <summary>
-    /// Fetches historical OHLCV candle data from Yahoo Finance's public CSV download endpoint.
+    /// Fetches historical OHLCV candle data from Yahoo Finance's v8 chart JSON API.
+    /// Supports intraday and daily intervals; caching is handled by <see cref="HistoricalDataFetcher"/>.
     /// </summary>
     public class YahooHistoricalDataProvider : IHistoricalDataProvider
     {
@@ -26,74 +26,69 @@ namespace Backtester.Data
         }
 
         /// <summary>
-        /// Downloads and parses candles for the symbol from Yahoo Finance.
+        /// Downloads and parses candles for the symbol from the Yahoo Finance v8 chart endpoint.
         /// Throws <see cref="NotSupportedException"/> for intervals not supported by Yahoo.
         /// </summary>
         public async Task<IEnumerable<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
-            // Yahoo public CSV download supports daily/weekly/monthly intervals and also intraday hourly data (limited to ~730 days).
-            // For unsupported intervals we surface an error so caller can select another provider.
-            string[] supported = new[] { "1d", "1wk", "1mo", "1h", "60m" };
+            string[] supported = new[] { "1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "1wk", "1mo" };
             if (!supported.Contains(interval))
-                throw new NotSupportedException($"Yahoo provider does not support interval '{interval}'. Supported: {string.Join(',', supported)}.");
+                throw new NotSupportedException($"Yahoo v8 provider does not support interval '{interval}'. Supported: {string.Join(',', supported)}.");
 
-            // Convert to unix timestamps (seconds)
             long period1 = ((DateTimeOffset)fromUtc).ToUnixTimeSeconds();
             long period2 = ((DateTimeOffset)toUtc).ToUnixTimeSeconds();
 
-            string url = $"https://query1.finance.yahoo.com/v7/finance/download/{Uri.EscapeDataString(symbol)}?period1={period1}&period2={period2}&interval={interval}&events=history&includeAdjustedClose=true";
+            string url = $"https://query2.finance.yahoo.com/v8/finance/chart/{Uri.EscapeDataString(symbol)}?period1={period1}&period2={period2}&interval={interval}";
 
             using HttpResponseMessage resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
                 string text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                throw new InvalidOperationException($"Yahoo provider HTTP error {resp.StatusCode}: {text}");
+                throw new InvalidOperationException($"Yahoo v8 HTTP error {resp.StatusCode}: {text}");
             }
 
-            string csv = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            using StringReader sr = new StringReader(csv);
-            sr.ReadLine(); // skip header
-            List<Candle> list = new();
-            string line;
-            while ((line = sr.ReadLine()) != null)
+            string json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            return ParseV8Json(json);
+        }
+
+        /// <summary>
+        /// Parses a Yahoo Finance v8 chart JSON payload into candles.
+        /// Rows where open or close is null (market holiday gaps) are skipped.
+        /// </summary>
+        private static IEnumerable<Candle> ParseV8Json(string json)
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            JsonElement result = doc.RootElement
+                .GetProperty("chart")
+                .GetProperty("result")[0];
+
+            JsonElement timestamps = result.GetProperty("timestamp");
+            JsonElement quote = result.GetProperty("indicators").GetProperty("quote")[0];
+
+            JsonElement opens   = quote.GetProperty("open");
+            JsonElement highs   = quote.GetProperty("high");
+            JsonElement lows    = quote.GetProperty("low");
+            JsonElement closes  = quote.GetProperty("close");
+            JsonElement volumes = quote.GetProperty("volume");
+
+            List<Candle> candles = new();
+            for (int i = 0; i < timestamps.GetArrayLength(); i++)
             {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
+                if (opens[i].ValueKind  == JsonValueKind.Null) continue;
+                if (closes[i].ValueKind == JsonValueKind.Null) continue;
 
-                string[] parts = line.Split(',');
-                // Expected: Date,Open,High,Low,Close,Adj Close,Volume
-                if (parts.Length < 6)
-                    continue;
-                if (!DateTime.TryParse(parts[0], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
-                    continue;
-                if (!decimal.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal open))
-                    continue;
-                if (!decimal.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal high))
-                    continue;
-                if (!decimal.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal low))
-                    continue;
-                if (!decimal.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out decimal close))
-                    continue;
-
-                decimal vol = 0m;
-                // volume may be at position 6 if Adj Close exists
-                if (parts.Length >= 7)
-                    decimal.TryParse(parts[6], NumberStyles.Any, CultureInfo.InvariantCulture, out vol);
-                else if (parts.Length >= 6)
-                    decimal.TryParse(parts[5], NumberStyles.Any, CultureInfo.InvariantCulture, out vol);
-
-                list.Add(new Candle
+                candles.Add(new Candle
                 {
-                    Timestamp = dt.ToUniversalTime(),
-                    Open = open,
-                    High = high,
-                    Low = low,
-                    Close = close,
-                    Volume = vol
+                    Timestamp = DateTimeOffset.FromUnixTimeSeconds(timestamps[i].GetInt64()).UtcDateTime,
+                    Open      = opens[i].GetDecimal(),
+                    High      = highs[i].GetDecimal(),
+                    Low       = lows[i].GetDecimal(),
+                    Close     = closes[i].GetDecimal(),
+                    Volume    = volumes[i].ValueKind != JsonValueKind.Null ? volumes[i].GetDecimal() : 0m
                 });
             }
 
-            return list.OrderBy(candle => candle.Timestamp).ToList();
+            return candles.OrderBy(c => c.Timestamp).ToList();
         }
     }
 }
