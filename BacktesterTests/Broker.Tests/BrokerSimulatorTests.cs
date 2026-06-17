@@ -36,9 +36,9 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_WithNoOrders_ReturnsEmpty()
         {
-            var broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
 
-            var trades = broker.ProcessBar(SliceWithBar("AAPL", 150m));
+            IEnumerable<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 150m));
 
             Assert.Empty(trades);
         }
@@ -46,9 +46,9 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void SubmitOrder_DoesNotThrow()
         {
-            var broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
 
-            var id = broker.SubmitOrder(MarketBuy("AAPL", 10));
+            string id = broker.SubmitOrder(MarketBuy("AAPL", 10));
 
             Assert.NotNull(id);
         }
@@ -56,11 +56,11 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_MarketBuy_FillsAtClose_ReturnsTrade()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 10));
 
-            var trades = broker.ProcessBar(SliceWithBar("AAPL", 102m)).ToList();
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 102m)).ToList();
 
             Assert.Single(trades);
             Assert.Equal(102m, trades[0].Price);
@@ -72,8 +72,8 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_AppliesTrade_PortfolioUpdated()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 10));
 
             broker.ProcessBar(SliceWithBar("AAPL", 100m));
@@ -85,11 +85,11 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_DrainsPendingOrders_DoesNotRefillNextBar()
         {
-            var broker = new BrokerSimulator(new Portfolio(10_000m));
+            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m));
             broker.SubmitOrder(MarketBuy("AAPL", 10));
             broker.ProcessBar(SliceWithBar("AAPL", 100m));
 
-            var secondBarTrades = broker.ProcessBar(SliceWithBar("AAPL", 105m)).ToList();
+            List<Trade> secondBarTrades = broker.ProcessBar(SliceWithBar("AAPL", 105m)).ToList();
 
             Assert.Empty(secondBarTrades);
         }
@@ -97,12 +97,12 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void ProcessBar_MultipleOrders_FillsAll()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 5));
             broker.SubmitOrder(MarketBuy("AAPL", 3));
 
-            var trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
 
             Assert.Equal(2, trades.Count);
         }
@@ -111,14 +111,14 @@ namespace BacktesterTests.Broker.Tests
         public void ProcessBar_WithCommissionAndSlippage_TradeCarriesNonZeroValues()
         {
             // Market buy at Open=100; 1% slippage → fill at 101; 0.5% commission on notional 101×10 = $5.05
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(
                 portfolio,
                 commissionModel: new PercentCommission { Percent = 0.005m },
                 slippageModel: new PercentSlippage { Percent = 0.01m });
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 });
-            var slice = new MarketSlice
+            MarketSlice slice = new MarketSlice
             {
                 Timestamp = T0,
                 BarsBySymbol = new Dictionary<string, Candle>
@@ -127,7 +127,7 @@ namespace BacktesterTests.Broker.Tests
                 }
             };
 
-            var trades = broker.ProcessBar(slice).ToList();
+            List<Trade> trades = broker.ProcessBar(slice).ToList();
 
             // fill: Open=100 + 1% slippage → price=101, slippage=1
             // commission: 0.5% × (101 × 10) = 5.05
@@ -141,12 +141,12 @@ namespace BacktesterTests.Broker.Tests
         public void SubmitOrder_WithSizingModel_OverridesRequestedQuantity()
         {
             // 10% of $10,000 at $100/share = 10 shares, regardless of the 1 in the request
-            var portfolio = new Portfolio(10_000m);
-            var sizing = new RiskPercentSizing { RiskPercent = 0.10m };
-            var broker = new BrokerSimulator(portfolio, sizingModel: sizing);
+            Portfolio portfolio = new Portfolio(10_000m);
+            RiskPercentSizing sizing = new RiskPercentSizing { RiskPercent = 0.10m };
+            BrokerSimulator broker = new BrokerSimulator(portfolio, sizingModel: sizing);
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 1 });
-            var trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
 
             Assert.Single(trades);
             Assert.Equal(10, trades[0].Quantity);
@@ -156,12 +156,12 @@ namespace BacktesterTests.Broker.Tests
         public void SubmitOrder_RejectedByRiskModel_ProducesNoTrade()
         {
             // portfolio $500, risk model blocks orders costing > cash, buying 10@$100 = $1000 → rejected
-            var portfolio = new Portfolio(500m);
-            var risk = new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m };
-            var broker = new BrokerSimulator(portfolio, riskModel: risk);
+            Portfolio portfolio = new Portfolio(500m);
+            PortfolioRiskModel risk = new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m };
+            BrokerSimulator broker = new BrokerSimulator(portfolio, riskModel: risk);
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 10 });
-            var trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
 
             Assert.Empty(trades);
         }
@@ -169,11 +169,11 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void BrokerSimulator_DefaultModel_MarketOrder_FillsAtOpen_NotClose()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
             broker.SubmitOrder(MarketBuy("AAPL", 1));
 
-            var slice = new MarketSlice
+            MarketSlice slice = new MarketSlice
             {
                 Timestamp = T0,
                 BarsBySymbol = new Dictionary<string, Candle>
@@ -181,7 +181,7 @@ namespace BacktesterTests.Broker.Tests
                     ["AAPL"] = new Candle { Timestamp = T0, Open = 100m, High = 115m, Low = 95m, Close = 110m, Volume = 1000 }
                 }
             };
-            var trades = broker.ProcessBar(slice).ToList();
+            List<Trade> trades = broker.ProcessBar(slice).ToList();
 
             Assert.Single(trades);
             Assert.Equal(100m, trades[0].Price);

@@ -36,9 +36,9 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void SnapshotAt_FreshPortfolio_ReturnsCashAndTimestamp()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
-            var snapshot = portfolio.SnapshotAt(T0);
+            PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
 
             Assert.Equal(10_000m, snapshot.Cash);
             Assert.Equal(T0, snapshot.Timestamp);
@@ -48,7 +48,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_ReducesCashByNotional()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -58,7 +58,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_DeductsCashByNotionalPlusCommission()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10, commission: 5m));
 
@@ -68,7 +68,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Buy_CreatesPosition()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -80,7 +80,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_SecondBuySameSymbol_UpdatesExistingPosition()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Buy("AAPL", 110m, 5));
@@ -92,7 +92,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_TwoDifferentSymbols_CreatesTwoPositions()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
             portfolio.ApplyTrade(Buy("MSFT", 200m, 5));
@@ -103,7 +103,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Sell_IncreasesCashByNotionalMinusCommission()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 10, commission: 5m));
@@ -115,7 +115,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_Sell_ReducesPositionQuantity()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));
@@ -126,10 +126,10 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void SnapshotAt_AfterTrade_IncludesPosition()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
-            var snapshot = portfolio.SnapshotAt(T0);
+            PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
 
             Assert.Single(snapshot.Positions);
             Assert.Equal(9_000m, snapshot.Cash);
@@ -155,7 +155,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void EquityHistory_IsEmptyOnConstruction()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             Assert.Empty(portfolio.EquityHistory);
         }
@@ -163,7 +163,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_AppendsOneEntryWithCorrectTimestamp()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
@@ -174,7 +174,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_NoPositions_CashAndTotalEquityEqualStartingCash()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
@@ -188,12 +188,12 @@ namespace BacktesterTests.Core.Tests
         {
             // Buy 10 @ $100 → Cash = $9,000; position market value at $110 = $1,100
             // TotalEquity = $9,000 + $1,100 = $10,100
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 110m, T0));
 
-            var snap = portfolio.EquityHistory[0];
+            EquitySnapshot snap = portfolio.EquityHistory[0];
             Assert.Equal(9_000m, snap.Cash);
             Assert.Equal(1_100m, snap.UnrealizedPnL);
             Assert.Equal(10_100m, snap.TotalEquity);
@@ -203,12 +203,12 @@ namespace BacktesterTests.Core.Tests
         public void RecordEquitySnapshot_SymbolNotInSlice_FallsBackToAveragePrice()
         {
             // Buy 10 @ $100; slice has no bar for AAPL → mark at avg price, UnrealizedPnL = $1,000, TotalEquity = $10,000
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
-            var snap = portfolio.EquityHistory[0];
+            EquitySnapshot snap = portfolio.EquityHistory[0];
             Assert.Equal(1_000m, snap.UnrealizedPnL);
             Assert.Equal(10_000m, snap.TotalEquity);
         }
@@ -219,7 +219,7 @@ namespace BacktesterTests.Core.Tests
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()
         {
             // Buy 10 @ $100, sell 5 @ $120 → realized gain = (120-100)*5 = $100
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));
@@ -230,7 +230,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void ApplyTrade_MultipleSells_AccumulatesRealizedPnL()
         {
-            var portfolio = new Portfolio(20_000m);
+            Portfolio portfolio = new Portfolio(20_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
             portfolio.ApplyTrade(Sell("AAPL", 120m, 3));  // gain = 60
@@ -242,13 +242,13 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void RecordEquitySnapshot_AfterSell_SnapshotIncludesRealizedPnL()
         {
-            var portfolio = new Portfolio(10_000m);
+            Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
             portfolio.ApplyTrade(Sell("AAPL", 120m, 5));  // Cash = 9000+600=9600, realized=100, remaining 5@100
 
             portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 120m, T0));
 
-            var snap = portfolio.EquityHistory[0];
+            EquitySnapshot snap = portfolio.EquityHistory[0];
             Assert.Equal(100m, snap.RealizedPnL);
         }
     }

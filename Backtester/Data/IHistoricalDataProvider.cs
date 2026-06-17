@@ -6,6 +6,9 @@ using Backtester.Core;
 
 namespace Backtester.Data
 {
+    /// <summary>
+    /// Fetches historical OHLCV candle data from an external or cached source.
+    /// </summary>
     public interface IHistoricalDataProvider
     {
         /// <summary>

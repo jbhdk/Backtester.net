@@ -1,17 +1,23 @@
 using System;
 using System.Collections.Generic;
+using Backtester.Core;
 
 namespace Backtester.Broker
 {
-    using Backtester.Core;
-
+    /// <summary>
+    /// Fill model that uses OHLC bar prices to determine whether limit and stop orders trigger,
+    /// and fills market orders at the bar's open price.
+    /// </summary>
     public class FillModel_OHLCHeuristic : IFillModel
     {
+        /// <summary>
+        /// Evaluates each order against the bar's OHLC data and yields a fill for every order that triggers.
+        /// </summary>
         public IEnumerable<FillResult> DetermineFills(IEnumerable<Order> orders, Candle bar)
         {
-            foreach (var order in orders)
+            foreach (Order order in orders)
             {
-                var fill = TryFill(order, bar);
+                FillResult fill = TryFill(order, bar);
                 if (fill != null) yield return fill;
             }
         }

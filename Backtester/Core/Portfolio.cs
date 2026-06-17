@@ -1,31 +1,48 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Backtester.Data;
 
 namespace Backtester.Core
 {
-    using Backtester.Data;
-
+    /// <summary>
+    /// Maintains portfolio state including cash, open positions, trades, and equity history.
+    /// </summary>
     public class Portfolio
     {
         private readonly List<EquitySnapshot> _equityHistory = new();
         private readonly List<Trade> _trades = new();
 
+        /// <summary>Gets the current available cash balance.</summary>
         public decimal Cash { get; private set; }
+
+        /// <summary>Gets the cash amount reserved for pending orders.</summary>
         public decimal ReservedCash { get; private set; }
+
+        /// <summary>Gets the cumulative realized profit/loss from all closed trades.</summary>
         public decimal RealizedPnL { get; private set; }
+
+        /// <summary>Gets the list of all open positions.</summary>
         public List<Position> Positions { get; } = new();
+
+        /// <summary>Gets the chronological series of equity snapshots recorded after each bar.</summary>
         public IReadOnlyList<EquitySnapshot> EquityHistory => _equityHistory;
+
+        /// <summary>Gets the complete trade history in submission order.</summary>
         public IReadOnlyList<Trade> Trades => _trades;
 
+        /// <summary>Initializes a new portfolio with the given starting cash balance.</summary>
         public Portfolio(decimal startingCash)
         {
             Cash = startingCash;
         }
 
+        /// <summary>
+        /// Returns a snapshot of the portfolio's state at the given timestamp using cost-basis equity.
+        /// </summary>
         public PortfolioSnapshot SnapshotAt(DateTime timestamp)
         {
-            var costBasisEquity = Cash + Positions.Sum(p => p.AveragePrice * p.Quantity);
+            decimal costBasisEquity = Cash + Positions.Sum(p => p.AveragePrice * p.Quantity);
             return new PortfolioSnapshot
             {
                 Timestamp = timestamp,
@@ -35,13 +52,16 @@ namespace Backtester.Core
             };
         }
 
+        /// <summary>
+        /// Applies a filled trade to the portfolio, adjusting cash and creating or updating the relevant position.
+        /// </summary>
         public void ApplyTrade(Trade trade)
         {
             _trades.Add(trade);
             if (trade.Side == OrderSide.Buy)
             {
                 Cash -= trade.Price * trade.Quantity + trade.Commission;
-                var position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
+                Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
                 if (position == null)
                 {
                     position = new Position { Id = Guid.NewGuid().ToString(), Symbol = trade.Symbol };
@@ -52,7 +72,7 @@ namespace Backtester.Core
             else
             {
                 Cash += trade.Price * trade.Quantity - trade.Commission;
-                var position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
+                Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
                 if (position != null)
                 {
                     RealizedPnL += (trade.Price - position.AveragePrice) * trade.Quantity;
@@ -61,11 +81,15 @@ namespace Backtester.Core
             }
         }
 
+        /// <summary>
+        /// Records a mark-to-market equity snapshot using closing prices from the provided market slice.
+        /// Falls back to average entry price for symbols not present in the slice.
+        /// </summary>
         public void RecordEquitySnapshot(MarketSlice slice)
         {
-            var unrealized = Positions.Sum(p =>
+            decimal unrealized = Positions.Sum(p =>
             {
-                var markPrice = slice.HasBar(p.Symbol) ? slice.BarsBySymbol[p.Symbol].Close : p.AveragePrice;
+                decimal markPrice = slice.HasBar(p.Symbol) ? slice.BarsBySymbol[p.Symbol].Close : p.AveragePrice;
                 return markPrice * p.Quantity;
             });
             _equityHistory.Add(new EquitySnapshot

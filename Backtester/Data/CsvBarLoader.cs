@@ -7,10 +7,17 @@ using Backtester.Core;
 
 namespace Backtester.Data
 {
+    /// <summary>
+    /// Reads and writes OHLCV candle data in a simple CSV format.
+    /// </summary>
     public class CsvBarLoader
     {
         private const string Header = "Timestamp,Open,High,Low,Close,Volume";
 
+        /// <summary>
+        /// Reads all candles from the CSV file at the given path, sorted by timestamp ascending.
+        /// Returns an empty list if the file does not exist.
+        /// </summary>
         public IReadOnlyList<Candle> ReadAll(string path)
         {
             if (!File.Exists(path))
@@ -58,21 +65,24 @@ namespace Backtester.Data
                 });
             }
 
-            return result.OrderBy(c => c.Timestamp).ToList();
+            return result.OrderBy(candle => candle.Timestamp).ToList();
         }
 
+        /// <summary>
+        /// Writes the given candles to the CSV file at the specified path, replacing any existing file.
+        /// </summary>
         public void WriteAll(string path, IEnumerable<Candle> candles)
         {
             string dir = Path.GetDirectoryName(path) ?? ".";
             Directory.CreateDirectory(dir);
 
             string tmp = Path.GetTempFileName();
-            using (StreamWriter w = new StreamWriter(tmp, false))
+            using (StreamWriter writer = new StreamWriter(tmp, false))
             {
-                w.WriteLine(Header);
+                writer.WriteLine(Header);
                 foreach (Candle candle in candles.OrderBy(candle => candle.Timestamp))
                 {
-                    w.WriteLine(Format(candle));
+                    writer.WriteLine(Format(candle));
                 }
             }
 
@@ -81,6 +91,9 @@ namespace Backtester.Data
             File.Delete(tmp);
         }
 
+        /// <summary>
+        /// Appends the given candles to the existing file, deduplicating by timestamp and re-sorting.
+        /// </summary>
         public void AppendAndMerge(string path, IEnumerable<Candle> additional)
         {
             List<Candle> existing = ReadAll(path).ToList();
@@ -94,6 +107,9 @@ namespace Backtester.Data
             WriteAll(path, merged);
         }
 
+        /// <summary>
+        /// Returns the most recent candle timestamp in the file, or null if the file is empty or missing.
+        /// </summary>
         public DateTime? GetLatestTimestamp(string path)
         {
             IReadOnlyList<Candle> list = ReadAll(path);
@@ -102,12 +118,12 @@ namespace Backtester.Data
             return list.Max(candle => candle.Timestamp);
         }
 
-        private static string Format(Candle c)
+        private static string Format(Candle candle)
         {
             // ISO 8601 UTC
             return string.Format(CultureInfo.InvariantCulture, "{0:yyyy-MM-ddTHH:mm:ssZ},{1},{2},{3},{4},{5}",
-                c.Timestamp.ToUniversalTime(),
-                c.Open, c.High, c.Low, c.Close, c.Volume);
+                candle.Timestamp.ToUniversalTime(),
+                candle.Open, candle.High, candle.Low, candle.Close, candle.Volume);
         }
     }
 }

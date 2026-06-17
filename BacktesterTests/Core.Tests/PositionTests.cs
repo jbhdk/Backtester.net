@@ -31,7 +31,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void AddTrade_FirstBuy_SetsQuantityAndAveragePrice()
         {
-            var position = new Position { Symbol = "AAPL" };
+            Position position = new Position { Symbol = "AAPL" };
 
             position.AddTrade(Buy(100m, 10));
 
@@ -42,7 +42,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void AddTrade_SecondBuy_AccumulatesQuantityAndUpdatesVwap()
         {
-            var position = new Position { Symbol = "AAPL" };
+            Position position = new Position { Symbol = "AAPL" };
             position.AddTrade(Buy(100m, 10));
 
             position.AddTrade(Buy(110m, 10));
@@ -54,7 +54,7 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void AddTrade_Sell_ReducesQuantityAndKeepsCostBasis()
         {
-            var position = new Position { Symbol = "AAPL" };
+            Position position = new Position { Symbol = "AAPL" };
             position.AddTrade(Buy(100m, 10));
 
             position.AddTrade(Sell(120m, 5));

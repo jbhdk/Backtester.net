@@ -10,15 +10,25 @@ using Backtester.Core;
 
 namespace Backtester.Data
 {
+    /// <summary>
+    /// Fetches historical OHLCV candle data from Yahoo Finance's public CSV download endpoint.
+    /// </summary>
     public class YahooHistoricalDataProvider : IHistoricalDataProvider
     {
         private readonly HttpClient _http;
 
+        /// <summary>
+        /// Initializes a new provider using the given <see cref="HttpClient"/>, or a default instance if null.
+        /// </summary>
         public YahooHistoricalDataProvider(HttpClient http = null)
         {
             _http = http ?? new HttpClient();
         }
 
+        /// <summary>
+        /// Downloads and parses candles for the symbol from Yahoo Finance.
+        /// Throws <see cref="NotSupportedException"/> for intervals not supported by Yahoo.
+        /// </summary>
         public async Task<IEnumerable<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
             // Yahoo public CSV download supports daily/weekly/monthly intervals and also intraday hourly data (limited to ~730 days).
@@ -42,7 +52,7 @@ namespace Backtester.Data
 
             string csv = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             using StringReader sr = new StringReader(csv);
-            string header = sr.ReadLine();
+            sr.ReadLine(); // skip header
             List<Candle> list = new();
             string line;
             while ((line = sr.ReadLine()) != null)

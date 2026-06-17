@@ -34,10 +34,10 @@ namespace BacktesterTests.Core.Tests
         [Fact]
         public void Market_FillsAtBarOpen()
         {
-            var order = MakeOrder(OrderType.Market, OrderSide.Buy);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Market, OrderSide.Buy);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Single(fills);
             Assert.Equal(100m, fills[0].Price);
@@ -48,10 +48,10 @@ namespace BacktesterTests.Core.Tests
         public void LimitBuy_FillsAtLimitPrice_WhenBarLowAtOrBelowLimit()
         {
             // limit=95, bar.Low=90 → 90 ≤ 95, should fill
-            var order = MakeOrder(OrderType.Limit, OrderSide.Buy, price: 95m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Limit, OrderSide.Buy, price: 95m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Single(fills);
             Assert.Equal(95m, fills[0].Price);
@@ -61,10 +61,10 @@ namespace BacktesterTests.Core.Tests
         public void LimitBuy_NoFill_WhenBarLowAboveLimit()
         {
             // limit=85, bar.Low=90 → 90 > 85, no fill
-            var order = MakeOrder(OrderType.Limit, OrderSide.Buy, price: 85m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Limit, OrderSide.Buy, price: 85m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Empty(fills);
         }
@@ -73,10 +73,10 @@ namespace BacktesterTests.Core.Tests
         public void LimitSell_FillsAtLimitPrice_WhenBarHighAtOrAboveLimit()
         {
             // limit=105, bar.High=110 → 110 ≥ 105, should fill
-            var order = MakeOrder(OrderType.Limit, OrderSide.Sell, price: 105m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Limit, OrderSide.Sell, price: 105m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Single(fills);
             Assert.Equal(105m, fills[0].Price);
@@ -86,10 +86,10 @@ namespace BacktesterTests.Core.Tests
         public void LimitSell_NoFill_WhenBarHighBelowLimit()
         {
             // limit=115, bar.High=110 → 110 < 115, no fill
-            var order = MakeOrder(OrderType.Limit, OrderSide.Sell, price: 115m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Limit, OrderSide.Sell, price: 115m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Empty(fills);
         }
@@ -98,10 +98,10 @@ namespace BacktesterTests.Core.Tests
         public void StopBuy_FillsAtStopPrice_WhenBarHighAtOrAboveStop()
         {
             // stop=105, bar.High=110 → 110 ≥ 105, should fill
-            var order = MakeOrder(OrderType.Stop, OrderSide.Buy, price: 105m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Stop, OrderSide.Buy, price: 105m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Single(fills);
             Assert.Equal(105m, fills[0].Price);
@@ -111,10 +111,10 @@ namespace BacktesterTests.Core.Tests
         public void StopBuy_NoFill_WhenBarHighBelowStop()
         {
             // stop=115, bar.High=110 → 110 < 115, no fill
-            var order = MakeOrder(OrderType.Stop, OrderSide.Buy, price: 115m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Stop, OrderSide.Buy, price: 115m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Empty(fills);
         }
@@ -123,10 +123,10 @@ namespace BacktesterTests.Core.Tests
         public void StopSell_FillsAtStopPrice_WhenBarLowAtOrBelowStop()
         {
             // stop=95, bar.Low=90 → 90 ≤ 95, should fill
-            var order = MakeOrder(OrderType.Stop, OrderSide.Sell, price: 95m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Stop, OrderSide.Sell, price: 95m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Single(fills);
             Assert.Equal(95m, fills[0].Price);
@@ -136,10 +136,10 @@ namespace BacktesterTests.Core.Tests
         public void StopSell_NoFill_WhenBarLowAboveStop()
         {
             // stop=85, bar.Low=90 → 90 > 85, no fill
-            var order = MakeOrder(OrderType.Stop, OrderSide.Sell, price: 85m);
-            var bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
+            Order order = MakeOrder(OrderType.Stop, OrderSide.Sell, price: 85m);
+            Candle bar = Bar(open: 100m, high: 110m, low: 90m, close: 105m);
 
-            var fills = Fill(order, bar);
+            IReadOnlyList<FillResult> fills = Fill(order, bar);
 
             Assert.Empty(fills);
         }

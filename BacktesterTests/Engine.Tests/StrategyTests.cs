@@ -36,11 +36,11 @@ namespace BacktesterTests.Engine.Tests
         private static IReadOnlyList<OrderRequest> RunBars(
             MovingAverageCrossStrategy strategy, string symbol, params decimal[] closes)
         {
-            var results = new List<OrderRequest>();
-            for (var i = 0; i < closes.Length; i++)
+            List<OrderRequest> results = new List<OrderRequest>();
+            for (int i = 0; i < closes.Length; i++)
             {
-                var snapshot = EmptySnapshot();
-                var orders = strategy.OnBar(symbol, Bar(T0.AddDays(i), closes[i]), snapshot);
+                PortfolioSnapshot snapshot = EmptySnapshot();
+                IEnumerable<OrderRequest> orders = strategy.OnBar(symbol, Bar(T0.AddDays(i), closes[i]), snapshot);
                 results.AddRange(orders);
             }
             return results;
@@ -50,9 +50,9 @@ namespace BacktesterTests.Engine.Tests
         public void NoOrder_WhenFewerThanSlowPeriodBars()
         {
             // fast=3, slow=5 — feed only 4 bars (one short of slow period)
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
 
-            var orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m);
+            IReadOnlyList<OrderRequest> orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m);
 
             Assert.Empty(orders);
         }
@@ -61,9 +61,9 @@ namespace BacktesterTests.Engine.Tests
         public void NoOrder_OnFirstBarWithBothSMAsCalculable()
         {
             // 5th bar is the first with a slow MA — no prior direction to compare, so no order
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
 
-            var orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m, 60m);
+            IReadOnlyList<OrderRequest> orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m, 60m);
 
             Assert.Empty(orders);
         }
@@ -72,11 +72,11 @@ namespace BacktesterTests.Engine.Tests
         public void NoOrder_WhenFastContinuesAboveSlow_NoCross()
         {
             // Steadily rising prices: fast always above slow after warmup, never crosses
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
 
             // bar 5 (price=5): fast=4 slow=3 → direction=true (first time, no order)
             // bar 6 (price=6): fast=5 slow=4 → still true → no cross
-            var orders = RunBars(strategy, "AAPL", 1m, 2m, 3m, 4m, 5m, 6m);
+            IReadOnlyList<OrderRequest> orders = RunBars(strategy, "AAPL", 1m, 2m, 3m, 4m, 5m, 6m);
 
             Assert.Empty(orders);
         }
@@ -86,9 +86,9 @@ namespace BacktesterTests.Engine.Tests
         {
             // Prices fall then recover, producing a fast-crosses-above-slow event on bar 8 (index 7)
             // [100,90,80,70,60,70,80,90]: on bar 8 fastMA=80 > slowMA=74 (was below on bar 7)
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
 
-            var orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m);
+            IReadOnlyList<OrderRequest> orders = RunBars(strategy, "AAPL", 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m);
 
             Assert.Single(orders);
             Assert.Equal(OrderSide.Buy, orders[0].Side);
@@ -101,15 +101,15 @@ namespace BacktesterTests.Engine.Tests
         {
             // Rising then falling: fast crosses below slow → death cross on bar 8 (index 7)
             // [60,70,80,90,100,90,80,70]: on bar 8 fastMA=80 < slowMA=86 (was above on bar 7)
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
-            var results = new List<OrderRequest>();
-            var prices = new[] { 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m };
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            List<OrderRequest> results = new List<OrderRequest>();
+            decimal[] prices = new[] { 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m };
 
-            for (var i = 0; i < prices.Length; i++)
+            for (int i = 0; i < prices.Length; i++)
             {
                 // Provide a position in the snapshot so the sell guard passes
-                var snapshot = i >= 6 ? SnapshotWithPosition("AAPL") : EmptySnapshot();
-                var orders = strategy.OnBar("AAPL", Bar(T0.AddDays(i), prices[i]), snapshot);
+                PortfolioSnapshot snapshot = i >= 6 ? SnapshotWithPosition("AAPL") : EmptySnapshot();
+                IEnumerable<OrderRequest> orders = strategy.OnBar("AAPL", Bar(T0.AddDays(i), prices[i]), snapshot);
                 results.AddRange(orders);
             }
 
@@ -121,9 +121,9 @@ namespace BacktesterTests.Engine.Tests
         public void NoSell_OnDeathCross_WhenNoPositionExists()
         {
             // Same death-cross series but snapshot always has no position → sell is suppressed
-            var strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
+            MovingAverageCrossStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 3, slowPeriod: 5);
 
-            var orders = RunBars(strategy, "AAPL", 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m);
+            IReadOnlyList<OrderRequest> orders = RunBars(strategy, "AAPL", 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m);
 
             Assert.Empty(orders);
         }

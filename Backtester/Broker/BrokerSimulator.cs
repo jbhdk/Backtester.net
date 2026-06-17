@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Backtester.Core;
+using Backtester.Data;
+using Backtester.Models.Commission;
+using Backtester.Models.Risk;
+using Backtester.Models.Sizing;
+using Backtester.Models.Slippage;
 
 namespace Backtester.Broker
 {
-    using Backtester.Core;
-    using Backtester.Data;
-    using Backtester.Models.Commission;
-    using Backtester.Models.Risk;
-    using Backtester.Models.Sizing;
-    using Backtester.Models.Slippage;
-
+    /// <summary>
+    /// Simulates order execution against historical bar data, applying sizing, risk, slippage, and commission models.
+    /// </summary>
     public class BrokerSimulator : IBrokerSimulator
     {
         private readonly Portfolio _portfolio;
@@ -21,6 +23,9 @@ namespace Backtester.Broker
         private readonly IRiskModel _riskModel;
         private readonly Queue<Order> _pendingOrders = new();
 
+        /// <summary>
+        /// Initializes a new broker simulator. All model parameters are optional; defaults are applied when null.
+        /// </summary>
         public BrokerSimulator(
             Portfolio portfolio,
             IFillModel fillModel = null,
@@ -37,11 +42,15 @@ namespace Backtester.Broker
             _riskModel = riskModel;
         }
 
+        /// <summary>
+        /// Applies sizing and risk checks, then queues the order for fill processing on the next bar.
+        /// Returns the assigned order ID, or null if the order was rejected.
+        /// </summary>
         public string SubmitOrder(OrderRequest request)
         {
             if (_sizingModel != null)
             {
-                var sized = _sizingModel.Size(request, _portfolio);
+                int sized = _sizingModel.Size(request, _portfolio);
                 if (sized == 0) return null;
                 request.Quantity = sized;
             }
@@ -49,7 +58,7 @@ namespace Backtester.Broker
             if (_riskModel != null && !_riskModel.Accept(request, _portfolio))
                 return null;
 
-            var order = new Order
+            Order order = new Order
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = request.Symbol,
@@ -63,36 +72,39 @@ namespace Backtester.Broker
             return order.Id;
         }
 
+        /// <summary>
+        /// Matches all pending orders against the current bar, applies slippage and commission, and returns the resulting trades.
+        /// </summary>
         public IEnumerable<Trade> ProcessBar(MarketSlice slice)
         {
-            var orders = new List<Order>();
-            while (_pendingOrders.TryDequeue(out var order))
+            List<Order> orders = new();
+            while (_pendingOrders.TryDequeue(out Order order))
                 orders.Add(order);
 
-            var trades = new List<Trade>();
-            foreach (var symbolGroup in orders.GroupBy(o => o.Symbol))
+            List<Trade> trades = new();
+            foreach (IGrouping<string, Order> symbolGroup in orders.GroupBy(o => o.Symbol))
             {
-                var symbol = symbolGroup.Key;
+                string symbol = symbolGroup.Key;
                 if (!slice.HasBar(symbol))
                     continue;
 
-                var candle = slice.BarsBySymbol[symbol];
-                var fills = _fillModel.DetermineFills(symbolGroup, candle);
-                foreach (var fill in fills)
+                Candle candle = slice.BarsBySymbol[symbol];
+                IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
+                foreach (FillResult fill in fills)
                 {
-                    var order = symbolGroup.First(o => o.Id == fill.OrderId);
+                    Order filledOrder = symbolGroup.First(o => o.Id == fill.OrderId);
 
-                    var rawPrice = fill.Price;
-                    var adjustedPrice = _slippageModel?.Apply(rawPrice, order.Side) ?? rawPrice;
-                    var slippageAmount = Math.Abs(adjustedPrice - rawPrice);
-                    var commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
+                    decimal rawPrice = fill.Price;
+                    decimal adjustedPrice = _slippageModel?.Apply(rawPrice, filledOrder.Side) ?? rawPrice;
+                    decimal slippageAmount = Math.Abs(adjustedPrice - rawPrice);
+                    decimal commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
 
-                    var trade = new Trade
+                    Trade trade = new Trade
                     {
                         Id = fill.TradeId,
                         OrderId = fill.OrderId,
                         Symbol = symbol,
-                        Side = order.Side,
+                        Side = filledOrder.Side,
                         Price = adjustedPrice,
                         Quantity = fill.Quantity,
                         Slippage = slippageAmount,

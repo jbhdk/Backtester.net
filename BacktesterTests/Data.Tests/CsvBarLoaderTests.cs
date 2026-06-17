@@ -1,10 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Backtester.Data;
 using Backtester.Core;
+using Backtester.Data;
 using Xunit;
-using System.Collections.Generic;
 
 namespace BacktesterTests.Data.Tests
 {

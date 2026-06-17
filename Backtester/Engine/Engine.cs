@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
+using Backtester.Broker;
+using Backtester.Core;
+using Backtester.Data;
+using Backtester.Strategies;
 
 namespace Backtester.Engine
 {
-    using Backtester.Broker;
-    using Backtester.Core;
-    using Backtester.Data;
-    using Backtester.Strategies;
-
+    /// <summary>
+    /// Orchestrates the bar-by-bar backtest loop: feeds market data to the strategy,
+    /// submits resulting orders to the broker, and records portfolio equity after each bar.
+    /// </summary>
     public class Engine : IEngine
     {
         private readonly IMarketDataFeed _feed;
@@ -15,6 +19,9 @@ namespace Backtester.Engine
         private readonly Portfolio _portfolio;
         private bool _stopRequested;
 
+        /// <summary>
+        /// Initializes a new engine with the required data feed, strategy, broker, and portfolio.
+        /// </summary>
         public Engine(IMarketDataFeed feed, IStrategy strategy, IBrokerSimulator broker, Portfolio portfolio)
         {
             _feed = feed;
@@ -23,6 +30,7 @@ namespace Backtester.Engine
             _portfolio = portfolio;
         }
 
+        /// <summary>Begins the backtest loop, processing bars until the feed is exhausted or <see cref="Stop"/> is called.</summary>
         public void Start()
         {
             _stopRequested = false;
@@ -30,21 +38,25 @@ namespace Backtester.Engine
                 RunOnce();
         }
 
+        /// <summary>Signals the engine to halt after completing the current bar.</summary>
         public void Stop()
         {
             _stopRequested = true;
         }
 
+        /// <summary>
+        /// Processes a single bar: invokes the strategy for each symbol, submits orders, processes fills, and records equity.
+        /// </summary>
         public void RunOnce()
         {
-            var slice = _feed.GetCurrentSlice();
-            var snapshot = _portfolio.SnapshotAt(slice.Timestamp);
+            MarketSlice slice = _feed.GetCurrentSlice();
+            PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
 
-            foreach (var (symbol, bar) in slice.BarsBySymbol)
+            foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
                 if (bar == null) continue;
-                var orders = _strategy.OnBar(symbol, bar, snapshot);
-                foreach (var order in orders)
+                IEnumerable<OrderRequest> orders = _strategy.OnBar(symbol, bar, snapshot);
+                foreach (OrderRequest order in orders)
                     _broker.SubmitOrder(order);
             }
 

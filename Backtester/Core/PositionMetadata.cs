@@ -1,7 +1,9 @@
 namespace Backtester.Core
 {
+    /// <summary>
+    /// Typed metadata container for strategy-specific per-position state.
+    /// </summary>
     public class PositionMetadata
     {
-        // Typed metadata/state container for strategy-specific fields
     }
 }

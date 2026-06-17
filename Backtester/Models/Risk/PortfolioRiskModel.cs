@@ -1,25 +1,33 @@
 using System.Linq;
+using Backtester.Core;
 
 namespace Backtester.Models.Risk
 {
-    using Backtester.Core;
-
+    /// <summary>
+    /// Rejects orders that would exceed available cash or push portfolio heat above a configured threshold.
+    /// </summary>
     public class PortfolioRiskModel : IRiskModel
     {
+        /// <summary>
+        /// Gets or sets the maximum fraction of total equity that may be deployed in open positions (e.g. 0.5 for 50%).
+        /// </summary>
         public decimal MaxPortfolioHeatPercent { get; set; }
 
+        /// <summary>
+        /// Returns false if the order would exceed available cash or breach the maximum portfolio heat limit.
+        /// </summary>
         public bool Accept(OrderRequest request, Portfolio portfolio)
         {
             if (request.Price.HasValue)
             {
-                var estimatedCost = request.Price.Value * request.Quantity;
+                decimal estimatedCost = request.Price.Value * request.Quantity;
                 if (estimatedCost > portfolio.Cash) return false;
 
-                var openNotional = portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
-                var totalEquity = portfolio.Cash + openNotional;
+                decimal openNotional = portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
+                decimal totalEquity = portfolio.Cash + openNotional;
                 if (totalEquity > 0)
                 {
-                    var heatAfter = (openNotional + estimatedCost) / totalEquity;
+                    decimal heatAfter = (openNotional + estimatedCost) / totalEquity;
                     if (heatAfter > MaxPortfolioHeatPercent) return false;
                 }
             }

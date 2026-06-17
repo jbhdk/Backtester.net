@@ -27,10 +27,10 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StubStrategyBuys_CreatesPositionAndReducesCash()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
-            var feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            var engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
+            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -43,11 +43,11 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StrategyReceivesSnapshot_WithCurrentCash()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
-            var feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            var spy = new SnapshotCapturingStrategy();
-            var engine = new BacktestEngine(feed, spy, broker, portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
+            SnapshotCapturingStrategy spy = new SnapshotCapturingStrategy();
+            BacktestEngine engine = new BacktestEngine(feed, spy, broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -59,10 +59,10 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void RunOnce_StrategyReturnsNoOrders_PortfolioUnchanged()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
-            var feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            var engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
+            BacktestEngine engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
 
             feed.Advance();
             engine.RunOnce();
@@ -74,30 +74,30 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Start_TwoSymbolFiveBars_BuyOnBar1_FinalSnapshotReflectsPosition()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
 
-            var aaplBars = Enumerable.Range(0, 5)
+            Candle[] aaplBars = Enumerable.Range(0, 5)
                 .Select(i => Bar(T0.AddDays(i), 100m + i))
                 .ToArray();
-            var msftBars = Enumerable.Range(0, 5)
+            Candle[] msftBars = Enumerable.Range(0, 5)
                 .Select(i => Bar(T0.AddDays(i), 200m + i))
                 .ToArray();
 
-            var feed = MarketDataSynchronizer.CreateFromSeries(
+            IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
                 new Dictionary<string, IReadOnlyList<Candle>>
                 {
                     ["AAPL"] = aaplBars,
                     ["MSFT"] = msftBars
                 });
 
-            var engine = new BacktestEngine(feed, new BuyAaplOnFirstBarOnly(), broker, portfolio);
+            BacktestEngine engine = new BacktestEngine(feed, new BuyAaplOnFirstBarOnly(), broker, portfolio);
 
             engine.Start();
 
             Assert.Equal(5, portfolio.EquityHistory.Count);
 
-            var final = portfolio.EquityHistory[4];
+            EquitySnapshot final = portfolio.EquityHistory[4];
             Assert.True(final.Cash < 10_000m, "Cash should be reduced by the AAPL purchase");
             Assert.True(final.UnrealizedPnL > 0m, "Open AAPL position should have market value");
             Assert.Equal(final.Cash + final.UnrealizedPnL, final.TotalEquity);
@@ -106,13 +106,13 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Start_ThreeBarFeed_EquityHistoryHasThreeEntries()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
-            var feed = SingleSymbolFeed("AAPL",
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
                 Bar(T0, 100m),
                 Bar(T0.AddDays(1), 101m),
                 Bar(T0.AddDays(2), 102m));
-            var engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
+            BacktestEngine engine = new BacktestEngine(feed, new DoNothingStrategy(), broker, portfolio);
 
             engine.Start();
 
@@ -122,15 +122,15 @@ namespace BacktesterTests.Engine.Tests
         [Fact]
         public void Stop_HaltsLoopAfterCurrentTick()
         {
-            var portfolio = new Portfolio(10_000m);
-            var broker = new BrokerSimulator(portfolio);
-            var feed = SingleSymbolFeed("AAPL",
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
                 Bar(T0, 100m),
                 Bar(T0.AddDays(1), 101m),
                 Bar(T0.AddDays(2), 102m));
 
-            var stopAfterFirstBar = new StopAfterOneBarStrategy();
-            var engine = new BacktestEngine(feed, stopAfterFirstBar, broker, portfolio);
+            StopAfterOneBarStrategy stopAfterFirstBar = new StopAfterOneBarStrategy();
+            BacktestEngine engine = new BacktestEngine(feed, stopAfterFirstBar, broker, portfolio);
             stopAfterFirstBar.Engine = engine;
 
             engine.Start();

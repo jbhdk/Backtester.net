@@ -1,22 +1,24 @@
 using System;
 using System.Collections.Generic;
+using Backtester.Core;
 
 namespace Backtester.Data
 {
-    using Core;
-
+    /// <summary>
+    /// Provides a bar-by-bar cursor over synchronized multi-symbol market data.
+    /// </summary>
     public interface IMarketDataFeed
     {
-        // Current global cursor (UTC)
+        /// <summary>Gets the current global cursor timestamp (UTC).</summary>
         DateTime CurrentTime { get; }
 
-        // Advance the feed to the next timestamp. Returns false at end-of-data.
+        /// <summary>Advances the feed to the next timestamp. Returns false when all data has been consumed.</summary>
         bool Advance();
 
-        // Return a snapshot representing the current time cursor.
+        /// <summary>Returns a snapshot of all symbol bars available at the current time cursor.</summary>
         MarketSlice GetCurrentSlice();
 
-        // Return the last `lookback` bars for `symbol`, newest-first.
+        /// <summary>Returns the last <paramref name="lookback"/> bars for <paramref name="symbol"/>, newest-first.</summary>
         IReadOnlyList<Candle> GetLookback(string symbol, int lookback);
     }
 }
