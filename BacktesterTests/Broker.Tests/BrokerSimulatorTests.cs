@@ -269,6 +269,81 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(120m, bar2Trades[0].Price);
         }
 
+        // --- Bracket + OCO ---
+
+        [Fact]
+        public void SubmitBracket_EntryFills_StopSubsequentlyFills()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: Market entry fills at Open=100
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: Low=85, stop at 90 triggers
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 95m, 98m, 85m, 88m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+            Assert.Equal(OrderSide.Sell, trades[0].Side);
+            Assert.Equal(90m, trades[0].Price);
+        }
+
+        [Fact]
+        public void SubmitBracket_BarSpansBothLegs_ExactlyOneFillsAndSiblingCancelled()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: entry fills
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: Low=80 (stop at 90 triggers), High=130 (target at 120 triggers) — spans both legs
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 80m, 110m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+        }
+
+        [Fact]
+        public void SubmitBracket_ModifyStop_TrailingStopFillsAtNewPrice()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: entry fills, stop (90) and target (120) armed
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Trail stop up to 95 (old price 90 would not trigger on Low=92, new price 95 does)
+            broker.Modify(handle.StopOrderId, 95m);
+
+            // Bar 2: Low=92 → stop@90 would not trigger; stop@95 does
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 96m, 98m, 92m, 94m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+            Assert.Equal(OrderSide.Sell, trades[0].Side);
+            Assert.Equal(95m, trades[0].Price);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

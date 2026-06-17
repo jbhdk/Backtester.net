@@ -13,7 +13,7 @@ namespace Backtester.Broker
     /// <summary>
     /// Simulates order execution against historical bar data, applying sizing, risk, slippage, and commission models.
     /// </summary>
-    public class BrokerSimulator : IBrokerSimulator
+    public class BrokerSimulator : IBrokerSimulator, IBroker
     {
         private readonly Portfolio _portfolio;
         private readonly IFillModel _fillModel;
@@ -23,6 +23,10 @@ namespace Backtester.Broker
         private readonly IRiskModel _riskModel;
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
+        // key: entry order ID → (stopPrice, targetPrice, quantity, handle) for pending bracket legs
+        private readonly Dictionary<string, (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
+        // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
+        private readonly Dictionary<string, string> _ocoLinks = new();
         private DateTime _currentBarTimestamp;
 
         /// <summary>
@@ -75,6 +79,25 @@ namespace Backtester.Broker
         }
 
         /// <summary>
+        /// Queues a single order for fill processing. Returns the assigned order ID, or null if rejected.
+        /// </summary>
+        public string Submit(OrderRequest request) => SubmitOrder(request);
+
+        /// <summary>
+        /// Queues an entry order with attached stop-loss and take-profit. Returns a handle whose
+        /// StopOrderId and TargetOrderId are populated once the entry fills.
+        /// </summary>
+        public BracketHandle SubmitBracket(BracketRequest request)
+        {
+            string entryId = SubmitOrder(request.Entry);
+            if (entryId == null) return null;
+            int quantity = _orderBook[entryId].Quantity;
+            BracketHandle handle = new BracketHandle { EntryOrderId = entryId };
+            _pendingBrackets[entryId] = (request.StopPrice, request.TargetPrice, quantity, handle);
+            return handle;
+        }
+
+        /// <summary>
         /// Matches all working orders against the current bar, applies slippage and commission, and returns the resulting trades.
         /// Filled orders are removed from the book; unfilled orders remain working (GTC).
         /// Records the bar timestamp so subsequent <see cref="SubmitOrder"/> calls can stamp orders with simulation time.
@@ -95,8 +118,18 @@ namespace Backtester.Broker
                 IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
                 foreach (FillResult fill in fills)
                 {
+                    if (!_orderBook.ContainsKey(fill.OrderId))
+                        continue;
+
                     Order filledOrder = _orderBook[fill.OrderId];
                     _orderBook.Remove(fill.OrderId);
+
+                    if (_ocoLinks.TryGetValue(fill.OrderId, out string siblingId))
+                    {
+                        _ocoLinks.Remove(fill.OrderId);
+                        _ocoLinks.Remove(siblingId);
+                        _orderBook.Remove(siblingId);
+                    }
 
                     decimal rawPrice = fill.Price;
                     decimal adjustedPrice = _slippageModel?.Apply(rawPrice, filledOrder.Side) ?? rawPrice;
@@ -117,9 +150,36 @@ namespace Backtester.Broker
                     };
                     _portfolio.ApplyTrade(trade);
                     trades.Add(trade);
+
+                    if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) bracket))
+                    {
+                        _pendingBrackets.Remove(fill.OrderId);
+                        string stopId = ArmBracketLeg(symbol, OrderType.Stop, bracket.stopPrice, bracket.quantity);
+                        string targetId = ArmBracketLeg(symbol, OrderType.Limit, bracket.targetPrice, bracket.quantity);
+                        _ocoLinks[stopId] = targetId;
+                        _ocoLinks[targetId] = stopId;
+                        bracket.handle.StopOrderId = stopId;
+                        bracket.handle.TargetOrderId = targetId;
+                    }
                 }
             }
             return trades;
+        }
+
+        private string ArmBracketLeg(string symbol, OrderType type, decimal price, int quantity)
+        {
+            Order order = new Order
+            {
+                Id = Guid.NewGuid().ToString(),
+                Symbol = symbol,
+                Side = OrderSide.Sell,
+                Type = type,
+                Price = price,
+                Quantity = quantity,
+                SubmittedAt = _currentBarTimestamp
+            };
+            _orderBook[order.Id] = order;
+            return order.Id;
         }
 
         /// <summary>
