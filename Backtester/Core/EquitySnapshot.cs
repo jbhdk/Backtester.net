@@ -19,7 +19,7 @@ namespace Backtester.Core
         /// <summary>Gets or sets the cumulative realized profit/loss from closed trades.</summary>
         public decimal RealizedPnL { get; set; }
 
-        /// <summary>Gets or sets the total portfolio equity (cash plus unrealized value).</summary>
-        public decimal TotalEquity { get; set; }
+        /// <summary>Gets or sets the mark-to-market portfolio equity (cash plus current market value of open positions).</summary>
+        public decimal MarkedEquity { get; set; }
     }
 }

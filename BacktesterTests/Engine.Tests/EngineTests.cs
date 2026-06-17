@@ -137,7 +137,7 @@ namespace BacktesterTests.Engine.Tests
             EquitySnapshot final = portfolio.EquityHistory[4];
             Assert.True(final.Cash < 10_000m, "Cash should be reduced by the AAPL purchase");
             Assert.True(final.UnrealizedPnL > 0m, "Open AAPL position should have market value");
-            Assert.Equal(final.Cash + final.UnrealizedPnL, final.TotalEquity);
+            Assert.Equal(final.Cash + final.UnrealizedPnL, final.MarkedEquity);
         }
 
         [Fact]

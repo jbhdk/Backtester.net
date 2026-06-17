@@ -14,8 +14,8 @@ namespace Backtester.Core
         /// <summary>Gets or sets the available cash at this point in time.</summary>
         public decimal Cash { get; set; }
 
-        /// <summary>Gets or sets the total cost-basis equity (cash plus open position notional).</summary>
-        public decimal Equity { get; set; }
+        /// <summary>Gets or sets the total cost-basis equity (cash plus open position cost, excluding unrealized P&amp;L).</summary>
+        public decimal CostBasisEquity { get; set; }
 
         /// <summary>Gets or sets the list of open positions at this point in time.</summary>
         public IReadOnlyList<Position> Positions { get; set; }

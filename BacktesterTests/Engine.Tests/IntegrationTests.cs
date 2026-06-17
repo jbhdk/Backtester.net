@@ -66,7 +66,7 @@ namespace BacktesterTests.Engine.Tests
             Assert.Equal(T0.AddDays(8), trade.Timestamp);
 
             // Final equity differs from starting cash (position was opened)
-            decimal finalEquity = portfolio.EquityHistory.Last().TotalEquity;
+            decimal finalEquity = portfolio.EquityHistory.Last().MarkedEquity;
             Assert.NotEqual(10_000m, finalEquity);
         }
     }

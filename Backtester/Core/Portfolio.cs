@@ -47,7 +47,7 @@ namespace Backtester.Core
             {
                 Timestamp = timestamp,
                 Cash = Cash,
-                Equity = costBasisEquity,
+                CostBasisEquity = costBasisEquity,
                 Positions = Positions.ToList()
             };
         }
@@ -57,7 +57,6 @@ namespace Backtester.Core
         /// </summary>
         public void ApplyTrade(Trade trade)
         {
-            _trades.Add(trade);
             if (trade.Side == OrderSide.Buy)
             {
                 Cash -= trade.Price * trade.Quantity + trade.Commission;
@@ -68,16 +67,30 @@ namespace Backtester.Core
                     Positions.Add(position);
                 }
                 position.AddTrade(trade);
+                _trades.Add(trade);
             }
             else
             {
-                Cash += trade.Price * trade.Quantity - trade.Commission;
                 Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
-                if (position != null)
+                int effectiveQty = Math.Min(trade.Quantity, position?.Quantity ?? 0);
+                if (effectiveQty == 0)
+                    return;
+
+                Trade effective = effectiveQty == trade.Quantity ? trade : new Trade
                 {
-                    RealizedPnL += (trade.Price - position.AveragePrice) * trade.Quantity;
-                    position.AddTrade(trade);
-                }
+                    Id = trade.Id,
+                    Symbol = trade.Symbol,
+                    Side = trade.Side,
+                    Price = trade.Price,
+                    Quantity = effectiveQty,
+                    Commission = trade.Commission,
+                    Slippage = trade.Slippage,
+                    Timestamp = trade.Timestamp
+                };
+                Cash += effective.Price * effective.Quantity - effective.Commission;
+                RealizedPnL += (effective.Price - position.AveragePrice) * effective.Quantity;
+                position.AddTrade(effective);
+                _trades.Add(effective);
             }
         }
 
@@ -98,7 +111,7 @@ namespace Backtester.Core
                 Cash = Cash,
                 UnrealizedPnL = unrealized,
                 RealizedPnL = RealizedPnL,
-                TotalEquity = Cash + unrealized
+                MarkedEquity = Cash + unrealized
             });
         }
     }

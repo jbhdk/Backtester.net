@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Backtester.Core;
 
@@ -45,12 +44,5 @@ namespace Backtester.Core
             }
         }
 
-        /// <summary>
-        /// Updates unrealized P&amp;L and any bar-level position state using the latest candle.
-        /// </summary>
-        public void UpdateWithBar(Candle bar)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

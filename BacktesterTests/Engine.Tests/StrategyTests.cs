@@ -21,7 +21,7 @@ namespace BacktesterTests.Engine.Tests
         {
             Timestamp = T0,
             Cash = 10_000m,
-            Equity = 10_000m,
+            CostBasisEquity = 10_000m,
             Positions = new List<Position>()
         };
 
@@ -29,7 +29,7 @@ namespace BacktesterTests.Engine.Tests
         {
             Timestamp = T0,
             Cash = 9_000m,
-            Equity = 10_000m,
+            CostBasisEquity = 10_000m,
             Positions = new List<Position> { new() { Symbol = symbol, Quantity = 10, AveragePrice = 100m } }
         };
 

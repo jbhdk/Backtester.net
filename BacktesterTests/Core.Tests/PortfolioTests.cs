@@ -135,6 +135,65 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(9_000m, snapshot.Cash);
         }
 
+        // --- Long-only guard ---
+
+        [Fact]
+        public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoCashChange()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
+
+            Assert.Equal(10_000m, portfolio.Cash);
+        }
+
+        [Fact]
+        public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoPositionCreated()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
+
+            Assert.Empty(portfolio.Positions);
+        }
+
+        [Fact]
+        public void ApplyTrade_SellLargerThanLong_ClampedToOpenQuantity_QuantityNeverNegative()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 5));
+
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
+
+            Assert.Equal(0, portfolio.Positions[0].Quantity);
+        }
+
+        [Fact]
+        public void ApplyTrade_SellLargerThanLong_CashReflectsClamped()
+        {
+            // Buy 5@100 → Cash=9500; oversell 10, clamped to 5@120 → Cash=9500+600=10100
+            Portfolio portfolio = new Portfolio(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 5));
+
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
+
+            Assert.Equal(10_100m, portfolio.Cash);
+        }
+
+        // --- Equity naming ---
+
+        [Fact]
+        public void SnapshotAt_ExposesCostBasisEquity_ExcludingUnrealizedPnL()
+        {
+            // Buy 10@100 → Cash=9000, cost basis = 9000+1000 = 10000 (not mark-to-market)
+            Portfolio portfolio = new Portfolio(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0);
+
+            Assert.Equal(10_000m, snapshot.CostBasisEquity);
+        }
+
         // --- EquityHistory / RecordEquitySnapshot ---
 
         private static MarketSlice EmptySlice(DateTime ts) => new()
@@ -172,14 +231,26 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
-        public void RecordEquitySnapshot_NoPositions_CashAndTotalEquityEqualStartingCash()
+        public void RecordEquitySnapshot_ExposesMarkedEquity_IncludingUnrealizedPnL()
+        {
+            // Buy 10@100 → Cash=9000; mark at 110 → position value=1100; MarkedEquity=10100
+            Portfolio portfolio = new Portfolio(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 110m, T0));
+
+            Assert.Equal(10_100m, portfolio.EquityHistory[0].MarkedEquity);
+        }
+
+        [Fact]
+        public void RecordEquitySnapshot_NoPositions_CashAndMarkedEquityEqualStartingCash()
         {
             Portfolio portfolio = new Portfolio(10_000m);
 
             portfolio.RecordEquitySnapshot(EmptySlice(T0));
 
             Assert.Equal(10_000m, portfolio.EquityHistory[0].Cash);
-            Assert.Equal(10_000m, portfolio.EquityHistory[0].TotalEquity);
+            Assert.Equal(10_000m, portfolio.EquityHistory[0].MarkedEquity);
             Assert.Equal(0m, portfolio.EquityHistory[0].UnrealizedPnL);
         }
 
@@ -187,7 +258,7 @@ namespace BacktesterTests.Core.Tests
         public void RecordEquitySnapshot_WithOpenPosition_UnrealizedPnLIsMarketValue()
         {
             // Buy 10 @ $100 → Cash = $9,000; position market value at $110 = $1,100
-            // TotalEquity = $9,000 + $1,100 = $10,100
+            // MarkedEquity = $9,000 + $1,100 = $10,100
             Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -196,13 +267,13 @@ namespace BacktesterTests.Core.Tests
             EquitySnapshot snap = portfolio.EquityHistory[0];
             Assert.Equal(9_000m, snap.Cash);
             Assert.Equal(1_100m, snap.UnrealizedPnL);
-            Assert.Equal(10_100m, snap.TotalEquity);
+            Assert.Equal(10_100m, snap.MarkedEquity);
         }
 
         [Fact]
         public void RecordEquitySnapshot_SymbolNotInSlice_FallsBackToAveragePrice()
         {
-            // Buy 10 @ $100; slice has no bar for AAPL → mark at avg price, UnrealizedPnL = $1,000, TotalEquity = $10,000
+            // Buy 10 @ $100; slice has no bar for AAPL → mark at avg price, UnrealizedPnL = $1,000, MarkedEquity = $10,000
             Portfolio portfolio = new Portfolio(10_000m);
             portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
 
@@ -210,7 +281,7 @@ namespace BacktesterTests.Core.Tests
 
             EquitySnapshot snap = portfolio.EquityHistory[0];
             Assert.Equal(1_000m, snap.UnrealizedPnL);
-            Assert.Equal(10_000m, snap.TotalEquity);
+            Assert.Equal(10_000m, snap.MarkedEquity);
         }
 
         // --- RealizedPnL ---
