@@ -22,6 +22,7 @@ namespace Backtester.Broker
         private readonly ISizingModel _sizingModel;
         private readonly IRiskModel _riskModel;
         private readonly Queue<Order> _pendingOrders = new();
+        private DateTime _currentBarTimestamp;
 
         /// <summary>
         /// Initializes a new broker simulator. All model parameters are optional; defaults are applied when null.
@@ -66,7 +67,7 @@ namespace Backtester.Broker
                 Type = request.Type,
                 Price = request.Price,
                 Quantity = request.Quantity,
-                SubmittedAt = DateTime.UtcNow
+                SubmittedAt = _currentBarTimestamp
             };
             _pendingOrders.Enqueue(order);
             return order.Id;
@@ -74,9 +75,11 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Matches all pending orders against the current bar, applies slippage and commission, and returns the resulting trades.
+        /// Records the bar timestamp so subsequent <see cref="SubmitOrder"/> calls can stamp orders with simulation time.
         /// </summary>
         public IEnumerable<Trade> ProcessBar(MarketSlice slice)
         {
+            _currentBarTimestamp = slice.Timestamp;
             List<Order> orders = new();
             while (_pendingOrders.TryDequeue(out Order order))
                 orders.Add(order);

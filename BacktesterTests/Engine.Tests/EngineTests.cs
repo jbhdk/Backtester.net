@@ -25,13 +25,50 @@ namespace BacktesterTests.Engine.Tests
             new() { Timestamp = ts, Open = close, High = close + 2, Low = close - 2, Close = close, Volume = 1000 };
 
         [Fact]
-        public void RunOnce_StubStrategyBuys_CreatesPositionAndReducesCash()
+        public void RunOnce_OrderEmittedOnBarN_DoesNotFillOnSameBar()
         {
             Portfolio portfolio = new Portfolio(10_000m);
             BrokerSimulator broker = new BrokerSimulator(portfolio);
             IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
             BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
+            feed.Advance();
+            engine.RunOnce();
+
+            Assert.Empty(portfolio.Positions);
+        }
+
+        [Fact]
+        public void RunOnce_MarketOrderEmittedOnBar1_FillsAtBar2Open()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            Candle bar1 = new Candle { Timestamp = T0, Open = 100m, High = 110m, Low = 90m, Close = 105m, Volume = 1000 };
+            Candle bar2 = new Candle { Timestamp = T0.AddDays(1), Open = 120m, High = 130m, Low = 115m, Close = 125m, Volume = 1000 };
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
+            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+
+            feed.Advance();
+            engine.RunOnce();
+            feed.Advance();
+            engine.RunOnce();
+
+            Assert.Single(portfolio.Positions);
+            Assert.Equal(120m, portfolio.Positions[0].AveragePrice);
+        }
+
+        [Fact]
+        public void RunOnce_StubStrategyBuys_CreatesPositionAndReducesCash()
+        {
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
+                Bar(T0, 150m),
+                Bar(T0.AddDays(1), 155m));
+            BacktestEngine engine = new BacktestEngine(feed, new AlwaysBuyOneShare(), broker, portfolio);
+
+            feed.Advance();
+            engine.RunOnce();
             feed.Advance();
             engine.RunOnce();
 

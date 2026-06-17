@@ -45,13 +45,16 @@ namespace Backtester.Engine
         }
 
         /// <summary>
-        /// Processes a single bar: invokes the strategy for each symbol, submits orders, processes fills, and records equity.
+        /// Processes a single bar: fills orders queued on the previous bar, records equity, then invokes the strategy
+        /// and queues any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
         /// </summary>
         public void RunOnce()
         {
             MarketSlice slice = _feed.GetCurrentSlice();
-            PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
+            _broker.ProcessBar(slice);
+            _portfolio.RecordEquitySnapshot(slice);
 
+            PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
                 if (bar == null) continue;
@@ -59,9 +62,6 @@ namespace Backtester.Engine
                 foreach (OrderRequest order in orders)
                     _broker.SubmitOrder(order);
             }
-
-            _broker.ProcessBar(slice);
-            _portfolio.RecordEquitySnapshot(slice);
         }
     }
 }

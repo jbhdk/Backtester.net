@@ -32,7 +32,7 @@ namespace BacktesterTests.Engine.Tests
         public void MovingAverageCross_FullStack_ProducesTradesAndEquityHistory()
         {
             // Synthetic 10-bar series: [100,90,80,70,60,70,80,90,100,110]
-            // Golden cross on bar 8 (index 7, price=90) → market buy fills at next Open=90
+            // Golden cross fires during bar index 7 (price=90) → market buy fills at bar index 8's Open=100
             decimal[] closes = new[] { 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m, 100m, 110m };
             Candle[] candles = closes
                 .Select((c, i) => Bar(T0.AddDays(i), c))
@@ -63,7 +63,7 @@ namespace BacktesterTests.Engine.Tests
             Trade trade = portfolio.Trades[0];
             Assert.Equal(5m, trade.Commission);
             Assert.True(trade.Price > 0m);
-            Assert.Equal(T0.AddDays(7), trade.Timestamp);
+            Assert.Equal(T0.AddDays(8), trade.Timestamp);
 
             // Final equity differs from starting cash (position was opened)
             decimal finalEquity = portfolio.EquityHistory.Last().TotalEquity;

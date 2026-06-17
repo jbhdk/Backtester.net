@@ -167,6 +167,30 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitOrder_AfterProcessBar_SubmittedAtReflectsBarTimestamp()
+        {
+            DateTime barTime = new DateTime(2020, 6, 1, 9, 30, 0, DateTimeKind.Utc);
+            MarketSlice slice = new MarketSlice
+            {
+                Timestamp = barTime,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    ["AAPL"] = new Candle { Timestamp = barTime, Open = 100m, High = 100m, Low = 100m, Close = 100m, Volume = 1 }
+                }
+            };
+
+            CapturingFillModel capture = new CapturingFillModel();
+            BrokerSimulator broker = new BrokerSimulator(new Portfolio(10_000m), fillModel: capture);
+
+            broker.ProcessBar(slice);
+            broker.SubmitOrder(MarketBuy("AAPL", 1));
+            broker.ProcessBar(slice);
+
+            Assert.Single(capture.CapturedOrders);
+            Assert.Equal(barTime, capture.CapturedOrders[0].SubmittedAt);
+        }
+
+        [Fact]
         public void BrokerSimulator_DefaultModel_MarketOrder_FillsAtOpen_NotClose()
         {
             Portfolio portfolio = new Portfolio(10_000m);
@@ -185,6 +209,18 @@ namespace BacktesterTests.Broker.Tests
 
             Assert.Single(trades);
             Assert.Equal(100m, trades[0].Price);
+        }
+
+        /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
+        private class CapturingFillModel : IFillModel
+        {
+            public List<Order> CapturedOrders { get; } = new();
+
+            public IEnumerable<FillResult> DetermineFills(IEnumerable<Order> orders, Candle bar)
+            {
+                CapturedOrders.AddRange(orders);
+                return Enumerable.Empty<FillResult>();
+            }
         }
     }
 }
