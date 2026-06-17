@@ -20,5 +20,8 @@ namespace Backtester.Data
 
         /// <summary>Returns the last <paramref name="lookback"/> bars for <paramref name="symbol"/>, newest-first.</summary>
         IReadOnlyList<Candle> GetLookback(string symbol, int lookback);
+
+        /// <summary>Returns the complete bar history for all symbols in the feed.</summary>
+        IReadOnlyDictionary<string, IReadOnlyList<Candle>> GetFullHistory();
     }
 }

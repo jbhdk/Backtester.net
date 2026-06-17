@@ -136,6 +136,11 @@ namespace Backtester.Data
                 result.Reverse();
                 return result;
             }
+
+            public IReadOnlyDictionary<string, IReadOnlyList<Candle>> GetFullHistory()
+            {
+                return new Dictionary<string, IReadOnlyList<Candle>>(_series);
+            }
         }
     }
 }

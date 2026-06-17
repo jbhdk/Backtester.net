@@ -5,8 +5,8 @@ using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
 using Backtester.Engine;
-using BacktestEngine = Backtester.Engine.Engine;
 using Backtester.Strategies;
+using BacktestEngine = Backtester.Engine.Engine;
 using Xunit;
 
 namespace BacktesterTests.Engine.Tests
@@ -23,6 +23,39 @@ namespace BacktesterTests.Engine.Tests
 
         private static Candle Bar(DateTime ts, decimal close) =>
             new() { Timestamp = ts, Open = close, High = close + 2, Low = close - 2, Close = close, Volume = 1000 };
+
+        [Fact]
+        public void Start_InvokesOnStart_BeforeFirstOnBar()
+        {
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 100m));
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            CallOrderTrackingStrategy strategy = new CallOrderTrackingStrategy();
+
+            BacktestEngine engine = new BacktestEngine(feed, strategy, broker, portfolio);
+            engine.Start();
+
+            Assert.True(strategy.OnStartWasCalled);
+            Assert.True(strategy.OnStartCalledBeforeOnBar);
+        }
+
+        [Fact]
+        public void Start_PassesFullFeedHistory_ToOnStart()
+        {
+            Candle bar1 = Bar(T0, 100m);
+            Candle bar2 = Bar(T0.AddDays(1), 101m);
+            IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
+            Portfolio portfolio = new Portfolio(10_000m);
+            BrokerSimulator broker = new BrokerSimulator(portfolio);
+            CallOrderTrackingStrategy strategy = new CallOrderTrackingStrategy();
+
+            BacktestEngine engine = new BacktestEngine(feed, strategy, broker, portfolio);
+            engine.Start();
+
+            Assert.NotNull(strategy.ReceivedHistory);
+            Assert.True(strategy.ReceivedHistory.ContainsKey("AAPL"));
+            Assert.Equal(2, strategy.ReceivedHistory["AAPL"].Count);
+        }
 
         [Fact]
         public void RunOnce_OrderEmittedOnBarN_DoesNotFillOnSameBar()
@@ -177,55 +210,71 @@ namespace BacktesterTests.Engine.Tests
 
         // --- Stub strategies ---
 
-        private class AlwaysBuyOneShare : IStrategy
+        /// <summary>Tracks that OnStart is called before OnBar.</summary>
+        private class CallOrderTrackingStrategy : StrategyBase
         {
-            public IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot)
+            public bool OnStartWasCalled { get; private set; }
+            public bool OnStartCalledBeforeOnBar { get; private set; }
+            public IReadOnlyDictionary<string, IReadOnlyList<Candle>> ReceivedHistory { get; private set; }
+            private bool _onBarWasCalled;
+
+            public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
             {
-                yield return new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 };
+                OnStartWasCalled = true;
+                OnStartCalledBeforeOnBar = !_onBarWasCalled;
+                ReceivedHistory = history;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                _onBarWasCalled = true;
             }
         }
 
-        private class DoNothingStrategy : IStrategy
+        private class AlwaysBuyOneShare : StrategyBase
         {
-            public IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot)
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
-                yield break;
+                broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
             }
         }
 
-        private class SnapshotCapturingStrategy : IStrategy
+        private class DoNothingStrategy : StrategyBase
+        {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        private class SnapshotCapturingStrategy : StrategyBase
         {
             public PortfolioSnapshot LastSnapshot { get; private set; }
 
-            public IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot)
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
                 LastSnapshot = snapshot;
-                yield break;
             }
         }
 
-        private class StopAfterOneBarStrategy : IStrategy
+        private class StopAfterOneBarStrategy : StrategyBase
         {
             public IEngine Engine { get; set; }
             private bool _stopped;
 
-            public IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot)
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
                 if (!_stopped) { Engine.Stop(); _stopped = true; }
-                yield break;
             }
         }
 
-        private class BuyAaplOnFirstBarOnly : IStrategy
+        private class BuyAaplOnFirstBarOnly : StrategyBase
         {
             private bool _bought;
 
-            public IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot)
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
                 if (!_bought && symbol == "AAPL")
                 {
                     _bought = true;
-                    yield return new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 };
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
                 }
             }
         }

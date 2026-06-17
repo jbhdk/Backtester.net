@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Backtester.Broker;
 using Backtester.Core;
 
 namespace Backtester.Strategies
@@ -9,8 +10,14 @@ namespace Backtester.Strategies
     public interface IStrategy
     {
         /// <summary>
-        /// Called on each bar for the given symbol. Returns zero or more order requests to submit.
+        /// Called once before the first bar with the complete per-symbol bar history from the feed.
+        /// Strategies use this to pre-compute indicators with any external library.
         /// </summary>
-        IEnumerable<OrderRequest> OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot);
+        void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history);
+
+        /// <summary>
+        /// Called on each bar for the given symbol. Strategies submit orders directly via <paramref name="broker"/>.
+        /// </summary>
+        void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker);
     }
 }

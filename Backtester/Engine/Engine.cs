@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
@@ -34,6 +33,7 @@ namespace Backtester.Engine
         public void Start()
         {
             _stopRequested = false;
+            _strategy.OnStart(_feed.GetFullHistory());
             while (!_stopRequested && _feed.Advance())
                 RunOnce();
         }
@@ -58,9 +58,7 @@ namespace Backtester.Engine
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
                 if (bar == null) continue;
-                IEnumerable<OrderRequest> orders = _strategy.OnBar(symbol, bar, snapshot);
-                foreach (OrderRequest order in orders)
-                    _broker.SubmitOrder(order);
+                _strategy.OnBar(symbol, bar, snapshot, _broker);
             }
         }
     }
