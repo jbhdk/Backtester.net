@@ -21,7 +21,8 @@ namespace Backtester.Broker
         private readonly ISlippageModel _slippageModel;
         private readonly ISizingModel _sizingModel;
         private readonly IRiskModel _riskModel;
-        private readonly Queue<Order> _pendingOrders = new();
+        // key: order ID → working order (GTC until filled or cancelled)
+        private readonly Dictionary<string, Order> _orderBook = new();
         private DateTime _currentBarTimestamp;
 
         /// <summary>
@@ -69,23 +70,22 @@ namespace Backtester.Broker
                 Quantity = request.Quantity,
                 SubmittedAt = _currentBarTimestamp
             };
-            _pendingOrders.Enqueue(order);
+            _orderBook[order.Id] = order;
             return order.Id;
         }
 
         /// <summary>
-        /// Matches all pending orders against the current bar, applies slippage and commission, and returns the resulting trades.
+        /// Matches all working orders against the current bar, applies slippage and commission, and returns the resulting trades.
+        /// Filled orders are removed from the book; unfilled orders remain working (GTC).
         /// Records the bar timestamp so subsequent <see cref="SubmitOrder"/> calls can stamp orders with simulation time.
         /// </summary>
         public IEnumerable<Trade> ProcessBar(MarketSlice slice)
         {
             _currentBarTimestamp = slice.Timestamp;
-            List<Order> orders = new();
-            while (_pendingOrders.TryDequeue(out Order order))
-                orders.Add(order);
 
+            List<Order> snapshot = _orderBook.Values.ToList();
             List<Trade> trades = new();
-            foreach (IGrouping<string, Order> symbolGroup in orders.GroupBy(o => o.Symbol))
+            foreach (IGrouping<string, Order> symbolGroup in snapshot.GroupBy(o => o.Symbol))
             {
                 string symbol = symbolGroup.Key;
                 if (!slice.HasBar(symbol))
@@ -95,7 +95,8 @@ namespace Backtester.Broker
                 IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
                 foreach (FillResult fill in fills)
                 {
-                    Order filledOrder = symbolGroup.First(o => o.Id == fill.OrderId);
+                    Order filledOrder = _orderBook[fill.OrderId];
+                    _orderBook.Remove(fill.OrderId);
 
                     decimal rawPrice = fill.Price;
                     decimal adjustedPrice = _slippageModel?.Apply(rawPrice, filledOrder.Side) ?? rawPrice;
@@ -119,6 +120,20 @@ namespace Backtester.Broker
                 }
             }
             return trades;
+        }
+
+        /// <summary>
+        /// Removes a working order from the book so it will never fill. No-ops if the order has already filled or is unknown.
+        /// </summary>
+        public void Cancel(string orderId) => _orderBook.Remove(orderId);
+
+        /// <summary>
+        /// Updates the trigger price of a working order. No-ops if the order has already filled or is unknown.
+        /// </summary>
+        public void Modify(string orderId, decimal newPrice)
+        {
+            if (_orderBook.TryGetValue(orderId, out Order order))
+                order.Price = newPrice;
         }
     }
 }
