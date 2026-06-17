@@ -12,6 +12,7 @@ namespace Backtester.Core
     {
         private readonly List<EquitySnapshot> _equityHistory = new();
         private readonly List<Trade> _trades = new();
+        private readonly decimal _startingCash;
 
         /// <summary>Gets the current available cash balance.</summary>
         public decimal Cash { get; private set; }
@@ -34,6 +35,7 @@ namespace Backtester.Core
         /// <summary>Initializes a new portfolio with the given starting cash balance.</summary>
         public Portfolio(decimal startingCash)
         {
+            _startingCash = startingCash;
             Cash = startingCash;
         }
 
@@ -92,6 +94,15 @@ namespace Backtester.Core
                 position.AddTrade(effective);
                 _trades.Add(effective);
             }
+        }
+
+        /// <summary>
+        /// Computes performance statistics by pairing trades into round trips and analysing the equity curve.
+        /// </summary>
+        public PerformanceStats GetPerformanceStats()
+        {
+            IReadOnlyList<RoundTrip> roundTrips = PerformanceCalculator.BuildRoundTrips(_trades, _equityHistory);
+            return PerformanceCalculator.Calculate(roundTrips, _equityHistory, _startingCash);
         }
 
         /// <summary>
