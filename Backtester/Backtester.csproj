@@ -7,7 +7,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 
     <PackageId>backtester.net</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.$([System.DateTime]::UtcNow.ToString("yyyyMMdd")).$([System.DateTime]::UtcNow.ToString("HHmm"))</Version>
     <Authors>Jesper Baagøe Hansen</Authors>
     <Description>A bar-by-bar backtesting engine for financial market strategies.</Description>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
