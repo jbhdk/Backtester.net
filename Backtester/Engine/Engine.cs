@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
@@ -6,38 +11,67 @@ using Backtester.Strategies;
 namespace Backtester.Engine
 {
     /// <summary>
-    /// Orchestrates the bar-by-bar backtest loop: feeds market data to the strategy,
-    /// submits resulting orders to the broker, and records portfolio equity after each bar.
+    /// Orchestrates the bar-by-bar backtest loop: fetches market data, synchronizes it into slices,
+    /// feeds each bar to the strategy, submits resulting orders to the broker, and records portfolio
+    /// equity after each bar.
     /// </summary>
     public class Engine : IEngine
     {
-        private readonly IMarketDataFeed _feed;
+        private readonly IHistoricalDataFetcher _fetcher;
+        private readonly string[] _symbols;
+        private readonly DateTime _fromUtc;
+        private readonly DateTime _toUtc;
+        private readonly string _interval;
         private readonly IStrategy _strategy;
         private readonly IBrokerSimulator _broker;
         private readonly Portfolio _portfolio;
         private bool _stopRequested;
 
         /// <summary>
-        /// Initializes a new engine with the required data feed, strategy, broker, and portfolio.
+        /// Initializes a new engine. Market data for <paramref name="symbols"/> over the given range and interval
+        /// is fetched (through the cache) when <see cref="StartAsync"/> is called.
         /// </summary>
-        public Engine(IMarketDataFeed feed, IStrategy strategy, IBrokerSimulator broker, Portfolio portfolio)
+        public Engine(
+            IHistoricalDataFetcher fetcher,
+            string[] symbols,
+            DateTime fromUtc,
+            DateTime toUtc,
+            string interval,
+            IStrategy strategy,
+            IBrokerSimulator broker,
+            Portfolio portfolio)
         {
-            _feed = feed;
+            _fetcher = fetcher;
+            _symbols = symbols;
+            _fromUtc = fromUtc;
+            _toUtc = toUtc;
+            _interval = interval;
             _strategy = strategy;
             _broker = broker;
             _portfolio = portfolio;
         }
 
-        /// <summary>Begins the backtest loop, processing bars until the feed is exhausted or <see cref="Stop"/> is called.</summary>
-        public void Start()
+        /// <summary>
+        /// Fetches all symbols concurrently, hands the full history to the strategy's <c>OnStart</c>, then steps
+        /// through the synchronized slices until exhausted or <see cref="Stop"/> is called.
+        /// </summary>
+        public async Task StartAsync(CancellationToken ct = default)
         {
             _stopRequested = false;
-            _strategy.OnStart(_feed.GetFullHistory());
-            while (!_stopRequested && _feed.Advance())
-            {
-                RunOnce();
-            }
+            IReadOnlyDictionary<string, IReadOnlyList<Candle>> series = await FetchSeriesAsync(ct).ConfigureAwait(false);
 
+            _strategy.OnStart(series);
+
+            SliceSequence sequence = new(series);
+            foreach (MarketSlice slice in sequence.Slices())
+            {
+                if (_stopRequested)
+                {
+                    break;
+                }
+
+                RunOnce(slice);
+            }
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
@@ -47,12 +81,32 @@ namespace Backtester.Engine
         }
 
         /// <summary>
-        /// Processes a single bar: fills orders queued on the previous bar, records equity, then invokes the strategy
-        /// and queues any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
+        /// Fetches every configured symbol concurrently and assembles the per-symbol series.
         /// </summary>
-        public void RunOnce()
+        private async Task<IReadOnlyDictionary<string, IReadOnlyList<Candle>>> FetchSeriesAsync(CancellationToken ct)
         {
-            MarketSlice slice = _feed.GetCurrentSlice();
+            Task<IReadOnlyList<Candle>>[] fetches = _symbols
+                .Select(symbol => _fetcher.FetchAsync(symbol, _fromUtc, _toUtc, _interval, ct))
+                .ToArray();
+
+            IReadOnlyList<Candle>[] results = await Task.WhenAll(fetches).ConfigureAwait(false);
+
+            // Key: symbol/ticker (string) -> fetched candle series for that symbol
+            Dictionary<string, IReadOnlyList<Candle>> series = new();
+            for (int i = 0; i < _symbols.Length; i++)
+            {
+                series[_symbols[i]] = results[i];
+            }
+
+            return series;
+        }
+
+        /// <summary>
+        /// Processes a single slice: fills orders queued on the previous bar, records equity, then invokes the
+        /// strategy and queues any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
+        /// </summary>
+        private void RunOnce(MarketSlice slice)
+        {
             _broker.ProcessBar(slice);
             _portfolio.RecordEquitySnapshot(slice);
 
@@ -63,7 +117,6 @@ namespace Backtester.Engine
                 {
                     continue;
                 }
-
 
                 _strategy.OnBar(symbol, bar, snapshot, _broker);
             }

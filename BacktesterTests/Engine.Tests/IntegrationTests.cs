@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
@@ -9,6 +11,7 @@ using Backtester.ExecutionModels.Risk;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
 using Backtester.Strategies;
+using FakeItEasy;
 using BacktestEngine = Backtester.Engine.Engine;
 using Xunit;
 
@@ -31,9 +34,21 @@ namespace BacktesterTests.Engine.Tests
             };
         }
 
+        /// <summary>Builds a fake fetcher that returns the given candle series for each named symbol.</summary>
+        private static IHistoricalDataFetcher FetcherReturning(params (string Symbol, IReadOnlyList<Candle> Candles)[] series)
+        {
+            IHistoricalDataFetcher fetcher = A.Fake<IHistoricalDataFetcher>();
+            foreach ((string symbol, IReadOnlyList<Candle> candles) in series)
+            {
+                A.CallTo(() => fetcher.FetchAsync(symbol, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                    .Returns(Task.FromResult(candles));
+            }
+
+            return fetcher;
+        }
 
         [Fact]
-        public void MovingAverageCross_FullStack_ProducesTradesAndEquityHistory()
+        public async Task MovingAverageCross_FullStack_ProducesTradesAndEquityHistory()
         {
             // Synthetic 10-bar series: [100,90,80,70,60,70,80,90,100,110]
             // Golden cross fires during bar index 7 (price=90) → market buy fills at bar index 8's Open=100
@@ -51,11 +66,10 @@ namespace BacktesterTests.Engine.Tests
                 riskModel: new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m });
 
             MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
-            IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
-                new Dictionary<string, IReadOnlyList<Candle>> { ["AAPL"] = candles });
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", candles));
 
-            BacktestEngine engine = new(feed, strategy, broker, portfolio);
-            engine.Start();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
 
             // One entry per bar
             Assert.Equal(10, portfolio.EquityHistory.Count);
@@ -75,7 +89,7 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public void AtrBracket_TwoSymbols_OneEntersOnce_OtherEntersTwice()
+        public async Task AtrBracket_TwoSymbols_OneEntersOnce_OtherEntersTwice()
         {
             // AAPL — flat throughout (H=103, L=97). ATR=6, stop=94, target=112. Neither ever hit.
             //   1 trade (entry fill only); position open at end; 0 round trips.
@@ -114,15 +128,10 @@ namespace BacktesterTests.Engine.Tests
             BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 1 });
 
             AtrBracketStrategy strategy = new(atrPeriod: 5);
-            IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
-                new Dictionary<string, IReadOnlyList<Candle>>
-                {
-                    ["AAPL"] = aaplBars,
-                    ["MSFT"] = msftBars
-                });
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", aaplBars), ("MSFT", msftBars));
 
-            BacktestEngine engine = new(feed, strategy, broker, portfolio);
-            engine.Start();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
 
             // AAPL entered once, position still open
             Assert.Equal(1, portfolio.Trades.Count(t => t.Symbol == "AAPL"));

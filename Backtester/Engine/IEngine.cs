@@ -1,3 +1,6 @@
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Backtester.Engine
 {
     /// <summary>
@@ -5,13 +8,13 @@ namespace Backtester.Engine
     /// </summary>
     public interface IEngine
     {
-        /// <summary>Begins processing bars in a loop until the feed is exhausted or <see cref="Stop"/> is called.</summary>
-        void Start();
+        /// <summary>
+        /// Fetches market data for the configured symbols, then processes bars in a loop until the data is
+        /// exhausted or <see cref="Stop"/> is called.
+        /// </summary>
+        Task StartAsync(CancellationToken ct = default);
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
         void Stop();
-
-        /// <summary>Processes a single bar: runs the strategy, submits orders, processes fills, and records equity.</summary>
-        void RunOnce();
     }
 }

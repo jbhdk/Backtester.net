@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
-using Backtester.Engine;
 using Backtester.Strategies;
+using FakeItEasy;
 using BacktestEngine = Backtester.Engine.Engine;
 using Xunit;
 
@@ -15,45 +16,64 @@ namespace BacktesterTests.Engine.Tests
     {
         private static readonly DateTime T0 = new(2024, 1, 2, 0, 0, 0, DateTimeKind.Utc);
 
-        private static IMarketDataFeed SingleSymbolFeed(string symbol, params Candle[] candles)
-        {
-            return MarketDataSynchronizer.CreateFromSeries(
-                new Dictionary<string, IReadOnlyList<Candle>> { [symbol] = candles });
-        }
-
         private static Candle Bar(DateTime ts, decimal close)
         {
             return new() { Timestamp = ts, Open = close, High = close + 2, Low = close - 2, Close = close, Volume = 1000 };
         }
 
+        /// <summary>Builds a fake fetcher that returns the given candle series for each named symbol.</summary>
+        private static IHistoricalDataFetcher FetcherReturning(params (string Symbol, IReadOnlyList<Candle> Candles)[] series)
+        {
+            IHistoricalDataFetcher fetcher = A.Fake<IHistoricalDataFetcher>();
+            foreach ((string symbol, IReadOnlyList<Candle> candles) in series)
+            {
+                A.CallTo(() => fetcher.FetchAsync(symbol, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                    .Returns(Task.FromResult(candles));
+            }
+
+            return fetcher;
+        }
 
         [Fact]
-        public void Start_InvokesOnStart_BeforeFirstOnBar()
+        public async Task StartAsync_SingleSymbol_RecordsOneEquitySnapshotPerBar()
         {
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 100m));
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 101m), Bar(T0.AddDays(2), 102m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Equal(3, portfolio.EquityHistory.Count);
+        }
+
+        [Fact]
+        public async Task StartAsync_InvokesOnStart_BeforeFirstOnBar()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
             CallOrderTrackingStrategy strategy = new();
 
-            BacktestEngine engine = new(feed, strategy, broker, portfolio);
-            engine.Start();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
 
             Assert.True(strategy.OnStartWasCalled);
             Assert.True(strategy.OnStartCalledBeforeOnBar);
         }
 
         [Fact]
-        public void Start_PassesFullFeedHistory_ToOnStart()
+        public async Task StartAsync_PassesFullFetchedHistory_ToOnStart()
         {
-            Candle bar1 = Bar(T0, 100m);
-            Candle bar2 = Bar(T0.AddDays(1), 101m);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 101m) }));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
             CallOrderTrackingStrategy strategy = new();
 
-            BacktestEngine engine = new(feed, strategy, broker, portfolio);
-            engine.Start();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
 
             Assert.NotNull(strategy.ReceivedHistory);
             Assert.True(strategy.ReceivedHistory.ContainsKey("AAPL"));
@@ -61,52 +81,44 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public void RunOnce_OrderEmittedOnBarN_DoesNotFillOnSameBar()
+        public async Task StartAsync_MarketOrderOnFirstBar_FillsAtNextBarOpen()
         {
-            Portfolio portfolio = new(10_000m);
-            BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
-
-            feed.Advance();
-            engine.RunOnce();
-
-            Assert.Empty(portfolio.Positions);
-        }
-
-        [Fact]
-        public void RunOnce_MarketOrderEmittedOnBar1_FillsAtBar2Open()
-        {
-            Portfolio portfolio = new(10_000m);
-            BrokerSimulator broker = new(portfolio);
             Candle bar1 = new() { Timestamp = T0, Open = 100m, High = 110m, Low = 90m, Close = 105m, Volume = 1000 };
             Candle bar2 = new() { Timestamp = T0.AddDays(1), Open = 120m, High = 130m, Low = 115m, Close = 125m, Volume = 1000 };
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", bar1, bar2);
-            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { bar1, bar2 }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
-            feed.Advance();
-            engine.RunOnce();
-            feed.Advance();
-            engine.RunOnce();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), broker, portfolio);
+            await engine.StartAsync();
 
             Assert.Single(portfolio.Positions);
             Assert.Equal(120m, portfolio.Positions[0].AveragePrice);
         }
 
         [Fact]
-        public void RunOnce_StubStrategyBuys_CreatesPositionAndReducesCash()
+        public async Task StartAsync_OrderOnLastBar_NeverFills()
         {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 150m) }));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
-                Bar(T0, 150m),
-                Bar(T0.AddDays(1), 155m));
-            BacktestEngine engine = new(feed, new AlwaysBuyOneShare(), broker, portfolio);
 
-            feed.Advance();
-            engine.RunOnce();
-            feed.Advance();
-            engine.RunOnce();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Empty(portfolio.Positions);
+        }
+
+        [Fact]
+        public async Task StartAsync_StrategyBuys_CreatesPositionAndReducesCash()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 150m), Bar(T0.AddDays(1), 155m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), broker, portfolio);
+            await engine.StartAsync();
 
             Assert.Single(portfolio.Positions);
             Assert.Equal("AAPL", portfolio.Positions[0].Symbol);
@@ -114,59 +126,45 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public void RunOnce_StrategyReceivesSnapshot_WithCurrentCash()
+        public async Task StartAsync_StrategyDoesNothing_PortfolioUnchanged()
         {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 150m) }));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            SnapshotCapturingStrategy spy = new();
-            BacktestEngine engine = new(feed, spy, broker, portfolio);
 
-            feed.Advance();
-            engine.RunOnce();
-
-            Assert.NotNull(spy.LastSnapshot);
-            Assert.Equal(10_000m, spy.LastSnapshot.Cash);
-        }
-
-        [Fact]
-        public void RunOnce_StrategyReturnsNoOrders_PortfolioUnchanged()
-        {
-            Portfolio portfolio = new(10_000m);
-            BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL", Bar(T0, 150m));
-            BacktestEngine engine = new(feed, new DoNothingStrategy(), broker, portfolio);
-
-            feed.Advance();
-            engine.RunOnce();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            await engine.StartAsync();
 
             Assert.Empty(portfolio.Positions);
             Assert.Equal(10_000m, portfolio.Cash);
         }
 
         [Fact]
-        public void Start_TwoSymbolFiveBars_BuyOnBar1_FinalSnapshotReflectsPosition()
+        public async Task StartAsync_StrategyReceivesSnapshot_WithCurrentCash()
         {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 150m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            SnapshotCapturingStrategy spy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", spy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.NotNull(spy.LastSnapshot);
+            Assert.Equal(10_000m, spy.LastSnapshot.Cash);
+        }
+
+        [Fact]
+        public async Task StartAsync_TwoSymbolsFiveBars_BuyAaplOnFirstBar_FinalSnapshotReflectsPosition()
+        {
+            Candle[] aaplBars = BuildSeries(5, 100m);
+            Candle[] msftBars = BuildSeries(5, 200m);
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", aaplBars), ("MSFT", msftBars));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            Candle[] aaplBars = Enumerable.Range(0, 5)
-                .Select(i => Bar(T0.AddDays(i), 100m + i))
-                .ToArray();
-            Candle[] msftBars = Enumerable.Range(0, 5)
-                .Select(i => Bar(T0.AddDays(i), 200m + i))
-                .ToArray();
-
-            IMarketDataFeed feed = MarketDataSynchronizer.CreateFromSeries(
-                new Dictionary<string, IReadOnlyList<Candle>>
-                {
-                    ["AAPL"] = aaplBars,
-                    ["MSFT"] = msftBars
-                });
-
-            BacktestEngine engine = new(feed, new BuyAaplOnFirstBarOnly(), broker, portfolio);
-
-            engine.Start();
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", new BuyAaplOnFirstBarOnly(), broker, portfolio);
+            await engine.StartAsync();
 
             Assert.Equal(5, portfolio.EquityHistory.Count);
 
@@ -177,43 +175,104 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public void Start_ThreeBarFeed_EquityHistoryHasThreeEntries()
+        public async Task StartAsync_StopCalledFromStrategy_HaltsLoopAfterCurrentBar()
         {
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 101m), Bar(T0.AddDays(2), 102m) }));
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
-                Bar(T0, 100m),
-                Bar(T0.AddDays(1), 101m),
-                Bar(T0.AddDays(2), 102m));
-            BacktestEngine engine = new(feed, new DoNothingStrategy(), broker, portfolio);
-
-            engine.Start();
-
-            Assert.Equal(3, portfolio.EquityHistory.Count);
-        }
-
-        [Fact]
-        public void Stop_HaltsLoopAfterCurrentTick()
-        {
-            Portfolio portfolio = new(10_000m);
-            BrokerSimulator broker = new(portfolio);
-            IMarketDataFeed feed = SingleSymbolFeed("AAPL",
-                Bar(T0, 100m),
-                Bar(T0.AddDays(1), 101m),
-                Bar(T0.AddDays(2), 102m));
-
             StopAfterOneBarStrategy stopAfterFirstBar = new();
-            BacktestEngine engine = new(feed, stopAfterFirstBar, broker, portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", stopAfterFirstBar, broker, portfolio);
             stopAfterFirstBar.Engine = engine;
 
-            engine.Start();
+            await engine.StartAsync();
 
             Assert.Equal(1, portfolio.EquityHistory.Count);
         }
 
+        [Fact]
+        public async Task StartAsync_FetchesEverySymbol()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m) }),
+                ("MSFT", new[] { Bar(T0, 200m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            await engine.StartAsync();
+
+            A.CallTo(() => fetcher.FetchAsync("AAPL", A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._)).MustHaveHappened();
+            A.CallTo(() => fetcher.FetchAsync("MSFT", A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._)).MustHaveHappened();
+        }
+
+        private static Candle[] BuildSeries(int count, decimal startClose)
+        {
+            Candle[] bars = new Candle[count];
+            for (int i = 0; i < count; i++)
+            {
+                bars[i] = Bar(T0.AddDays(i), startClose + i);
+            }
+
+            return bars;
+        }
+
         // --- Stub strategies ---
 
-        /// <summary>Tracks that OnStart is called before OnBar.</summary>
+        private class DoNothingStrategy : StrategyBase
+        {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        private class BuyAaplOnFirstBarOnly : StrategyBase
+        {
+            private bool _bought;
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (!_bought && symbol == "AAPL")
+                {
+                    _bought = true;
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+                }
+            }
+        }
+
+        private class StopAfterOneBarStrategy : StrategyBase
+        {
+            public Backtester.Engine.IEngine Engine { get; set; }
+            private bool _stopped;
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (!_stopped)
+                {
+                    Engine.Stop();
+                    _stopped = true;
+                }
+            }
+        }
+
+        private class SnapshotCapturingStrategy : StrategyBase
+        {
+            public PortfolioSnapshot LastSnapshot { get; private set; }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                LastSnapshot = snapshot;
+            }
+        }
+
+        private class AlwaysBuyOneShare : StrategyBase
+        {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+            }
+        }
+
+        /// <summary>Tracks that OnStart is called before OnBar and captures the history it received.</summary>
         private class CallOrderTrackingStrategy : StrategyBase
         {
             public bool OnStartWasCalled { get; private set; }
@@ -231,54 +290,6 @@ namespace BacktesterTests.Engine.Tests
             public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
                 _onBarWasCalled = true;
-            }
-        }
-
-        private class AlwaysBuyOneShare : StrategyBase
-        {
-            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
-            {
-                broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
-            }
-        }
-
-        private class DoNothingStrategy : StrategyBase
-        {
-            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
-        }
-
-        private class SnapshotCapturingStrategy : StrategyBase
-        {
-            public PortfolioSnapshot LastSnapshot { get; private set; }
-
-            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
-            {
-                LastSnapshot = snapshot;
-            }
-        }
-
-        private class StopAfterOneBarStrategy : StrategyBase
-        {
-            public IEngine Engine { get; set; }
-            private bool _stopped;
-
-            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
-            {
-                if (!_stopped) { Engine.Stop(); _stopped = true; }
-            }
-        }
-
-        private class BuyAaplOnFirstBarOnly : StrategyBase
-        {
-            private bool _bought;
-
-            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
-            {
-                if (!_bought && symbol == "AAPL")
-                {
-                    _bought = true;
-                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
-                }
             }
         }
     }
