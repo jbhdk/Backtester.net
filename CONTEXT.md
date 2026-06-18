@@ -84,6 +84,14 @@ _Avoid_: notional sizing, percent sizing.
 The per-share loss if the stop is hit: `|entry − stopPrice|`.
 _Avoid_: risk, spread.
 
+### Execution models
+
+**Execution model**:
+A pluggable rule the broker applies when simulating execution — commission, slippage,
+position sizing, or risk. The four families live in `Backtester.ExecutionModels`. In this
+codebase, **"model" always means one of these**; nothing else is a model.
+_Avoid_: using "model" for a strategy, an indicator, or a data type (e.g. a Slice).
+
 ### Strategy & indicators
 
 **Strategy**:
