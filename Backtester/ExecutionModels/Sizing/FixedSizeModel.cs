@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Sizing
+namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Always returns a fixed position size regardless of the order or portfolio state.

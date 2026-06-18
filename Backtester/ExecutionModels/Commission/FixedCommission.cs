@@ -1,4 +1,4 @@
-namespace Backtester.Models.Commission
+namespace Backtester.ExecutionModels.Commission
 {
     /// <summary>
     /// Charges a flat commission amount per trade regardless of size.

@@ -1,4 +1,4 @@
-namespace Backtester.Models.Commission
+namespace Backtester.ExecutionModels.Commission
 {
     /// <summary>
     /// Charges commission as a percentage of the trade's notional value.

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using Backtester.Core;
 
-namespace Backtester.Models.Sizing
+namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Sizes positions so that a stop-out loses a fixed fraction of realized (cost-basis) equity.

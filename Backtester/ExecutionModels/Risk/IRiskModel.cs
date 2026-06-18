@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Risk
+namespace Backtester.ExecutionModels.Risk
 {
     /// <summary>
     /// Evaluates whether an order request is acceptable given current portfolio state.

@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Slippage
+namespace Backtester.ExecutionModels.Slippage
 {
     /// <summary>
     /// Applies a percentage-based slippage — buys pay more, sells receive less.

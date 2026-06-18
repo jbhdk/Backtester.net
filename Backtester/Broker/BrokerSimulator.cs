@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Backtester.Core;
-using Backtester.Models.Commission;
-using Backtester.Models.Risk;
-using Backtester.Models.Sizing;
-using Backtester.Models.Slippage;
+using Backtester.ExecutionModels.Commission;
+using Backtester.ExecutionModels.Risk;
+using Backtester.ExecutionModels.Sizing;
+using Backtester.ExecutionModels.Slippage;
 
 namespace Backtester.Broker
 {

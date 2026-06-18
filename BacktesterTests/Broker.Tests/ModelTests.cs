@@ -1,7 +1,7 @@
 using System;
 using Backtester.Core;
-using Backtester.Models.Risk;
-using Backtester.Models.Sizing;
+using Backtester.ExecutionModels.Risk;
+using Backtester.ExecutionModels.Sizing;
 using Xunit;
 
 namespace BacktesterTests.Broker.Tests

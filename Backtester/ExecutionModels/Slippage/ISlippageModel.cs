@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Slippage
+namespace Backtester.ExecutionModels.Slippage
 {
     /// <summary>
     /// Applies a slippage adjustment to a fill price based on order direction.

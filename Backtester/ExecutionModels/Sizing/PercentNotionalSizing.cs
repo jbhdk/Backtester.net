@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Sizing
+namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Sizes positions by allocating a fixed percentage of available cash per trade.

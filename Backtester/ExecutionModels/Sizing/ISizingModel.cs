@@ -1,6 +1,6 @@
 using Backtester.Core;
 
-namespace Backtester.Models.Sizing
+namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Determines the position size (number of shares or contracts) for an order.

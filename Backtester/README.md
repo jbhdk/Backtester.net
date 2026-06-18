@@ -52,7 +52,7 @@ PerformanceStats stats = portfolio.GetPerformanceStats();
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
 | `Backtester.Data` | `CsvBarLoader`, `YahooHistoricalDataProvider`, `MarketDataSynchronizer` |
 | `Backtester.Strategies` | `IStrategy`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
-| `Backtester.Models.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
+| `Backtester.ExecutionModels.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
 
 ## Requirements
 

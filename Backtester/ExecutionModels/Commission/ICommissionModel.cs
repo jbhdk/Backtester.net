@@ -1,4 +1,4 @@
-namespace Backtester.Models.Commission
+namespace Backtester.ExecutionModels.Commission
 {
     /// <summary>
     /// Computes the commission charged on a trade.

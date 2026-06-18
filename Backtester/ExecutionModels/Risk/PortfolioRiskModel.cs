@@ -1,7 +1,7 @@
 using System.Linq;
 using Backtester.Core;
 
-namespace Backtester.Models.Risk
+namespace Backtester.ExecutionModels.Risk
 {
     /// <summary>
     /// Rejects orders that would exceed available cash or push portfolio heat above a configured threshold.

@@ -1,4 +1,4 @@
-namespace Backtester.Models.Commission
+namespace Backtester.ExecutionModels.Commission
 {
     /// <summary>
     /// Charges a fixed fee per share or contract filled.
