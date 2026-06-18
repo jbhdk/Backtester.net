@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Backtester.Core;
-using Backtester.Data;
 
 namespace Backtester.Broker
 {

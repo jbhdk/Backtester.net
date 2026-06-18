@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Backtester.Core;
 
-namespace Backtester.Data
+namespace Backtester.Core
 {
     /// <summary>
     /// Represents a single point-in-time cross-section of market data across all tracked symbols.

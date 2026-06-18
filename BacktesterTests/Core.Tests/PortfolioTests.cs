@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Backtester.Core;
-using Backtester.Data;
 using Xunit;
 
 namespace BacktesterTests.Core.Tests

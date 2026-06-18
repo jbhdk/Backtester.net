@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Backtester.Broker;
 using Backtester.Core;
-using Backtester.Data;
 using Backtester.Models.Commission;
 using Backtester.Models.Risk;
 using Backtester.Models.Sizing;
