@@ -12,7 +12,7 @@ namespace Backtester.Data
     /// Fetches historical candle data from a provider and caches the results as CSV files on disk.
     /// Subsequent requests are served from cache when data is fresh and covers the requested range.
     /// </summary>
-    public class HistoricalDataFetcher
+    public class HistoricalDataFetcher : IHistoricalDataFetcher
     {
         private readonly IHistoricalDataProvider _provider;
         private readonly CsvBarLoader _csv;
@@ -39,7 +39,6 @@ namespace Backtester.Data
             {
                 throw new ArgumentNullException(nameof(symbol));
             }
-
 
             symbol = symbol.Trim().ToUpperInvariant();
 
