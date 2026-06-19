@@ -23,3 +23,19 @@ string json = System.Text.Json.JsonSerializer.Serialize(model);
 ```
 
 `System.Text.Json` (in-box on net8.0) is sufficient for serialization — no external dependency.
+
+## HTML report
+
+`HtmlReportWriter` turns the model into a single self-contained HTML file that opens from `file://`
+with no external dependencies. It serializes the model to JSON and token-replaces it into an
+embedded `template.html` (real HTML/CSS/JS, not C# string-building), inlining the data:
+
+```csharp
+new HtmlReportWriter().Write(model, "report.html");
+// or get the markup without touching disk:
+string html = new HtmlReportWriter().BuildHtml(model);
+```
+
+The page renders a grouped stats panel (headline, trade-quality, run context) with money as
+currency, ratio stats as percentages, and P&L colour-coded green/red, plus a sortable round-trips
+table. Displayed P&L is gross of commission and slippage.

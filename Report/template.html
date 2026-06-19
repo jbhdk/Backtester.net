@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backtest Report</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2027; --line: #2a313a; --text: #e6e9ef;
+    --muted: #8b95a3; --accent: #4ea1ff; --green: #2ecc71; --red: #e74c3c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+  #stats-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .stat:last-child { border-bottom: none; }
+  .stat .label { color: var(--muted); }
+  .stat .value { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th { cursor: pointer; user-select: none; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  thead th:hover { color: var(--text); }
+  thead th[aria-sort="ascending"]::after { content: " \25B2"; }
+  thead th[aria-sort="descending"]::after { content: " \25BC"; }
+  tbody tr:hover { background: rgba(255,255,255,.03); }
+  .footnote { color: var(--muted); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h1>Backtest Report</h1>
+<p class="sub" id="run-subtitle"></p>
+
+<section id="stats-panel">
+  <div class="stat-group" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
+  <div class="stat-group" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
+  <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
+</section>
+
+<h2>Round trips</h2>
+<table id="round-trips">
+  <thead>
+    <tr>
+      <th data-key="number" data-type="num">#</th>
+      <th data-key="symbol" data-type="str">Symbol</th>
+      <th data-key="entryTime" data-type="date">Entry</th>
+      <th data-key="exitTime" data-type="date">Exit</th>
+      <th data-key="entryPrice" data-type="num">Entry price</th>
+      <th data-key="exitPrice" data-type="num">Exit price</th>
+      <th data-key="quantity" data-type="num">Qty</th>
+      <th data-key="realizedPnL" data-type="num">P&amp;L</th>
+      <th data-key="returnPercent" data-type="num">Return %</th>
+      <th data-key="timeHeld" data-type="str">Time held</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<p class="footnote">P&amp;L is shown gross of commission and slippage.</p>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var model = JSON.parse(document.getElementById("report-data").textContent);
+  var stats = model.stats || {};
+  var run = model.run || {};
+
+  function fmtMoney(v) {
+    if (v == null) return "–";
+    return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtPct(v) { return v == null ? "–" : (v * 100).toFixed(2) + "%"; }
+  function fmtNum(v, d) { return v == null ? "–" : Number(v).toFixed(d == null ? 2 : d); }
+  function fmtDate(v) { return v == null ? "–" : new Date(v).toISOString().replace("T", " ").slice(0, 16) + "Z"; }
+  function signClass(v) { return v > 0 ? "pos" : v < 0 ? "neg" : ""; }
+
+  // value may carry an explicit css class for P&L colour-coding
+  function row(label, value, cls) {
+    return '<div class="stat"><span class="label">' + label + '</span>' +
+           '<span class="value ' + (cls || "") + '">' + value + '</span></div>';
+  }
+
+  function fill(id, html) { document.querySelector("#" + id + " .stat-body").innerHTML = html; }
+
+  fill("headline-stats",
+    row("Net profit", fmtMoney(stats.netProfit), signClass(stats.netProfit)) +
+    row("Net profit %", fmtPct(stats.netProfitPercent), signClass(stats.netProfitPercent)) +
+    row("Final equity", fmtMoney(run.finalEquity)) +
+    row("Total return", fmtPct(run.totalReturnPercent), signClass(run.totalReturnPercent)) +
+    row("CAGR", fmtPct(stats.cagr), signClass(stats.cagr)) +
+    row("Max drawdown", fmtPct(stats.maxDrawdown), stats.maxDrawdown > 0 ? "neg" : "") +
+    row("Sharpe", fmtNum(stats.sharpe)));
+
+  fill("trade-quality-stats",
+    row("Trades", fmtNum(stats.trades, 0)) +
+    row("Win rate", fmtPct(stats.winRate)) +
+    row("Profit factor", fmtNum(stats.profitFactor)) +
+    row("Expectancy", fmtMoney(stats.expectancy), signClass(stats.expectancy)) +
+    row("Avg win", fmtMoney(stats.avgWin), "pos") +
+    row("Avg loss", fmtMoney(stats.avgLoss), stats.avgLoss < 0 ? "neg" : "") +
+    row("Max consec. losses", fmtNum(stats.maxConsecLosses, 0)));
+
+  var symbols = (run.symbols || []).join(", ");
+  fill("run-context",
+    row("Symbols", symbols || "–") +
+    row("Interval", run.interval || "–") +
+    row("From", fmtDate(run.fromUtc)) +
+    row("To", fmtDate(run.toUtc)) +
+    row("Starting equity", fmtMoney(run.startingEquity)));
+
+  document.getElementById("run-subtitle").textContent =
+    symbols + " · " + (run.interval || "") + " · " + fmtDate(run.fromUtc) + " – " + fmtDate(run.toUtc);
+
+  // --- Round-trips table ---
+  var trips = (model.roundTrips || []).slice();
+  var tbody = document.querySelector("#round-trips tbody");
+
+  function cell(value, cls) { return '<td class="' + (cls || "") + '">' + value + "</td>"; }
+  function renderRows() {
+    tbody.innerHTML = trips.map(function (t) {
+      return "<tr>" +
+        cell(t.number) + cell(t.symbol) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
+        cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
+        cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
+        cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +
+        cell(t.timeHeld) +
+        "</tr>";
+    }).join("");
+  }
+  renderRows();
+
+  var headers = document.querySelectorAll("#round-trips thead th");
+  var sortKey = null, sortDir = 1;
+  headers.forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      var type = th.getAttribute("data-type");
+      sortDir = (sortKey === key) ? -sortDir : 1;
+      sortKey = key;
+      headers.forEach(function (h) { h.removeAttribute("aria-sort"); });
+      th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+      trips.sort(function (a, b) {
+        var av = a[key], bv = b[key];
+        if (type === "num") { av = Number(av); bv = Number(bv); }
+        else if (type === "date") { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }
+        else { av = String(av); bv = String(bv); }
+        return av < bv ? -sortDir : av > bv ? sortDir : 0;
+      });
+      renderRows();
+    });
+  });
+})();
+</script>
+</body>
+</html>
