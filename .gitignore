@@ -70,3 +70,6 @@ package-lock.json
 
 # Generated files
 *.generated.cs
+
+# Auto-incremented build counter (local per-machine state)
+buildnumber.txt

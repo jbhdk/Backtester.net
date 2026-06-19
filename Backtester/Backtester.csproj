@@ -7,12 +7,13 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 
     <PackageId>backtester.net</PackageId>
-    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
-    <Version>1.0.$(BuildNumber)</Version>
     <Authors>Jesper Baagøe Hansen</Authors>
     <Description>A bar-by-bar backtesting engine for financial market strategies.</Description>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- File that persists the auto-incremented build number between builds. -->
+    <BuildNumberFile>$(MSBuildProjectDirectory)\buildnumber.txt</BuildNumberFile>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -23,5 +24,44 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!--
+    Increments and persists the build number. Hooked to BeforeBuild, which only
+    runs in the primary build pass (not in the separate NuGet pack/nuspec passes),
+    so the counter advances exactly once per build.
+  -->
+  <Target Name="IncrementBuildNumber" BeforeTargets="BeforeBuild">
+    <ReadLinesFromFile File="$(BuildNumberFile)" Condition="Exists('$(BuildNumberFile)')">
+      <Output TaskParameter="Lines" PropertyName="PreviousBuildNumber" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <PreviousBuildNumber Condition="'$(PreviousBuildNumber)' == ''">0</PreviousBuildNumber>
+      <BuildNumber>$([MSBuild]::Add($(PreviousBuildNumber), 1))</BuildNumber>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(BuildNumberFile)" Lines="$(BuildNumber)" Overwrite="true" />
+    <Message Importance="high" Text="Build number incremented to $(BuildNumber)." />
+  </Target>
+
+  <!--
+    Applies the current (already-incremented) build number as the version. Runs in
+    every build and pack pass so the compiled assembly and the generated NuGet
+    package always share the same version. Read-only: it never mutates the counter.
+  -->
+  <Target Name="SetVersionFromBuildNumber" BeforeTargets="BeforeCompile;GenerateNuspec;Pack">
+    <ReadLinesFromFile File="$(BuildNumberFile)" Condition="Exists('$(BuildNumberFile)')">
+      <Output TaskParameter="Lines" PropertyName="CurrentBuildNumber" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <CurrentBuildNumber Condition="'$(CurrentBuildNumber)' == ''">0</CurrentBuildNumber>
+      <Version>1.0.$(CurrentBuildNumber)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <AssemblyVersion>$(Version).0</AssemblyVersion>
+      <FileVersion>$(Version).0</FileVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
 
 </Project>
