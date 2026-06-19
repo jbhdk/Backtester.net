@@ -50,11 +50,11 @@ PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 
 | Namespace | Contents |
 |---|---|
-| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice` |
+| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `IndicatorSeries`, `IndicatorPoint`, `IndicatorPane` |
 | `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
 | `Backtester.Data` | `CsvBarLoader`, `YahooHistoricalDataProvider`, `HistoricalDataFetcher`, `IHistoricalDataFetcher` |
-| `Backtester.Strategies` | `IStrategy`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
+| `Backtester.Strategies` | `IStrategy`, `IIndicatorSource`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
 | `Backtester.ExecutionModels.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
 
 ## Requirements

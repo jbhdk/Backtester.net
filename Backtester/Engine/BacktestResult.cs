@@ -16,7 +16,7 @@ namespace Backtester.Engine
         public BacktestResult(
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
             Portfolio portfolio,
-            IReadOnlyList<object> indicatorSeries)
+            IReadOnlyList<IndicatorSeries> indicatorSeries)
         {
             CandleHistory = candleHistory;
             Portfolio = portfolio;
@@ -33,9 +33,9 @@ namespace Backtester.Engine
         public Portfolio Portfolio { get; }
 
         /// <summary>
-        /// Gets the indicator series the strategy exposed during the run. Empty until the exposure
-        /// seam lands; the element type is firmed up by that follow-up (ADR 0007).
+        /// Gets the indicator series the strategy exposed during the run, collected by the engine from
+        /// any <see cref="Backtester.Strategies.IIndicatorSource"/> strategy. Empty when none were exposed.
         /// </summary>
-        public IReadOnlyList<object> IndicatorSeries { get; }
+        public IReadOnlyList<IndicatorSeries> IndicatorSeries { get; }
     }
 }

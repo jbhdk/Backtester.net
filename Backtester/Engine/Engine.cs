@@ -73,8 +73,13 @@ namespace Backtester.Engine
                 RunOnce(slice);
             }
 
-            // Indicator series stay empty until the exposure seam lands (ADR 0007).
-            return new BacktestResult(series, _portfolio, Array.Empty<object>());
+            // Collect any indicator series the strategy chose to expose (ADR 0007); a strategy that
+            // does not implement the seam contributes none.
+            IReadOnlyList<IndicatorSeries> indicators = _strategy is IIndicatorSource source
+                ? source.IndicatorSeries
+                : Array.Empty<IndicatorSeries>();
+
+            return new BacktestResult(series, _portfolio, indicators);
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>

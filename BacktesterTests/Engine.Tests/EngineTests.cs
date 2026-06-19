@@ -95,6 +95,35 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_CollectsExposedIndicatorSeries_OntoResult()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            ExposesOneIndicatorStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            IndicatorSeries series = Assert.Single(result.IndicatorSeries);
+            Assert.Equal("SMA", series.Name);
+            Assert.Equal(IndicatorPane.PriceOverlay, series.Pane);
+        }
+
+        [Fact]
+        public async Task StartAsync_NonIndicatorSourceStrategy_YieldsEmptyIndicatorSeries()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new RawStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.Empty(result.IndicatorSeries);
+        }
+
+        [Fact]
         public async Task StartAsync_SingleSymbol_RecordsOneEquitySnapshotPerBar()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(
@@ -282,6 +311,25 @@ namespace BacktesterTests.Engine.Tests
 
         private class DoNothingStrategy : StrategyBase
         {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        /// <summary>A strategy that implements IStrategy directly, without the IIndicatorSource seam.</summary>
+        private class RawStrategy : IStrategy
+        {
+            public void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history) { }
+
+            public void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        /// <summary>Exposes a single price-overlay indicator series during OnStart.</summary>
+        private class ExposesOneIndicatorStrategy : StrategyBase
+        {
+            public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
+            {
+                RecordIndicator("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            }
+
             public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
         }
 
