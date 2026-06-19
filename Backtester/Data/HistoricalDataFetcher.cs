@@ -89,9 +89,9 @@ namespace Backtester.Data
                 return false;
             }
 
-
             DateTime min = list.Min(candle => candle.Timestamp);
             DateTime max = list.Max(candle => candle.Timestamp);
+
             return min <= fromUtc && max >= toUtc;
         }
 
@@ -101,7 +101,6 @@ namespace Backtester.Data
             {
                 throw new ArgumentNullException(nameof(interval));
             }
-
 
             interval = interval.Trim().ToLowerInvariant();
             if (interval.EndsWith("h") && int.TryParse(interval.Substring(0, interval.Length - 1), out int hours))

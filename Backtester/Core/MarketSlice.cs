@@ -20,6 +20,5 @@ namespace Backtester.Core
         {
             return BarsBySymbol != null && BarsBySymbol.ContainsKey(symbol) && BarsBySymbol[symbol] != null;
         }
-
     }
 }

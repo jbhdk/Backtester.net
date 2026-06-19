@@ -34,10 +34,8 @@ namespace Backtester.Data
             string[] supported = new[] { "1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "1wk", "1mo" };
             if (!supported.Contains(interval))
             {
-
                 throw new NotSupportedException($"Yahoo v8 provider does not support interval '{interval}'. Supported: {string.Join(',', supported)}.");
             }
-
 
             long period1 = ((DateTimeOffset)fromUtc).ToUnixTimeSeconds();
             long period2 = ((DateTimeOffset)toUtc).ToUnixTimeSeconds();
@@ -83,12 +81,10 @@ namespace Backtester.Data
                     continue;
                 }
 
-
                 if (closes[i].ValueKind == JsonValueKind.Null)
                 {
                     continue;
                 }
-
 
                 candles.Add(new Candle
                 {

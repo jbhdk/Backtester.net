@@ -15,6 +15,5 @@ namespace Backtester.ExecutionModels.Slippage
         {
             return side == OrderSide.Buy ? price + Amount : price - Amount;
         }
-
     }
 }

@@ -61,19 +61,15 @@ namespace Backtester.Broker
                     return null;
                 }
 
-
                 request.Quantity = sized;
             }
 
             if (_riskModel != null && !_riskModel.Accept(request, _portfolio))
             {
-
                 return null;
             }
 
-
             Order order = new()
-
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = request.Symbol,
@@ -84,6 +80,7 @@ namespace Backtester.Broker
                 SubmittedAt = _currentBarTimestamp
             };
             _orderBook[order.Id] = order;
+
             return order.Id;
         }
 
@@ -107,7 +104,6 @@ namespace Backtester.Broker
             {
                 return null;
             }
-
 
             int quantity = _orderBook[entryId].Quantity;
             BracketHandle handle = new() { EntryOrderId = entryId };
@@ -134,7 +130,6 @@ namespace Backtester.Broker
                     continue;
                 }
 
-
                 Candle candle = slice.BarsBySymbol[symbol];
                 IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
                 foreach (FillResult fill in fills)
@@ -143,7 +138,6 @@ namespace Backtester.Broker
                     {
                         continue;
                     }
-
 
                     Order filledOrder = _orderBook[fill.OrderId];
                     _orderBook.Remove(fill.OrderId);
@@ -161,7 +155,6 @@ namespace Backtester.Broker
                     decimal commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
 
                     Trade trade = new()
-
                     {
                         Id = fill.TradeId,
                         OrderId = fill.OrderId,
@@ -188,13 +181,13 @@ namespace Backtester.Broker
                     }
                 }
             }
+
             return trades;
         }
 
         private string ArmBracketLeg(string symbol, OrderType type, decimal price, int quantity)
         {
             Order order = new()
-
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = symbol,
@@ -205,6 +198,7 @@ namespace Backtester.Broker
                 SubmittedAt = _currentBarTimestamp
             };
             _orderBook[order.Id] = order;
+
             return order.Id;
         }
 
@@ -224,10 +218,8 @@ namespace Backtester.Broker
         {
             if (_orderBook.TryGetValue(orderId, out Order order))
             {
-
                 order.Price = newPrice;
             }
-
         }
     }
 }

@@ -21,7 +21,6 @@ namespace Backtester.ExecutionModels.Sizing
                 return 0;
             }
 
-
             return (int)(portfolio.Cash * Percent / request.Price.Value);
         }
     }

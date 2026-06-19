@@ -44,7 +44,6 @@ namespace Backtester.Core
                         continue;
                     }
 
-
                     int exitBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
                     trips.Add(new RoundTrip
                     {
@@ -123,13 +122,11 @@ namespace Backtester.Core
         {
             for (int i = 0; i < history.Count; i++)
             {
-
                 if (history[i].Timestamp >= ts)
                 {
                     return i;
                 }
             }
-
 
             return history.Count;
         }
@@ -141,7 +138,6 @@ namespace Backtester.Core
                 return 0m;
             }
 
-
             decimal peak = history[0].MarkedEquity;
             decimal maxDd = 0m;
             foreach (EquitySnapshot snap in history)
@@ -151,7 +147,6 @@ namespace Backtester.Core
                     peak = snap.MarkedEquity;
                 }
 
-
                 if (peak > 0m)
                 {
                     decimal dd = (peak - snap.MarkedEquity) / peak;
@@ -159,9 +154,9 @@ namespace Backtester.Core
                     {
                         maxDd = dd;
                     }
-
                 }
             }
+
             return maxDd;
         }
 
@@ -172,14 +167,12 @@ namespace Backtester.Core
                 return 0m;
             }
 
-
             decimal finalEquity = history[history.Count - 1].MarkedEquity;
             double years = (history[history.Count - 1].Timestamp - history[0].Timestamp).TotalDays / 365.25;
             if (years <= 0 || finalEquity <= 0m)
             {
                 return 0m;
             }
-
 
             return (decimal)(Math.Pow((double)(finalEquity / startingCash), 1.0 / years) - 1.0);
         }
@@ -200,14 +193,13 @@ namespace Backtester.Core
                     continue;
                 }
 
-
                 returns.Add(((double)history[i].MarkedEquity - prev) / prev);
             }
+
             if (returns.Count < 2)
             {
                 return 0m;
             }
-
 
             double mean   = returns.Average();
             double stdDev = Math.Sqrt(returns.Sum(r => Math.Pow(r - mean, 2)) / (returns.Count - 1));
@@ -215,7 +207,6 @@ namespace Backtester.Core
             {
                 return 0m;
             }
-
 
             return (decimal)(mean / stdDev * Math.Sqrt(252));
         }
@@ -235,8 +226,8 @@ namespace Backtester.Core
                 {
                     current = 0;
                 }
-
             }
+
             return max;
         }
     }

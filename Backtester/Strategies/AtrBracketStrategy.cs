@@ -94,6 +94,7 @@ namespace Backtester.Strategies
                     StopPrice = stop,
                     TargetPrice = target
                 });
+                
                 if (handle != null)
                 {
                     _handles[symbol] = handle;

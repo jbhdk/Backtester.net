@@ -26,7 +26,6 @@ namespace Backtester.ExecutionModels.Risk
                     return false;
                 }
 
-
                 decimal openNotional = portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
                 decimal totalEquity = portfolio.Cash + openNotional;
                 if (totalEquity > 0)
@@ -36,9 +35,9 @@ namespace Backtester.ExecutionModels.Risk
                     {
                         return false;
                     }
-
                 }
             }
+            
             return true;
         }
     }

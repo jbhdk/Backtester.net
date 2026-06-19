@@ -24,19 +24,16 @@ namespace Backtester.ExecutionModels.Sizing
                 return 0;
             }
 
-
             if (request.StopPrice is null)
             {
                 return 0;
             }
-
 
             decimal stopDistance = Math.Abs(request.Price.Value - request.StopPrice.Value);
             if (stopDistance == 0m)
             {
                 return 0;
             }
-
 
             decimal realizedEquity = portfolio.Cash + portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
             return (int)(RiskFraction * realizedEquity / stopDistance);

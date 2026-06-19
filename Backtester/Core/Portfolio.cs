@@ -79,7 +79,6 @@ namespace Backtester.Core
                     return;
                 }
 
-
                 Trade effective = effectiveQty == trade.Quantity ? trade : new Trade
                 {
                     Id = trade.Id,

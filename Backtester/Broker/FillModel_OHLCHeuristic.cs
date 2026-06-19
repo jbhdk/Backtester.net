@@ -22,7 +22,6 @@ namespace Backtester.Broker
                 {
                     yield return fill;
                 }
-
             }
         }
 
@@ -39,7 +38,6 @@ namespace Backtester.Broker
             };
         }
 
-
         private static FillResult Fill(Order order, decimal price)
         {
             return new()
@@ -50,6 +48,5 @@ namespace Backtester.Broker
                 Quantity = order.Quantity
             };
         }
-
     }
 }

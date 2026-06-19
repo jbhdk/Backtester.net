@@ -40,7 +40,6 @@ namespace Backtester.Strategies
             {
                 ComputeSignals(symbol, bars);
             }
-
         }
 
         /// <summary>
@@ -86,7 +85,6 @@ namespace Backtester.Strategies
                 {
                     _sellSignals.Add((symbol, bars[i].Timestamp));
                 }
-
 
                 lastFastAboveSlow = fastAboveSlow;
             }

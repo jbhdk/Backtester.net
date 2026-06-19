@@ -113,12 +113,10 @@ namespace Backtester.Engine
             PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
-                if (bar == null)
+                if (bar is not null)
                 {
-                    continue;
+                    _strategy.OnBar(symbol, bar, snapshot, _broker);
                 }
-
-                _strategy.OnBar(symbol, bar, snapshot, _broker);
             }
         }
     }

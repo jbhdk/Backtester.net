@@ -42,6 +42,5 @@ namespace Backtester.Core
                 Quantity -= trade.Quantity;
             }
         }
-
     }
 }

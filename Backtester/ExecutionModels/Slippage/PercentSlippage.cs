@@ -17,6 +17,5 @@ namespace Backtester.ExecutionModels.Slippage
                 ? price * (1 + Percent)
                 : price * (1 - Percent);
         }
-
     }
 }
