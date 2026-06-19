@@ -16,8 +16,14 @@ namespace Backtester.Report
         /// <summary>The placeholder in the template that the serialized model is substituted for.</summary>
         private const string DataToken = "__REPORT_DATA__";
 
+        /// <summary>The placeholder in the template that the inlined chart library is substituted for.</summary>
+        private const string ChartLibToken = "__CHART_LIB__";
+
         /// <summary>The embedded template resource name (root namespace + file name).</summary>
         private const string TemplateResource = "Backtester.Report.template.html";
+
+        /// <summary>The embedded Lightweight Charts standalone build (root namespace + file name).</summary>
+        private const string ChartLibResource = "Backtester.Report.lightweight-charts.standalone.production.js";
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -31,9 +37,15 @@ namespace Backtester.Report
         /// </summary>
         public string BuildHtml(ReportModel model)
         {
-            string template = LoadTemplate();
+            string template = LoadResource(TemplateResource);
             string json = JsonSerializer.Serialize(model, JsonOptions);
-            return template.Replace(DataToken, json);
+
+            // Inline the chart library first, then the model data. The library text is fixed and
+            // contains no token, so substituting it before the data avoids any collision with the
+            // serialized JSON.
+            return template
+                .Replace(ChartLibToken, LoadResource(ChartLibResource))
+                .Replace(DataToken, json);
         }
 
         /// <summary>
@@ -44,13 +56,13 @@ namespace Backtester.Report
             File.WriteAllText(path, BuildHtml(model));
         }
 
-        private static string LoadTemplate()
+        private static string LoadResource(string resourceName)
         {
             Assembly assembly = typeof(HtmlReportWriter).Assembly;
-            using Stream stream = assembly.GetManifestResourceStream(TemplateResource);
+            using Stream stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null)
             {
-                throw new InvalidOperationException($"Embedded template resource '{TemplateResource}' was not found.");
+                throw new InvalidOperationException($"Embedded resource '{resourceName}' was not found.");
             }
 
             using StreamReader reader = new(stream);

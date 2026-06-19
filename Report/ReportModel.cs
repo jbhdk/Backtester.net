@@ -21,11 +21,8 @@ namespace Backtester.Report
         /// <summary>Gets or sets the portfolio-wide equity curve.</summary>
         public IReadOnlyList<ReportEquityPoint> EquityCurve { get; set; }
 
-        /// <summary>
-        /// Gets or sets the per-symbol candle series the run executed on.
-        /// Key: symbol/ticker (string) -> the candle series for that symbol.
-        /// </summary>
-        public IReadOnlyDictionary<string, IReadOnlyList<Candle>> Candles { get; set; }
+        /// <summary>Gets or sets the chart-ready price section: per-symbol candle series the run executed on.</summary>
+        public ReportChart Chart { get; set; }
 
         /// <summary>Gets or sets the run-context section: inputs plus derived final equity and total return.</summary>
         public ReportRunInfo Run { get; set; }

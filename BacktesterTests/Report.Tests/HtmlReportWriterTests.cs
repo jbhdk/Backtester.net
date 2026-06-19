@@ -42,7 +42,7 @@ namespace BacktesterTests.Report.Tests
                 },
                 Indicators = Array.Empty<IndicatorSeries>(),
                 EquityCurve = new[] { new ReportEquityPoint { Timestamp = T0, Equity = 10_000m } },
-                Candles = new Dictionary<string, IReadOnlyList<Candle>>(),
+                Chart = new ReportChart { Series = new Dictionary<string, IReadOnlyList<ChartCandle>>() },
                 Run = new ReportRunInfo
                 {
                     Symbols = new[] { "AAPL" }, Interval = "1d", FromUtc = T0, ToUtc = T0.AddYears(1),
@@ -99,6 +99,33 @@ namespace BacktesterTests.Report.Tests
             string html = new HtmlReportWriter().BuildHtml(SampleModel());
 
             Assert.Contains("gross of commission and slippage", html);
+        }
+
+        [Fact]
+        public void BuildHtml_InlinesLightweightChartsLibrary()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // The vendored standalone build's banner and the global it defines: proves the chart
+            // library is inlined (offline, no CDN) rather than referenced externally.
+            Assert.Contains("Lightweight Charts", html);
+            Assert.Contains("LightweightCharts", html);
+        }
+
+        [Fact]
+        public void BuildHtml_LeavesNoChartLibToken()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            Assert.DoesNotContain("__CHART_LIB__", html);
+        }
+
+        [Fact]
+        public void BuildHtml_ContainsPriceChartContainer()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            Assert.Contains("id=\"price-chart\"", html);
         }
 
         [Fact]

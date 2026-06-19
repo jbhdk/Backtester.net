@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="template.html" />
+    <EmbeddedResource Include="lightweight-charts.standalone.production.js" />
   </ItemGroup>
 
   <PropertyGroup>

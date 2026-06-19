@@ -112,6 +112,57 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_Chart_EntryMarker_BelowBarArrowUpAtEntryTime()
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            ChartMarker entry = Assert.Single(model.Chart.Markers, marker => marker.Shape == "arrowUp");
+            Assert.Equal("AAPL", entry.Symbol);
+            Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), entry.Time);
+            Assert.Equal("belowBar", entry.Position);
+        }
+
+        [Fact]
+        public void Build_Chart_ExitMarker_AboveBarArrowDownAtExitTime()
+        {
+            DateTime exit = T0.AddDays(2);
+            BacktestResult result = ResultWithRoundTrip(T0, exit, 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            ChartMarker exitMarker = Assert.Single(model.Chart.Markers, marker => marker.Shape == "arrowDown");
+            Assert.Equal("AAPL", exitMarker.Symbol);
+            Assert.Equal(new DateTimeOffset(exit, TimeSpan.Zero).ToUnixTimeSeconds(), exitMarker.Time);
+            Assert.Equal("aboveBar", exitMarker.Position);
+        }
+
+        [Theory]
+        [InlineData(120, "#2ecc71")] // winning trip -> green markers
+        [InlineData(80, "#e74c3c")]  // losing trip -> red markers
+        public void Build_Chart_MarkersColouredByWinLoss(double exitPrice, string expectedColor)
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, (decimal)exitPrice, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedColor, marker.Color));
+        }
+
+        [Theory]
+        [InlineData(120, "+$200.00")] // winning trip P&L label
+        [InlineData(80, "-$200.00")]  // losing trip P&L label
+        public void Build_Chart_MarkerText_CarriesSignedPnL(double exitPrice, string expectedText)
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, (decimal)exitPrice, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedText, marker.Text));
+        }
+
+        [Fact]
         public void Build_Indicators_PresentWithPanePlacement()
         {
             IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
@@ -142,23 +193,20 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_Candles_PresentAndSymbolKeyed()
+        public void Build_Chart_EncodesCandleTimesAsUtcSeconds()
         {
             Candle aapl = new() { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 };
-            Candle msft = new() { Timestamp = T0, Open = 200m, High = 201m, Low = 199m, Close = 200.5m, Volume = 2000 };
-            Dictionary<string, IReadOnlyList<Candle>> history = new()
-            {
-                ["AAPL"] = new[] { aapl },
-                ["MSFT"] = new[] { msft }
-            };
+            Dictionary<string, IReadOnlyList<Candle>> history = new() { ["AAPL"] = new[] { aapl } };
             BacktestResult result = new(history, new Portfolio(10_000m), NoIndicators());
 
             ReportModel model = new ReportModelBuilder().Build(result, Context());
 
-            Assert.Equal(2, model.Candles.Count);
-            Assert.True(model.Candles.ContainsKey("AAPL"));
-            Assert.Equal(100.5m, model.Candles["AAPL"][0].Close);
-            Assert.Equal(200.5m, model.Candles["MSFT"][0].Close);
+            ChartCandle bar = Assert.Single(model.Chart.Series["AAPL"]);
+            Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), bar.Time);
+            Assert.Equal(100m, bar.Open);
+            Assert.Equal(101m, bar.High);
+            Assert.Equal(99m, bar.Low);
+            Assert.Equal(100.5m, bar.Close);
         }
 
         [Fact]

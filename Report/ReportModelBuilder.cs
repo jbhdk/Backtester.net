@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Backtester.Core;
 using Backtester.Engine;
 
@@ -11,6 +12,12 @@ namespace Backtester.Report
     /// </summary>
     public class ReportModelBuilder
     {
+        /// <summary>Marker colour for a winning round trip (matches the report's green accent).</summary>
+        private const string WinColor = "#2ecc71";
+
+        /// <summary>Marker colour for a losing round trip (matches the report's red accent).</summary>
+        private const string LossColor = "#e74c3c";
+
         /// <summary>
         /// Maps the run's <paramref name="result"/> and <paramref name="context"/> to a report model.
         /// </summary>
@@ -25,7 +32,7 @@ namespace Backtester.Report
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 Indicators = result.IndicatorSeries,
                 EquityCurve = MapEquityCurve(result.Portfolio.EquityHistory),
-                Candles = result.CandleHistory,
+                Chart = MapChart(result.CandleHistory, stats.RoundTrips),
                 Run = new ReportRunInfo
                 {
                     Symbols = context.Symbols,
@@ -82,6 +89,91 @@ namespace Backtester.Report
             }
 
             return $"{span.Minutes}m";
+        }
+
+        /// <summary>
+        /// Projects the raw per-symbol candle history into chart-ready series, encoding each bar's
+        /// timestamp as UTC seconds.
+        /// </summary>
+        private static ReportChart MapChart(
+            IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
+            IReadOnlyList<RoundTrip> roundTrips)
+        {
+            // Key: symbol/ticker -> the chart-ready candle series for that symbol.
+            Dictionary<string, IReadOnlyList<ChartCandle>> series = new(candleHistory.Count);
+            foreach (KeyValuePair<string, IReadOnlyList<Candle>> entry in candleHistory)
+            {
+                List<ChartCandle> bars = new(entry.Value.Count);
+                foreach (Candle candle in entry.Value)
+                {
+                    bars.Add(new ChartCandle
+                    {
+                        Time = ToUnixSeconds(candle.Timestamp),
+                        Open = candle.Open,
+                        High = candle.High,
+                        Low = candle.Low,
+                        Close = candle.Close
+                    });
+                }
+
+                series[entry.Key] = bars;
+            }
+
+            return new ReportChart { Series = series, Markers = MapMarkers(roundTrips) };
+        }
+
+        /// <summary>
+        /// Derives the entry/exit markers for the round trips. Each round trip yields an entry marker
+        /// (an arrow up below the entry bar) and an exit marker (an arrow down above the exit bar).
+        /// </summary>
+        private static IReadOnlyList<ChartMarker> MapMarkers(IReadOnlyList<RoundTrip> roundTrips)
+        {
+            List<ChartMarker> markers = new(roundTrips.Count * 2);
+            foreach (RoundTrip trip in roundTrips)
+            {
+                // Entry and exit share one colour and P&L label reflecting the round trip's outcome.
+                string color = trip.RealizedPnL >= 0m ? WinColor : LossColor;
+                string label = FormatPnL(trip.RealizedPnL);
+                markers.Add(new ChartMarker
+                {
+                    Symbol = trip.Symbol,
+                    Time = ToUnixSeconds(trip.EntryTime),
+                    Position = "belowBar",
+                    Shape = "arrowUp",
+                    Color = color,
+                    Text = label
+                });
+                markers.Add(new ChartMarker
+                {
+                    Symbol = trip.Symbol,
+                    Time = ToUnixSeconds(trip.ExitTime),
+                    Position = "aboveBar",
+                    Shape = "arrowDown",
+                    Color = color,
+                    Text = label
+                });
+            }
+
+            return markers;
+        }
+
+        /// <summary>
+        /// Formats a round trip's profit/loss as a signed currency label (e.g. <c>"+$200.00"</c>,
+        /// <c>"-$50.00"</c>) for a marker.
+        /// </summary>
+        private static string FormatPnL(decimal pnl)
+        {
+            string sign = pnl >= 0m ? "+" : "-";
+            return sign + "$" + Math.Abs(pnl).ToString("N2", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Encodes a UTC timestamp as seconds since the Unix epoch, the form the chart library uses
+        /// for intraday data.
+        /// </summary>
+        private static long ToUnixSeconds(DateTime timestamp)
+        {
+            return new DateTimeOffset(timestamp, TimeSpan.Zero).ToUnixTimeSeconds();
         }
 
         private static IReadOnlyList<ReportEquityPoint> MapEquityCurve(IReadOnlyList<EquitySnapshot> history)
