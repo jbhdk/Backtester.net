@@ -48,6 +48,47 @@ namespace BacktesterTests.Core.Tests
         }
 
 
+        private static EquitySnapshot Snapshot(DateTime ts)
+        {
+            return new() { Timestamp = ts };
+        }
+
+        [Fact]
+        public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
+        {
+            // Buy at T0, sell one day later → EntryTime = T0, ExitTime = T0+1d
+            DateTime entry = T0;
+            DateTime exit = T0.AddDays(1);
+            List<Trade> trades = new() { Buy("AAPL", 100m, 10, entry), Sell("AAPL", 120m, 10, exit) };
+            List<EquitySnapshot> history = new() { Snapshot(entry), Snapshot(exit) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(entry, trips[0].EntryTime);
+            Assert.Equal(exit, trips[0].ExitTime);
+        }
+
+        [Fact]
+        public void BuildRoundTrips_TwoBuysAveragedThenSell_EntryTimeIsFirstBuy()
+        {
+            // Two buys average into one position; the second buy must not overwrite the entry time.
+            DateTime firstBuy = T0;
+            DateTime secondBuy = T0.AddDays(1);
+            DateTime exit = T0.AddDays(2);
+            List<Trade> trades = new()
+            {
+                Buy("AAPL", 100m, 10, firstBuy),
+                Buy("AAPL", 120m, 10, secondBuy),
+                Sell("AAPL", 130m, 20, exit)
+            };
+            List<EquitySnapshot> history = new() { Snapshot(firstBuy), Snapshot(secondBuy), Snapshot(exit) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(firstBuy, trips[0].EntryTime);
+            Assert.Equal(exit, trips[0].ExitTime);
+        }
+
         [Fact]
         public void GetPerformanceStats_SingleWinningRoundTrip_NetProfitCorrect()
         {

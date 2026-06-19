@@ -1,3 +1,5 @@
+using System;
+
 namespace Backtester.Core
 {
     /// <summary>
@@ -22,5 +24,11 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the number of bars the position was held before exit.</summary>
         public int BarsHeld { get; set; }
+
+        /// <summary>Gets or sets the UTC timestamp of the entry trade that opened this round trip.</summary>
+        public DateTime EntryTime { get; set; }
+
+        /// <summary>Gets or sets the UTC timestamp of the exit trade that closed this round trip.</summary>
+        public DateTime ExitTime { get; set; }
     }
 }

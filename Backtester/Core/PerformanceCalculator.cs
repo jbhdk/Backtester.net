@@ -17,29 +17,29 @@ namespace Backtester.Core
             IReadOnlyList<Trade> trades,
             IReadOnlyList<EquitySnapshot> equityHistory)
         {
-            // key: symbol → (runningAvgEntry, runningQty, entryBarIndex)
-            Dictionary<string, (decimal avgEntry, int qty, int entryBarIdx)> open = new();
+            // key: symbol → (runningAvgEntry, runningQty, entryBarIndex, entryTime)
+            Dictionary<string, (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime)> open = new();
             List<RoundTrip> trips = new();
 
             foreach (Trade trade in trades)
             {
                 if (trade.Side == OrderSide.Buy)
                 {
-                    if (open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx) pos))
+                    if (open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
                     {
                         decimal totalCost = pos.avgEntry * pos.qty + trade.Price * trade.Quantity;
                         int newQty = pos.qty + trade.Quantity;
-                        open[trade.Symbol] = (totalCost / newQty, newQty, pos.entryBarIdx);
+                        open[trade.Symbol] = (totalCost / newQty, newQty, pos.entryBarIdx, pos.entryTime);
                     }
                     else
                     {
                         int entryBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
-                        open[trade.Symbol] = (trade.Price, trade.Quantity, entryBarIdx);
+                        open[trade.Symbol] = (trade.Price, trade.Quantity, entryBarIdx, trade.Timestamp);
                     }
                 }
                 else
                 {
-                    if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx) pos))
+                    if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
                     {
                         continue;
                     }
@@ -52,7 +52,9 @@ namespace Backtester.Core
                         ExitPrice   = trade.Price,
                         Quantity    = trade.Quantity,
                         RealizedPnL = (trade.Price - pos.avgEntry) * trade.Quantity,
-                        BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx)
+                        BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx),
+                        EntryTime   = pos.entryTime,
+                        ExitTime    = trade.Timestamp
                     });
 
                     int remaining = pos.qty - trade.Quantity;
@@ -62,7 +64,7 @@ namespace Backtester.Core
                     }
                     else
                     {
-                        open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx);
+                        open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx, pos.entryTime);
                     }
 
                 }
