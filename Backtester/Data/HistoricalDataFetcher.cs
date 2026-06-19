@@ -47,15 +47,7 @@ namespace Backtester.Data
 
             List<Candle> existing = _csv.ReadAll(filename).ToList();
 
-            // If latest candle is recent enough and covers requested range, return filtered
-            DateTime? latest = existing.Count == 0 ? (DateTime?)null : existing.Max(candle => candle.Timestamp);
-            DateTime now = DateTime.UtcNow;
-            if (latest != null && latest >= now - _freshnessWindow && CoversRange(existing, fromUtc, toUtc))
-            {
-                return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).ToList();
-            }
-
-            // Need to fetch missing data
+            // Empty cache: fetch the full requested range and persist it.
             if (existing.Count == 0)
             {
                 List<Candle> fetched = (await _provider.FetchAsync(symbol, fromUtc, toUtc, interval, ct).ConfigureAwait(false)).ToList();
@@ -63,16 +55,20 @@ namespace Backtester.Data
                 return fetched;
             }
 
-            // existing non-empty but maybe stale or incomplete
-            DateTime lastTimestamp = latest!.Value;
-            DateTime nextNeeded = AddInterval(lastTimestamp, interval);
-            if (nextNeeded > toUtc)
+            // A non-empty cache is trusted while its most recent bar is within the freshness window of the
+            // requested end (or now, when the end is in the future). This treats a completed historical window
+            // as fresh forever, and tolerates the cache lagging the requested end by up to one window. See
+            // docs/adr/0006-cache-freshness-over-completeness.md.
+            DateTime latest = existing.Max(candle => candle.Timestamp);
+            DateTime now = DateTime.UtcNow;
+            DateTime reference = toUtc < now ? toUtc : now;
+            if (latest >= reference - _freshnessWindow)
             {
-                // existing data covers range but was stale by time; still return filtered
                 return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).ToList();
             }
 
-            List<Candle> fetchedMore = (await _provider.FetchAsync(symbol, nextNeeded, toUtc, interval, ct).ConfigureAwait(false)).ToList();
+            // Stale: extend the tail from the latest cached bar. The dedup in AppendAndMerge absorbs the overlap.
+            List<Candle> fetchedMore = (await _provider.FetchAsync(symbol, latest, toUtc, interval, ct).ConfigureAwait(false)).ToList();
             if (fetchedMore.Count > 0)
             {
                 _csv.AppendAndMerge(filename, fetchedMore);
@@ -80,53 +76,6 @@ namespace Backtester.Data
             }
 
             return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
-        }
-
-        private static bool CoversRange(List<Candle> list, DateTime fromUtc, DateTime toUtc)
-        {
-            if (list.Count == 0)
-            {
-                return false;
-            }
-
-            DateTime min = list.Min(candle => candle.Timestamp);
-            DateTime max = list.Max(candle => candle.Timestamp);
-
-            return min <= fromUtc && max >= toUtc;
-        }
-
-        private static DateTime AddInterval(DateTime ts, string interval)
-        {
-            if (string.IsNullOrWhiteSpace(interval))
-            {
-                throw new ArgumentNullException(nameof(interval));
-            }
-
-            interval = interval.Trim().ToLowerInvariant();
-            if (interval.EndsWith("h") && int.TryParse(interval.Substring(0, interval.Length - 1), out int hours))
-            {
-                return ts.AddHours(hours);
-            }
-            if (interval.EndsWith("d") && int.TryParse(interval.Substring(0, interval.Length - 1), out int days))
-            {
-                return ts.AddDays(days);
-            }
-            if (interval.EndsWith("wk") && int.TryParse(interval.Substring(0, interval.Length - 2), out int weeks))
-            {
-                return ts.AddDays(7 * weeks);
-            }
-            if (interval.EndsWith("mo") && int.TryParse(interval.Substring(0, interval.Length - 2), out int months))
-            {
-                return ts.AddMonths(months);
-            }
-
-            // Fallback: try parse as minutes (e.g., "60m")
-            if (interval.EndsWith("m") && int.TryParse(interval.Substring(0, interval.Length - 1), out int minutes))
-            {
-                return ts.AddMinutes(minutes);
-            }
-
-            throw new NotSupportedException($"Interval string '{interval}' not supported.");
         }
     }
 }

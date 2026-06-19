@@ -22,6 +22,32 @@ The bars at or before the current bar, made available so a strategy can compute 
 Reading indicator values aligned to the current bar is lookahead-free because indicators are causal.
 _Avoid_: lookahead, window (window is an indicator parameter).
 
+### Data acquisition
+
+**Provider**:
+A source adapter that fetches bars from an external service (e.g. Yahoo's v8 chart API).
+Pure acquisition: it performs no caching and touches no disk. The .NET seam is
+`IHistoricalDataProvider`.
+_Avoid_: feed, client, source, fetcher (the fetcher caches; the provider never does).
+
+**Fetcher**:
+The cache-aware orchestrator that serves bars from the local Cache and calls a Provider only
+for the bars the Cache lacks. The .NET seam is `IHistoricalDataFetcher`.
+_Avoid_: provider, loader, repository.
+
+**Cache**:
+The on-disk copy of previously fetched bars for one symbol-and-interval. The Fetcher reads and
+writes it; the Provider is unaware of it.
+_Avoid_: store, database.
+
+**Freshness window**:
+The maximum age of the Cache's most recent bar within which the Fetcher trusts the Cache and does
+not contact the Provider. Age is measured against the requested end of range, or now when that end
+is in the future — whichever is earlier. So a completed historical window stays fresh indefinitely,
+while a run ending at the present goes stale as time passes. Bounded at one week: the current
+week's bars are not required.
+_Avoid_: TTL, expiry.
+
 ### Orders & execution
 
 **Order**:
