@@ -10,9 +10,9 @@ namespace Backtester.Engine
     {
         /// <summary>
         /// Fetches market data for the configured symbols, then processes bars in a loop until the data is
-        /// exhausted or <see cref="Stop"/> is called.
+        /// exhausted or <see cref="Stop"/> is called, returning the run's outputs as a <see cref="BacktestResult"/>.
         /// </summary>
-        Task StartAsync(CancellationToken ct = default);
+        Task<BacktestResult> StartAsync(CancellationToken ct = default);
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
         void Stop();

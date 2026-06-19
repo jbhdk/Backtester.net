@@ -55,7 +55,7 @@ namespace Backtester.Engine
         /// Fetches all symbols concurrently, hands the full history to the strategy's <c>OnStart</c>, then steps
         /// through the synchronized slices until exhausted or <see cref="Stop"/> is called.
         /// </summary>
-        public async Task StartAsync(CancellationToken ct = default)
+        public async Task<BacktestResult> StartAsync(CancellationToken ct = default)
         {
             _stopRequested = false;
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> series = await FetchSeriesAsync(ct).ConfigureAwait(false);
@@ -72,6 +72,9 @@ namespace Backtester.Engine
 
                 RunOnce(slice);
             }
+
+            // Indicator series stay empty until the exposure seam lands (ADR 0007).
+            return new BacktestResult(series, _portfolio, Array.Empty<object>());
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>

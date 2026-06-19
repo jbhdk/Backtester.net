@@ -39,9 +39,11 @@ IEngine engine = new Engine(
     strategy,
     broker,
     portfolio);
-await engine.StartAsync();
+// StartAsync returns a BacktestResult bundling the run's candle history, portfolio,
+// and (once exposed) indicator series — a single source of truth for reporting.
+BacktestResult result = await engine.StartAsync();
 
-PerformanceStats stats = portfolio.GetPerformanceStats();
+PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 ```
 
 ## Namespaces
@@ -49,7 +51,7 @@ PerformanceStats stats = portfolio.GetPerformanceStats();
 | Namespace | Contents |
 |---|---|
 | `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice` |
-| `Backtester.Engine` | `Engine`, `IEngine` |
+| `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
 | `Backtester.Data` | `CsvBarLoader`, `YahooHistoricalDataProvider`, `HistoricalDataFetcher`, `IHistoricalDataFetcher` |
 | `Backtester.Strategies` | `IStrategy`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |

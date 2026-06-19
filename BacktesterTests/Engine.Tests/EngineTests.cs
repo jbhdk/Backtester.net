@@ -35,6 +35,66 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_ReturnsResult_CarryingTheRunPortfolio()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.NotNull(result);
+            Assert.Same(portfolio, result.Portfolio);
+        }
+
+        [Fact]
+        public async Task StartAsync_Result_CarriesExactCandleSeriesRunOn()
+        {
+            Candle[] bars = { Bar(T0, 100m), Bar(T0.AddDays(1), 101m) };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", bars));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.True(result.CandleHistory.ContainsKey("AAPL"));
+            Assert.Same(bars, result.CandleHistory["AAPL"]);
+        }
+
+        [Fact]
+        public async Task StartAsync_Result_CarriesHistoryForEverySymbol()
+        {
+            Candle[] aaplBars = { Bar(T0, 100m) };
+            Candle[] msftBars = { Bar(T0, 200m) };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", aaplBars), ("MSFT", msftBars));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.Equal(2, result.CandleHistory.Count);
+            Assert.Same(aaplBars, result.CandleHistory["AAPL"]);
+            Assert.Same(msftBars, result.CandleHistory["MSFT"]);
+        }
+
+        [Fact]
+        public async Task StartAsync_Result_HasEmptyIndicatorSeries()
+        {
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.NotNull(result.IndicatorSeries);
+            Assert.Empty(result.IndicatorSeries);
+        }
+
+        [Fact]
         public async Task StartAsync_SingleSymbol_RecordsOneEquitySnapshotPerBar()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(
