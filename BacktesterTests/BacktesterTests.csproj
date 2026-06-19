@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Backtester\Backtester.csproj" />
+    <ProjectReference Include="..\Report\Report.csproj" />
   </ItemGroup>
 
 </Project>
