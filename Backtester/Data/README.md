@@ -9,6 +9,7 @@ Summary
   - `YahooHistoricalDataProvider` — concrete provider (supports `1d`, `1wk`, `1mo` and intraday `1h`/`60m` with limited history).
   - `CsvBarLoader` — local CSV read/write/append+merge utilities.
   - `HistoricalDataFetcher` — orchestrator that decides whether to use cached data or fetch missing ranges.
+  - `CsvHistoricalDataFetcher` — offline `IHistoricalDataFetcher` that reads candles straight from a committed `{SYMBOL}_{interval}.csv` file (no provider, no cache logic) for deterministic, repeatable runs.
 
 Cache files
 - Location: repo root `data/` folder by default (configurable via `HistoricalDataFetcher` constructor).
@@ -39,6 +40,7 @@ Testing
 - Unit tests live in `BacktesterTests/Data.Tests/`:
   - `CsvBarLoaderTests` — verifies read/write, append+merge and deduplication behavior.
   - `HistoricalDataFetcherTests` — verifies new-file fetch, fresh-cache use, stale-cache append, and provider error propagation.
+  - `CsvHistoricalDataFetcherTests` — verifies reading a known CSV, deterministic repeat calls, and empty result when no file exists.
 
 Usage example
 - Create a provider (e.g., `new YahooHistoricalDataProvider()`), then:

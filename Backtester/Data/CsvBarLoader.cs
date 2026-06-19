@@ -15,6 +15,20 @@ namespace Backtester.Data
         private const string Header = "Timestamp,Open,High,Low,Close,Volume";
 
         /// <summary>
+        /// Builds the canonical cache file name for a symbol and interval (e.g. <c>AAPL_1h.csv</c>).
+        /// The symbol is trimmed and upper-cased so casing differences resolve to the same file.
+        /// </summary>
+        public static string FileName(string symbol, string interval)
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                throw new ArgumentNullException(nameof(symbol));
+            }
+
+            return $"{symbol.Trim().ToUpperInvariant()}_{interval}.csv";
+        }
+
+        /// <summary>
         /// Reads all candles from the CSV file at the given path, sorted by timestamp ascending.
         /// Returns an empty list if the file does not exist.
         /// </summary>

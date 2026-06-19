@@ -43,7 +43,7 @@ namespace Backtester.Data
             symbol = symbol.Trim().ToUpperInvariant();
 
             Directory.CreateDirectory(_dataFolder);
-            string filename = Path.Combine(_dataFolder, $"{symbol}_{interval}.csv");
+            string filename = Path.Combine(_dataFolder, CsvBarLoader.FileName(symbol, interval));
 
             List<Candle> existing = _csv.ReadAll(filename).ToList();
 

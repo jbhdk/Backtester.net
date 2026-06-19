@@ -76,6 +76,12 @@ namespace BacktesterTests.Data.Tests
             Assert.Equal(5m, merged[1].Volume);
         }
 
+        [Fact]
+        public void FileName_NormalizesSymbolCasingAndWhitespace()
+        {
+            Assert.Equal("AAPL_1h.csv", CsvBarLoader.FileName(" aapl ", "1h"));
+        }
+
         private static DateTime TruncateToSecond(DateTime dt)
         {
             return new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
