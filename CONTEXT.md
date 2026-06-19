@@ -126,9 +126,19 @@ broker (`Submit`, `SubmitBracket`, `Cancel`, `Modify`).
 _Avoid_: algo, system, model (model means an execution model).
 
 **Indicator**:
-A derived series (EMA, ATR, Keltner, …). The engine is **indicator-agnostic**: it ships none and
-takes no indicator dependency; the consumer brings their own library.
+A derived series (EMA, ATR, Keltner, …). The engine is **indicator-agnostic in computation**: it
+ships none and takes no indicator dependency; the consumer brings their own library and computes
+series with it. The engine may, however, be *aware* of series a strategy chooses to expose (see
+Indicator series) — awareness is not a dependency.
 _Avoid_: signal, study.
+
+**Indicator series**:
+A named, time-aligned sequence of values a strategy exposes for visualization (e.g. "FastMA"),
+distinct from the private computation it performs to make decisions. A series declares whether it
+shares the price scale (a price overlay) or occupies its own pane. The strategy computes it; the
+engine surfaces it; the consumer renders it. Exposure is opt-in — a strategy that exposes nothing
+is still valid.
+_Avoid_: plot, overlay (an overlay is one kind of series placement, not the series itself).
 
 ### Performance
 

@@ -1,5 +1,10 @@
 # Indicator-agnostic engine
 
+> Refined by [ADR 0007](0007-engine-indicator-awareness.md): the engine may now be *aware* of
+> indicator series a strategy chooses to expose, while still shipping no indicators and taking no
+> indicator-library dependency.
+
+
 The engine ships no indicators and takes no indicator-library dependency. Instead it exposes bar
 **History** to strategies (full history on `OnStart`) so a consumer can compute indicators with
 whatever library they prefer — Skender.Stock.Indicators, OoplesFinance.StockIndicators, or
