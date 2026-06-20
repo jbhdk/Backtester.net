@@ -19,30 +19,32 @@ namespace Backtester.Report
         private const string LossColor = "#e74c3c";
 
         /// <summary>
-        /// Maps the run's <paramref name="result"/> and <paramref name="context"/> to a report model.
+        /// Maps the run's <paramref name="result"/> to a report model. Everything the report renders,
+        /// including the run inputs, is derived from the result alone (ADR 0008).
         /// </summary>
-        public ReportModel Build(BacktestResult result, ReportRunContext context)
+        public ReportModel Build(BacktestResult result)
         {
             PerformanceStats stats = result.Portfolio.GetPerformanceStats();
-            decimal finalEquity = FinalEquity(result.Portfolio, context.StartingEquity);
+            decimal startingEquity = result.StartingEquity;
+            decimal finalEquity = FinalEquity(result.Portfolio, startingEquity);
 
             return new ReportModel
             {
-                Stats = MapStats(stats, context.StartingEquity),
+                Stats = MapStats(stats, startingEquity),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 Indicators = MapIndicators(result.IndicatorSeries),
-                EquityCurve = MapEquityCurve(stats.RoundTrips, context.StartingEquity),
+                EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
                 Chart = MapChart(result.CandleHistory, stats.RoundTrips),
                 Run = new ReportRunInfo
                 {
-                    Symbols = context.Symbols,
-                    Interval = context.Interval,
-                    FromUtc = context.FromUtc,
-                    ToUtc = context.ToUtc,
-                    StartingEquity = context.StartingEquity,
+                    Symbols = result.Symbols,
+                    Interval = result.Interval,
+                    FromUtc = result.FromUtc,
+                    ToUtc = result.ToUtc,
+                    StartingEquity = startingEquity,
                     FinalEquity = finalEquity,
-                    TotalReturnPercent = context.StartingEquity != 0m
-                        ? (finalEquity - context.StartingEquity) / context.StartingEquity
+                    TotalReturnPercent = startingEquity != 0m
+                        ? (finalEquity - startingEquity) / startingEquity
                         : 0m
                 }
             };

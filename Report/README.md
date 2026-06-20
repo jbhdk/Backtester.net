@@ -6,9 +6,9 @@ Kept in its own package so the core engine takes on no reporting or web-asset de
 
 ## View-model builder
 
-`ReportModelBuilder` is a pure function from a run's `BacktestResult` (plus a `ReportRunContext`
-carrying the run inputs) to a serializable `ReportModel`. It performs no I/O, and every value the
-page renders is pre-derived:
+`ReportModelBuilder` is a pure function from a run's `BacktestResult` to a serializable
+`ReportModel`. It performs no I/O, and every value the page renders — including the run inputs,
+which the `BacktestResult` now carries — is derived from the result alone:
 
 - **Stats** — net profit (currency and percent), CAGR, max drawdown, Sharpe, trades, win rate,
   profit factor, expectancy, average win/loss, max consecutive losses.
@@ -18,7 +18,7 @@ page renders is pre-derived:
 - **Per-symbol candles**, **indicator series** with pane placement, and the portfolio **equity curve**.
 
 ```csharp
-ReportModel model = new ReportModelBuilder().Build(result, context);
+ReportModel model = new ReportModelBuilder().Build(result);
 string json = System.Text.Json.JsonSerializer.Serialize(model);
 ```
 
@@ -31,9 +31,14 @@ with no external dependencies. It serializes the model to JSON and token-replace
 embedded `template.html` (real HTML/CSS/JS, not C# string-building), inlining the data:
 
 ```csharp
+// One-call path straight from a run — the writer projects the result internally:
+new HtmlReportWriter().Write(result, "report.html");
+
+// Or supply a pre-built model (e.g. when you also want the JSON):
 new HtmlReportWriter().Write(model, "report.html");
-// or get the markup without touching disk:
-string html = new HtmlReportWriter().BuildHtml(model);
+
+// Either form is also available without touching disk:
+string html = new HtmlReportWriter().BuildHtml(result);
 ```
 
 The page renders a grouped stats panel (headline, trade-quality, run context) with money as

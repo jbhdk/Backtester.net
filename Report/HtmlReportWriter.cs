@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using Backtester.Engine;
 
 namespace Backtester.Report
 {
@@ -31,6 +32,25 @@ namespace Backtester.Report
             // HTML-safe encoder still escapes < > & so the JSON is safe to inline in a <script>.
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+
+        /// <summary>
+        /// Builds the complete HTML document straight from a backtest run, projecting it to a report
+        /// model internally. The one-call path for callers who only have a <see cref="BacktestResult"/>.
+        /// </summary>
+        public string BuildHtml(BacktestResult result)
+        {
+            return BuildHtml(new ReportModelBuilder().Build(result));
+        }
+
+        /// <summary>
+        /// Writes the HTML report for a backtest run to the file at <paramref name="path"/>, projecting
+        /// it to a report model internally. The one-call path for callers who only have a
+        /// <see cref="BacktestResult"/>.
+        /// </summary>
+        public void Write(BacktestResult result, string path)
+        {
+            Write(new ReportModelBuilder().Build(result), path);
+        }
 
         /// <summary>
         /// Builds the complete HTML document for the given model, with the serialized model inlined.

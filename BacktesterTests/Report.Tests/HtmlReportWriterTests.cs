@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Backtester.Core;
+using Backtester.Engine;
 using Backtester.Report;
 using Xunit;
 
@@ -163,6 +164,52 @@ namespace BacktesterTests.Report.Tests
 
             Assert.True(File.Exists(path));
             Assert.Equal(writer.BuildHtml(model), File.ReadAllText(path));
+        }
+
+        /// <summary>A minimal backtest result: one AAPL bar, a 10,000 portfolio, no trades or indicators.</summary>
+        private static BacktestResult SampleResult()
+        {
+            Dictionary<string, IReadOnlyList<Candle>> history = new()
+            {
+                ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }
+            };
+            return new BacktestResult(history, new Portfolio(10_000m), Array.Empty<IndicatorSeries>(),
+                new[] { "AAPL" }, "1d", T0, T0.AddYears(1));
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_ProjectsAndEmbedsModel()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleResult());
+
+            // The result's starting equity (10,000) reaches the run section, proving the writer ran the
+            // builder internally rather than requiring a pre-built model.
+            Assert.Contains("\"startingEquity\":10000", html);
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_MatchesExplicitBuilderPath()
+        {
+            HtmlReportWriter writer = new();
+            BacktestResult result = SampleResult();
+
+            string fromResult = writer.BuildHtml(result);
+            string fromModel = writer.BuildHtml(new ReportModelBuilder().Build(result));
+
+            Assert.Equal(fromModel, fromResult);
+        }
+
+        [Fact]
+        public void Write_FromResult_ProducesSameContentAsBuildHtml()
+        {
+            HtmlReportWriter writer = new();
+            BacktestResult result = SampleResult();
+            string path = Path.Combine(Path.GetTempPath(), "bt_report_test", Guid.NewGuid() + ".html");
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+            writer.Write(result, path);
+
+            Assert.Equal(writer.BuildHtml(result), File.ReadAllText(path));
         }
 
         [Fact]

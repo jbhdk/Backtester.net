@@ -1,9 +1,11 @@
 # Engine returns a BacktestResult
 
-`Engine.StartAsync` now returns a `BacktestResult` bundling the candle history, the portfolio, and
-the strategy's exposed indicator series, rather than only mutating caller-owned objects and
-discarding the fetched history. This gives report generation a single source of truth for
-everything a run produced and guarantees the chart renders the exact bars the backtest ran on.
+`Engine.StartAsync` now returns a `BacktestResult` bundling the candle history, the portfolio, the
+strategy's exposed indicator series, and the run inputs (symbols, interval, requested date range,
+and starting equity), rather than only mutating caller-owned objects and discarding the fetched
+history. This gives report generation a single source of truth for everything a run produced and
+how it was configured: a report is built from the result alone, with no separately-supplied run
+context, and the chart renders the exact bars the backtest ran on.
 
 ## Considered options
 

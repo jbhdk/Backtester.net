@@ -23,9 +23,13 @@ namespace BacktesterTests.Report.Tests
             return Array.Empty<IndicatorSeries>();
         }
 
-        private static ReportRunContext Context(decimal startingEquity = 10_000m)
+        /// <summary>Wraps a run's produced data in a result stamped with default run-config (AAPL, 1d, one year).</summary>
+        private static BacktestResult Result(
+            IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
+            Portfolio portfolio,
+            IReadOnlyList<IndicatorSeries> indicators)
         {
-            return new ReportRunContext(new[] { "AAPL" }, "1d", T0, T0.AddYears(1), startingEquity);
+            return new(candleHistory, portfolio, indicators, new[] { "AAPL" }, "1d", T0, T0.AddYears(1));
         }
 
         private static Trade Trade(string symbol, OrderSide side, decimal price, int qty, DateTime ts)
@@ -65,7 +69,7 @@ namespace BacktesterTests.Report.Tests
             portfolio.RecordEquitySnapshot(Slice("AAPL", entryPrice, entry));
             portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, exitPrice, qty, exit));
             portfolio.RecordEquitySnapshot(Slice("AAPL", exitPrice, exit));
-            return new(NoCandles(), portfolio, NoIndicators());
+            return Result(NoCandles(), portfolio, NoIndicators());
         }
 
         [Fact]
@@ -73,7 +77,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ReportRoundTrip rt = Assert.Single(model.RoundTrips);
             Assert.Equal(1, rt.Number);
@@ -91,7 +95,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             // (120 - 100) / 100 = 0.2
             Assert.Equal(0.2m, Assert.Single(model.RoundTrips).ReturnPercent);
@@ -107,7 +111,7 @@ namespace BacktesterTests.Report.Tests
             // Flat prices: this test isolates holding-time formatting and avoids CAGR over a sub-day span.
             BacktestResult result = ResultWithRoundTrip(T0, exit, 100m, 100m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(expected, Assert.Single(model.RoundTrips).TimeHeld);
         }
@@ -117,7 +121,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ChartMarker entry = Assert.Single(model.Chart.Markers, marker => marker.Shape == "arrowUp");
             Assert.Equal("AAPL", entry.Symbol);
@@ -131,7 +135,7 @@ namespace BacktesterTests.Report.Tests
             DateTime exit = T0.AddDays(2);
             BacktestResult result = ResultWithRoundTrip(T0, exit, 100m, 120m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ChartMarker exitMarker = Assert.Single(model.Chart.Markers, marker => marker.Shape == "arrowDown");
             Assert.Equal("AAPL", exitMarker.Symbol);
@@ -146,7 +150,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, (decimal)exitPrice, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedColor, marker.Color));
         }
@@ -156,7 +160,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             // The single round trip is number 1; both its entry and exit markers carry that number so
             // the page can highlight the matching table row when a marker is hovered.
@@ -170,7 +174,7 @@ namespace BacktesterTests.Report.Tests
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, (decimal)exitPrice, 10);
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedText, marker.Text));
         }
@@ -179,9 +183,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_Indicators_ProjectsExposedSeriesPreservingName()
         {
             IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ChartIndicator indicator = Assert.Single(model.Indicators);
             Assert.Equal("SMA(20)", indicator.Name);
@@ -191,9 +195,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_Indicators_CarrySymbolForPerSymbolScoping()
         {
             IndicatorSeries sma = new("SMA(20)", "AAPL", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal("AAPL", Assert.Single(model.Indicators).Symbol);
         }
@@ -202,9 +206,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_Indicators_EncodesPointTimesAsUtcSeconds()
         {
             IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 123.5m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ChartLinePoint point = Assert.Single(Assert.Single(model.Indicators).Points);
             Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), point.Time);
@@ -217,9 +221,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_Indicators_MapsPaneDesignationToPageString(IndicatorPane pane, string expected)
         {
             IndicatorSeries series = new("ATR", pane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { series });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { series });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(expected, Assert.Single(model.Indicators).Pane);
         }
@@ -229,9 +233,9 @@ namespace BacktesterTests.Report.Tests
         {
             IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
             IndicatorSeries atr = new("ATR", IndicatorPane.SeparatePane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma, atr });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma, atr });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(new[] { "SMA", "ATR" }, model.Indicators.Select(indicator => indicator.Name));
         }
@@ -239,9 +243,9 @@ namespace BacktesterTests.Report.Tests
         [Fact]
         public void Build_Indicators_NoneExposed_YieldsEmptyList()
         {
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), NoIndicators());
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Empty(model.Indicators);
         }
@@ -249,9 +253,9 @@ namespace BacktesterTests.Report.Tests
         [Fact]
         public void Build_EquityCurve_StartsAtStartingEquityAsTradeZero()
         {
-            BacktestResult result = new(NoCandles(), WinningPortfolio(), NoIndicators());
+            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ReportEquityPoint start = model.EquityCurve[0];
             Assert.Equal(0, start.Trade);
@@ -267,9 +271,9 @@ namespace BacktesterTests.Report.Tests
             portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, T0.AddDays(2)));
             portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, T0.AddDays(3)));
             portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 95m, 10, T0.AddDays(5)));
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             // Trade-indexed cumulative realized equity: 10,000 → 10,200 → 10,150.
             Assert.Equal(new[] { 0, 1, 2 }, model.EquityCurve.Select(point => point.Trade));
@@ -281,9 +285,9 @@ namespace BacktesterTests.Report.Tests
         {
             Candle aapl = new() { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 };
             Dictionary<string, IReadOnlyList<Candle>> history = new() { ["AAPL"] = new[] { aapl } };
-            BacktestResult result = new(history, new Portfolio(10_000m), NoIndicators());
+            BacktestResult result = Result(history, new Portfolio(10_000m), NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             ChartCandle bar = Assert.Single(model.Chart.Series["AAPL"]);
             Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), bar.Time);
@@ -301,9 +305,9 @@ namespace BacktesterTests.Report.Tests
             {
                 ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }
             };
-            BacktestResult result = new(history, WinningPortfolio(), new[] { sma });
+            BacktestResult result = Result(history, WinningPortfolio(), new[] { sma });
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
             string json = JsonSerializer.Serialize(model);
 
             Assert.Contains("\"Stats\"", json);
@@ -316,10 +320,10 @@ namespace BacktesterTests.Report.Tests
         public void Build_Stats_FaithfullyMapsPerformanceStats()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
             PerformanceStats expected = portfolio.GetPerformanceStats();
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(expected.NetProfit, model.Stats.NetProfit);
             Assert.Equal(expected.Trades, model.Stats.Trades);
@@ -338,9 +342,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_Stats_DerivesNetProfitPercentFromStartingEquity()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             // Net profit 200 on 10,000 starting equity = 0.02
             Assert.Equal(0.02m, model.Stats.NetProfitPercent);
@@ -350,9 +354,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_RunInfo_DerivesFinalEquityAndTotalReturn()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             // Final marked equity after the winning exit is 10,200 → total return (10200-10000)/10000 = 0.02
             Assert.Equal(10_200m, model.Run.FinalEquity);
@@ -363,10 +367,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_RunInfo_EchoesRunInputs()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
-            ReportRunContext context = new(new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30), 10_000m);
+            BacktestResult result = new(NoCandles(), portfolio, NoIndicators(), new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30));
 
-            ReportModel model = new ReportModelBuilder().Build(result, context);
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(new[] { "AAPL", "MSFT" }, model.Run.Symbols);
             Assert.Equal("1h", model.Run.Interval);
@@ -378,9 +381,9 @@ namespace BacktesterTests.Report.Tests
         public void Build_RunContext_CarriesStartingEquity()
         {
             Portfolio portfolio = new(10_000m);
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+            ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(10_000m, model.Run.StartingEquity);
         }
