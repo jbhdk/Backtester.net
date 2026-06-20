@@ -199,6 +199,27 @@
       .sort(function (a, b) { return a.time - b.time; });
     LightweightCharts.createSeriesMarkers(candleSeries, markers);
 
+    // --- Indicators ---
+    // Drawn straight from the model's exposed series (no re-derivation). Each series declares its
+    // pane: a "priceOverlay" shares the price pane (pane 0) and its vertical scale; a "separatePane"
+    // gets its own sub-pane beneath the price pane so it doesn't distort the price scale. The page
+    // assigns colours from a palette. With no indicators the loop is a no-op and the chart is unchanged.
+    var indicatorPalette = ["#4ea1ff", "#f5a623", "#bd10e0", "#7ed321", "#50e3c2", "#e94f8a"];
+    var nextPane = 1; // pane 0 is the price pane; separate sub-panes start at 1
+    (model.indicators || []).forEach(function (ind, idx) {
+      var points = (ind.points || []).slice().sort(function (a, b) { return a.time - b.time; });
+      if (!points.length) return;
+      var paneIndex = ind.pane === "separatePane" ? nextPane++ : 0;
+      var line = chart.addSeries(LightweightCharts.LineSeries, {
+        color: indicatorPalette[idx % indicatorPalette.length],
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: ind.pane === "separatePane",
+        title: ind.name
+      }, paneIndex);
+      line.setData(points);
+    });
+
     chart.timeScale().fitContent();
   }
 })();

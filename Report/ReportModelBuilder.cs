@@ -30,7 +30,7 @@ namespace Backtester.Report
             {
                 Stats = MapStats(stats, context.StartingEquity),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
-                Indicators = result.IndicatorSeries,
+                Indicators = MapIndicators(result.IndicatorSeries),
                 EquityCurve = MapEquityCurve(result.Portfolio.EquityHistory),
                 Chart = MapChart(result.CandleHistory, stats.RoundTrips),
                 Run = new ReportRunInfo
@@ -89,6 +89,41 @@ namespace Backtester.Report
             }
 
             return $"{span.Minutes}m";
+        }
+
+        /// <summary>
+        /// Projects the strategy-exposed indicator series into chart-ready form, preserving their order
+        /// (no re-derivation): each point's timestamp encoded as UTC seconds so it aligns to the candle
+        /// time axis, and each series' pane designation mapped to a page-friendly string.
+        /// </summary>
+        private static IReadOnlyList<ChartIndicator> MapIndicators(IReadOnlyList<IndicatorSeries> indicators)
+        {
+            List<ChartIndicator> mapped = new(indicators.Count);
+            foreach (IndicatorSeries series in indicators)
+            {
+                List<ChartLinePoint> points = new(series.Points.Count);
+                foreach (IndicatorPoint point in series.Points)
+                {
+                    points.Add(new ChartLinePoint { Time = ToUnixSeconds(point.Timestamp), Value = point.Value });
+                }
+
+                mapped.Add(new ChartIndicator
+                {
+                    Name = series.Name,
+                    Pane = MapPane(series.Pane),
+                    Points = points
+                });
+            }
+
+            return mapped;
+        }
+
+        /// <summary>
+        /// Maps an indicator's pane designation to the page-friendly string the chart rendering reads.
+        /// </summary>
+        private static string MapPane(IndicatorPane pane)
+        {
+            return pane == IndicatorPane.PriceOverlay ? "priceOverlay" : "separatePane";
         }
 
         /// <summary>

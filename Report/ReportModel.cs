@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Backtester.Core;
 
 namespace Backtester.Report
 {
@@ -15,8 +14,8 @@ namespace Backtester.Report
         /// <summary>Gets or sets the round trips with their derived return and holding time.</summary>
         public IReadOnlyList<ReportRoundTrip> RoundTrips { get; set; }
 
-        /// <summary>Gets or sets the strategy-exposed indicator series, each with its pane placement.</summary>
-        public IReadOnlyList<IndicatorSeries> Indicators { get; set; }
+        /// <summary>Gets or sets the chart-ready strategy-exposed indicator series, each with its pane placement.</summary>
+        public IReadOnlyList<ChartIndicator> Indicators { get; set; }
 
         /// <summary>Gets or sets the portfolio-wide equity curve.</summary>
         public IReadOnlyList<ReportEquityPoint> EquityCurve { get; set; }

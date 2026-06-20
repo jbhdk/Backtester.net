@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Backtester.Core;
 using Backtester.Engine;
@@ -163,18 +164,63 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_Indicators_PresentWithPanePlacement()
+        public void Build_Indicators_ProjectsExposedSeriesPreservingName()
         {
-            IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
-            IndicatorSeries rsi = new("RSI", IndicatorPane.SeparatePane, new[] { new IndicatorPoint { Timestamp = T0, Value = 55m } });
-            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma, rsi });
+            IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
             ReportModel model = new ReportModelBuilder().Build(result, Context());
 
-            Assert.Equal(2, model.Indicators.Count);
-            Assert.Equal("SMA", model.Indicators[0].Name);
-            Assert.Equal(IndicatorPane.PriceOverlay, model.Indicators[0].Pane);
-            Assert.Equal(IndicatorPane.SeparatePane, model.Indicators[1].Pane);
+            ChartIndicator indicator = Assert.Single(model.Indicators);
+            Assert.Equal("SMA(20)", indicator.Name);
+        }
+
+        [Fact]
+        public void Build_Indicators_EncodesPointTimesAsUtcSeconds()
+        {
+            IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 123.5m } });
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            ChartLinePoint point = Assert.Single(Assert.Single(model.Indicators).Points);
+            Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), point.Time);
+            Assert.Equal(123.5m, point.Value);
+        }
+
+        [Theory]
+        [InlineData(IndicatorPane.PriceOverlay, "priceOverlay")]
+        [InlineData(IndicatorPane.SeparatePane, "separatePane")]
+        public void Build_Indicators_MapsPaneDesignationToPageString(IndicatorPane pane, string expected)
+        {
+            IndicatorSeries series = new("ATR", pane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { series });
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.Equal(expected, Assert.Single(model.Indicators).Pane);
+        }
+
+        [Fact]
+        public void Build_Indicators_DrawsExactlyThoseExposedInOrder()
+        {
+            IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            IndicatorSeries atr = new("ATR", IndicatorPane.SeparatePane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma, atr });
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.Equal(new[] { "SMA", "ATR" }, model.Indicators.Select(indicator => indicator.Name));
+        }
+
+        [Fact]
+        public void Build_Indicators_NoneExposed_YieldsEmptyList()
+        {
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.Empty(model.Indicators);
         }
 
         [Fact]

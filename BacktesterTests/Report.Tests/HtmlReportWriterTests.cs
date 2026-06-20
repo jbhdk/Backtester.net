@@ -40,7 +40,7 @@ namespace BacktesterTests.Report.Tests
                         ReturnPercent = 0.2m, TimeHeld = "2d 0h"
                     }
                 },
-                Indicators = Array.Empty<IndicatorSeries>(),
+                Indicators = Array.Empty<ChartIndicator>(),
                 EquityCurve = new[] { new ReportEquityPoint { Timestamp = T0, Equity = 10_000m } },
                 Chart = new ReportChart { Series = new Dictionary<string, IReadOnlyList<ChartCandle>>() },
                 Run = new ReportRunInfo
@@ -126,6 +126,29 @@ namespace BacktesterTests.Report.Tests
             string html = new HtmlReportWriter().BuildHtml(SampleModel());
 
             Assert.Contains("id=\"price-chart\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_InlinesIndicatorSeriesWithPaneDesignation()
+        {
+            ReportModel model = SampleModel();
+            model.Indicators = new[]
+            {
+                new ChartIndicator
+                {
+                    Name = "ATR(14)",
+                    Pane = "separatePane",
+                    Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 2.5m } }
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // The chart-ready indicator reaches the page: its name, pane designation, and time-aligned
+            // point are inlined in the serialized model for the page to draw.
+            Assert.Contains("\"name\":\"ATR(14)\"", html);
+            Assert.Contains("\"pane\":\"separatePane\"", html);
+            Assert.Contains("\"time\":1704153600", html);
         }
 
         [Fact]
