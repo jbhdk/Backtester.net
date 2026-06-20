@@ -33,6 +33,21 @@ namespace Backtester.Data.Alpaca
         }
 
         /// <summary>
+        /// Initializes a new provider from Alpaca API credentials, building the underlying data client
+        /// over Alpaca's shared market-data endpoint (the same for paper and live trading accounts).
+        /// The market data <paramref name="feed"/> and price <paramref name="adjustment"/> default as in
+        /// the primary constructor.
+        /// </summary>
+        public AlpacaHistoricalDataProvider(
+            string keyId,
+            string secret,
+            MarketDataFeed feed = MarketDataFeed.Sip,
+            Adjustment adjustment = Adjustment.SplitsOnly)
+            : this(Environments.Live.GetAlpacaDataClient(new SecretKey(keyId, secret)), feed, adjustment)
+        {
+        }
+
+        /// <summary>
         /// Fetches candles for the symbol from Alpaca's historical bars endpoint and maps them to <see cref="Candle"/>.
         /// </summary>
         public async Task<IEnumerable<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)

@@ -127,6 +127,21 @@ namespace BacktesterTests.Data.Tests
         }
 
         [Fact]
+        public async Task FetchAsync_ClientRaisesRestClientError_PropagatesItUnwrapped()
+        {
+            IAlpacaDataClient client = A.Fake<IAlpacaDataClient>();
+            RestClientErrorException raised = new("Alpaca SIP entitlement required.");
+            A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
+                .Throws(raised);
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            RestClientErrorException thrown = await Assert.ThrowsAsync<RestClientErrorException>(
+                () => provider.FetchAsync("SPY", From, To, "1d"));
+
+            Assert.Same(raised, thrown);
+        }
+
+        [Fact]
         public async Task FetchAsync_OverriddenFeedAndAdjustment_ReachTheRequest()
         {
             List<HistoricalBarsRequest> captured = new();
