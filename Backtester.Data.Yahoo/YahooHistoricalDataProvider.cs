@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Core;
 
-namespace Backtester.Data
+namespace Backtester.Data.Yahoo
 {
     /// <summary>
     /// Fetches historical OHLCV candle data from Yahoo Finance's v8 chart JSON API.

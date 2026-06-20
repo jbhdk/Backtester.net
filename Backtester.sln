@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Report", "Report\Report.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Backtester.Data.Alpaca", "Backtester.Data.Alpaca\Backtester.Data.Alpaca.csproj", "{F5AD45C0-0C4F-48A7-8998-53358C30A0F7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Backtester.Data.Yahoo", "Backtester.Data.Yahoo\Backtester.Data.Yahoo.csproj", "{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{F5AD45C0-0C4F-48A7-8998-53358C30A0F7}.Release|x64.Build.0 = Release|Any CPU
 		{F5AD45C0-0C4F-48A7-8998-53358C30A0F7}.Release|x86.ActiveCfg = Release|Any CPU
 		{F5AD45C0-0C4F-48A7-8998-53358C30A0F7}.Release|x86.Build.0 = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|x64.Build.0 = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Debug|x86.Build.0 = Debug|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|Any CPU.Build.0 = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|x64.ActiveCfg = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|x64.Build.0 = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|x86.ActiveCfg = Release|Any CPU
+		{202A4C8A-15F4-44B0-AA66-2D5BCCA85169}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

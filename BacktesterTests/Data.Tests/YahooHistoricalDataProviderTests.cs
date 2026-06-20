@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Core;
-using Backtester.Data;
+using Backtester.Data.Yahoo;
 using Xunit;
 
 namespace BacktesterTests.Data.Tests
