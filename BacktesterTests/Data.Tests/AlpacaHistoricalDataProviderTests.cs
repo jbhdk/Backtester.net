@@ -48,6 +48,67 @@ namespace BacktesterTests.Data.Tests
             Assert.Equal(new DateTime(2021, 5, 3, 15, 0, 0, DateTimeKind.Utc), candles[1].Timestamp);
         }
 
+        [Theory]
+        [InlineData("5m",  5, BarTimeFrameUnit.Minute)]
+        [InlineData("15m", 15, BarTimeFrameUnit.Minute)]
+        [InlineData("2h",  2, BarTimeFrameUnit.Hour)]
+        [InlineData("1h",  1, BarTimeFrameUnit.Hour)]
+        [InlineData("1d",  1, BarTimeFrameUnit.Day)]
+        [InlineData("1wk", 1, BarTimeFrameUnit.Week)]
+        [InlineData("1mo", 1, BarTimeFrameUnit.Month)]
+        public async Task FetchAsync_Interval_IsParsedIntoBarTimeFrame(string interval, int expectedValue, BarTimeFrameUnit expectedUnit)
+        {
+            List<HistoricalBarsRequest> captured = new();
+            IAlpacaDataClient client = CapturingClient(Page(null), captured);
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            await provider.FetchAsync("SPY", From, To, interval);
+
+            HistoricalBarsRequest request = Assert.Single(captured);
+            Assert.Equal(expectedValue, request.TimeFrame.Value);
+            Assert.Equal(expectedUnit, request.TimeFrame.Unit);
+        }
+
+        [Fact]
+        public async Task FetchAsync_OverriddenFeedAndAdjustment_ReachTheRequest()
+        {
+            List<HistoricalBarsRequest> captured = new();
+            IAlpacaDataClient client = CapturingClient(Page(null), captured);
+            AlpacaHistoricalDataProvider provider = new(client, MarketDataFeed.Iex, Adjustment.SplitsAndDividends);
+
+            await provider.FetchAsync("SPY", From, To, "1d");
+
+            HistoricalBarsRequest request = Assert.Single(captured);
+            Assert.Equal(MarketDataFeed.Iex, request.Feed.Value);
+            Assert.Equal(Adjustment.SplitsAndDividends, request.Adjustment.Value);
+        }
+
+        [Fact]
+        public async Task FetchAsync_ByDefault_RequestsSipFeedAndSplitAdjustment()
+        {
+            List<HistoricalBarsRequest> captured = new();
+            IAlpacaDataClient client = CapturingClient(Page(null), captured);
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            await provider.FetchAsync("SPY", From, To, "1d");
+
+            HistoricalBarsRequest request = Assert.Single(captured);
+            Assert.Equal(MarketDataFeed.Sip, request.Feed.Value);
+            Assert.Equal(Adjustment.SplitsOnly, request.Adjustment.Value);
+        }
+
+        [Fact]
+        public async Task FetchAsync_UnsupportedInterval_ThrowsBeforeCallingClient()
+        {
+            IAlpacaDataClient client = ClientReturning(Page(null));
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.FetchAsync("SPY", From, To, "3y"));
+
+            A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
+                .MustNotHaveHappened();
+        }
+
         /// <summary>Builds a fake <see cref="IBar"/> exposing the given OHLCV and timestamp.</summary>
         private static IBar FakeBar(DateTime timeUtc, decimal open, decimal high, decimal low, decimal close, decimal volume)
         {
@@ -75,6 +136,16 @@ namespace BacktesterTests.Data.Tests
         {
             IAlpacaDataClient client = A.Fake<IAlpacaDataClient>();
             A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
+                .Returns(Task.FromResult(page));
+            return client;
+        }
+
+        /// <summary>Builds a fake client that returns the given page and records each request it receives.</summary>
+        private static IAlpacaDataClient CapturingClient(IPage<IBar> page, IList<HistoricalBarsRequest> captured)
+        {
+            IAlpacaDataClient client = A.Fake<IAlpacaDataClient>();
+            A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
+                .Invokes((HistoricalBarsRequest request, CancellationToken ct) => captured.Add(request))
                 .Returns(Task.FromResult(page));
             return client;
         }
