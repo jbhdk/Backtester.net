@@ -43,13 +43,25 @@ namespace Backtester.Data.Alpaca
                 Adjustment = _adjustment
             };
 
-            IPage<IBar> page = await _client.ListHistoricalBarsAsync(request, ct).ConfigureAwait(false);
+            // Pull the largest page Alpaca allows to minimize round-trips over a wide range.
+            request.Pagination.Size = Pagination.MaxPageSize;
 
             List<Candle> candles = new();
-            foreach (IBar bar in page.Items)
+
+            // Alpaca returns a single capped page per call; walk the NextPageToken until the range is
+            // exhausted, accumulating every page's bars. There is no cap on the total number of bars.
+            IPage<IBar> page;
+            do
             {
-                candles.Add(ToCandle(bar));
+                page = await _client.ListHistoricalBarsAsync(request, ct).ConfigureAwait(false);
+                foreach (IBar bar in page.Items)
+                {
+                    candles.Add(ToCandle(bar));
+                }
+
+                request.Pagination.Token = page.NextPageToken;
             }
+            while (!string.IsNullOrEmpty(page.NextPageToken));
 
             candles.Sort((left, right) => left.Timestamp.CompareTo(right.Timestamp));
             return candles;

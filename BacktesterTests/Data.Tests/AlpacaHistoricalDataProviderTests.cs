@@ -70,6 +70,63 @@ namespace BacktesterTests.Data.Tests
         }
 
         [Fact]
+        public async Task FetchAsync_MultiplePages_ReturnsBarsFromEveryPage()
+        {
+            List<Call> calls = new();
+            IBar onPage1 = FakeBar(new DateTime(2021, 5, 3, 14, 0, 0, DateTimeKind.Utc), 1m, 1m, 1m, 1m, 1m);
+            IBar onPage2 = FakeBar(new DateTime(2021, 5, 3, 15, 0, 0, DateTimeKind.Utc), 2m, 2m, 2m, 2m, 2m);
+            IAlpacaDataClient client = SequencedClient(calls, Page("TOKEN1", onPage1), Page(null, onPage2));
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            List<Candle> candles = new(await provider.FetchAsync("SPY", From, To, "1d"));
+
+            Assert.Equal(2, candles.Count);
+            Assert.Equal(new DateTime(2021, 5, 3, 14, 0, 0, DateTimeKind.Utc), candles[0].Timestamp);
+            Assert.Equal(new DateTime(2021, 5, 3, 15, 0, 0, DateTimeKind.Utc), candles[1].Timestamp);
+            Assert.Equal(2, calls.Count);
+        }
+
+        [Fact]
+        public async Task FetchAsync_RequestsMaximumPageSize()
+        {
+            List<Call> calls = new();
+            IAlpacaDataClient client = SequencedClient(calls, Page(null));
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            await provider.FetchAsync("SPY", From, To, "1d");
+
+            Assert.Equal(Pagination.MaxPageSize, Assert.Single(calls).PageSize.Value);
+        }
+
+        [Fact]
+        public async Task FetchAsync_ThreadsNextPageTokenIntoFollowUpCall()
+        {
+            List<Call> calls = new();
+            IAlpacaDataClient client = SequencedClient(calls, Page("TOKEN1"), Page(null));
+            AlpacaHistoricalDataProvider provider = new(client);
+
+            await provider.FetchAsync("SPY", From, To, "1d");
+
+            Assert.Equal(2, calls.Count);
+            Assert.True(string.IsNullOrEmpty(calls[0].PageToken));
+            Assert.Equal("TOKEN1", calls[1].PageToken);
+        }
+
+        [Fact]
+        public async Task FetchAsync_ForwardsCancellationTokenToEveryPageCall()
+        {
+            List<Call> calls = new();
+            IAlpacaDataClient client = SequencedClient(calls, Page("TOKEN1"), Page(null));
+            AlpacaHistoricalDataProvider provider = new(client);
+            using CancellationTokenSource cts = new();
+
+            await provider.FetchAsync("SPY", From, To, "1d", cts.Token);
+
+            Assert.Equal(2, calls.Count);
+            Assert.All(calls, call => Assert.Equal(cts.Token, call.Ct));
+        }
+
+        [Fact]
         public async Task FetchAsync_OverriddenFeedAndAdjustment_ReachTheRequest()
         {
             List<HistoricalBarsRequest> captured = new();
@@ -137,6 +194,40 @@ namespace BacktesterTests.Data.Tests
             IAlpacaDataClient client = A.Fake<IAlpacaDataClient>();
             A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
                 .Returns(Task.FromResult(page));
+            return client;
+        }
+
+        /// <summary>A snapshot of one bars call: the request's page token and size, and the token at call time.</summary>
+        private readonly struct Call
+        {
+            public Call(string pageToken, uint? pageSize, CancellationToken ct)
+            {
+                PageToken = pageToken;
+                PageSize = pageSize;
+                Ct = ct;
+            }
+
+            public string PageToken { get; }
+            public uint? PageSize { get; }
+            public CancellationToken Ct { get; }
+        }
+
+        /// <summary>
+        /// Builds a fake client that returns the given pages on successive calls, recording a
+        /// snapshot of each call's pagination state (token and size) and cancellation token.
+        /// </summary>
+        private static IAlpacaDataClient SequencedClient(IList<Call> calls, params IPage<IBar>[] pages)
+        {
+            IAlpacaDataClient client = A.Fake<IAlpacaDataClient>();
+            int index = 0;
+            A.CallTo(() => client.ListHistoricalBarsAsync(A<HistoricalBarsRequest>._, A<CancellationToken>._))
+                .ReturnsLazily((HistoricalBarsRequest request, CancellationToken ct) =>
+                {
+                    calls.Add(new Call(request.Pagination.Token, request.Pagination.Size, ct));
+                    IPage<IBar> page = pages[Math.Min(index, pages.Length - 1)];
+                    index++;
+                    return Task.FromResult(page);
+                });
             return client;
         }
 
