@@ -8,7 +8,7 @@ A bar-by-bar backtesting engine for financial market strategies, written in C# o
 - **Strategy interface** — implement `IStrategy.OnStart(history)` to pre-compute indicators from the full bar history (using any library), then `IStrategy.OnBar(symbol, bar, snapshot, broker)` to submit orders directly via the broker.
 - **Broker simulation** — `BrokerSimulator` fills orders using an OHLC heuristic, supports market, limit, and stop order types, bracket orders with OCO exit legs, and tracks open positions through `Portfolio`.
 - **Pluggable models** — swap in your own implementations of `IFillModel`, `ICommissionModel`, `ISlippageModel`, `ISizingModel`, and `IRiskModel` without touching engine code.
-- **Data providers** — fetch historical data from Yahoo Finance (`YahooHistoricalDataProvider`), cached to disk as CSV (`HistoricalDataFetcher` / `CsvBarLoader`); the engine fetches each symbol and synchronizes multi-symbol data internally.
+- **Data seams** — the engine fetches each symbol through `IHistoricalDataFetcher` and synchronizes multi-symbol data internally. The core ships the cache-aware `HistoricalDataFetcher`, the offline `CsvHistoricalDataFetcher`, and `CsvBarLoader`; live network providers are opt-in packages (`backtester.net.yahoo`, `backtester.net.alpaca`).
 - **Performance stats** — `Portfolio.GetPerformanceStats()` returns win rate, profit factor, expectancy, max drawdown, CAGR, Sharpe, and more, computed from completed round trips.
 
 ## Quick start
@@ -26,8 +26,10 @@ IBrokerSimulator broker = new BrokerSimulator(
     slippageModel: new FixedSlippage { Amount = 0.05m },
     sizingModel: new FixedSizeModel { FixedSize = 10 });
 
-// 3. Create a cache-aware data fetcher (Yahoo Finance, cached to disk as CSV)
-IHistoricalDataFetcher fetcher = new HistoricalDataFetcher(new YahooHistoricalDataProvider());
+// 3. Create a data fetcher. The offline CSV fetcher ships in this package and needs no
+//    network; for live data add a provider package (backtester.net.yahoo or
+//    backtester.net.alpaca) and pass its provider to HistoricalDataFetcher instead.
+IHistoricalDataFetcher fetcher = new CsvHistoricalDataFetcher(dataFolder: "data");
 
 // 4. Run — the engine fetches the data, synchronizes it, and steps through it bar by bar
 IEngine engine = new Engine(
@@ -53,7 +55,7 @@ PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 | `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `IndicatorSeries`, `IndicatorPoint`, `IndicatorPane` |
 | `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
-| `Backtester.Data` | `CsvBarLoader`, `YahooHistoricalDataProvider`, `HistoricalDataFetcher`, `IHistoricalDataFetcher` |
+| `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader` |
 | `Backtester.Strategies` | `IStrategy`, `IIndicatorSource`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
 | `Backtester.ExecutionModels.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
 

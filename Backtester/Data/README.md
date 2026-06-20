@@ -6,7 +6,6 @@ Summary
 - Purpose: fetch OHLCV history from pluggable providers and store per-symbol+interval CSV files under the repo `data/` folder for fast reuse.
 - Key components:
   - `IHistoricalDataProvider` — provider contract for fetching candles.
-  - `YahooHistoricalDataProvider` — concrete provider (supports `1d`, `1wk`, `1mo` and intraday `1h`/`60m` with limited history).
   - `CsvBarLoader` — local CSV read/write/append+merge utilities.
   - `HistoricalDataFetcher` — orchestrator that decides whether to use cached data or fetch missing ranges.
   - `CsvHistoricalDataFetcher` — offline `IHistoricalDataFetcher` that reads candles straight from a committed `{SYMBOL}_{interval}.csv` file (no provider, no cache logic) for deterministic, repeatable runs.
@@ -31,7 +30,7 @@ Behavior & policy
 
 Provider notes
 - Implement `IHistoricalDataProvider.FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken)`.
-- `YahooHistoricalDataProvider` uses Yahoo Finance CSV download and supports `1d`, `1wk`, `1mo`, and `1h`/`60m` (intraday history limited to approx. 730 days). If the provider cannot serve the requested interval it will throw `NotSupportedException`.
+- Live network providers ship as their own opt-in packages, so the core stays network-free (see `docs/adr/0009-network-providers-separate-packages.md`): `backtester.net.yahoo` (Yahoo Finance v8) and `backtester.net.alpaca` (Alpaca). The only provider in the core package is the offline `CsvHistoricalDataFetcher`. If a provider cannot serve the requested interval it throws `NotSupportedException`.
 
 Concurrency & safety
 - Writes are atomic: CSV writes are performed to a temp file then copied to the target path to reduce corruption risk. This implementation does not implement cross-process locking — coordinate multiple processes externally if necessary.

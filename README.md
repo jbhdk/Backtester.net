@@ -14,11 +14,15 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds two NuGet packages. Use the engine on its own, or add reporting when you want it.
+The repository builds four NuGet packages. Use the engine on its own, and add a data source or
+reporting when you want them. The core makes no outbound network call on its own — every live data
+provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
 | Package | What it is | Depends on |
 |---|---|---|
-| [`backtester.net`](Backtester/README.md) | The backtesting engine: data, broker, portfolio, strategies, execution models. | — |
+| [`backtester.net`](Backtester/README.md) | The backtesting engine: the data seams, the cache-aware fetcher, the offline CSV provider, broker, portfolio, strategies, execution models. | — |
+| [`backtester.net.yahoo`](Backtester.Data.Yahoo/README.md) | Opt-in Yahoo Finance data provider. BCL-only. | `backtester.net` |
+| [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
 | [`backtester.net.report`](Report/README.md) | Opt-in HTML reporting built from a run's `BacktestResult`. Kept separate so the engine takes on no web-asset dependencies. | `backtester.net` |
 
 ---
@@ -63,6 +67,7 @@ A complete run: fetch data, simulate a strategy, and write an HTML report.
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
+using Backtester.Data.Yahoo;   // from the backtester.net.yahoo package
 using Backtester.Engine;
 using Backtester.ExecutionModels.Commission;
 using Backtester.ExecutionModels.Slippage;
@@ -83,7 +88,8 @@ IBrokerSimulator broker = new BrokerSimulator(
     sizingModel:     new FixedSizeModel { FixedSize = 100 });
 
 // 3. Create a cache-aware data fetcher. It serves bars from a local CSV cache
-//    and only calls Yahoo Finance for bars the cache is missing.
+//    and only calls Yahoo Finance for bars the cache is missing. The Yahoo
+//    provider ships in the opt-in backtester.net.yahoo package.
 IHistoricalDataFetcher fetcher = new HistoricalDataFetcher(new YahooHistoricalDataProvider());
 
 // 4. Run the engine. It fetches each symbol, synchronizes them into slices,
@@ -229,20 +235,27 @@ IBrokerSimulator broker = new BrokerSimulator(
 
 Data flows through two seams (see [`CONTEXT.md`](CONTEXT.md) for the distinction):
 
-- **Provider** (`IHistoricalDataProvider`) — pure acquisition from an external service.
-  [`YahooHistoricalDataProvider`](Backtester/Data/YahooHistoricalDataProvider.cs) fetches from Yahoo
-  Finance's v8 chart API (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1wk`, `1mo`, …).
-- **Fetcher** (`IHistoricalDataFetcher`) — the cache-aware orchestrator the engine talks to.
+- **Provider** (`IHistoricalDataProvider`) — pure acquisition from an external service. Each live
+  provider is an opt-in package, so the core stays network-free
+  (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)):
+  - [`backtester.net.yahoo`](Backtester.Data.Yahoo/README.md) — Yahoo Finance v8 chart API
+    (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1wk`, `1mo`, …); raw, unadjusted prices.
+  - [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) — Alpaca (US equities, consolidated
+    SIP, split-adjusted by default).
+- **Fetcher** (`IHistoricalDataFetcher`) — the cache-aware orchestrator the engine talks to. The
+  fetchers and the offline CSV provider live in the core package.
 
 Two fetchers ship in the box:
 
 ```csharp
 // Online + cached: calls the provider only for bars the local CSV cache lacks.
+// Add the backtester.net.yahoo package for the provider below (or backtester.net.alpaca).
 IHistoricalDataFetcher live = new HistoricalDataFetcher(
     new YahooHistoricalDataProvider(),
     dataFolder: "data");   // defaults to ./data
 
 // Fully offline + deterministic: reads committed CSV files, never touches the network.
+// No provider package needed — CsvHistoricalDataFetcher is part of the core engine.
 IHistoricalDataFetcher offline = new CsvHistoricalDataFetcher(dataFolder: "samples/data");
 ```
 
@@ -289,16 +302,20 @@ Backtester/            The engine (backtester.net)
   Core/                Candle, Order, Trade, Position, Portfolio, PerformanceStats, MarketSlice, …
   Engine/              Engine, IEngine, BacktestResult
   Broker/              BrokerSimulator, IFillModel, FillModel_OHLCHeuristic
-  Data/                Yahoo + CSV providers and fetchers, CsvBarLoader
+  Data/                Data seams, HistoricalDataFetcher, CSV provider/fetcher, CsvBarLoader
   Strategies/          IStrategy, StrategyBase, reference strategies
   ExecutionModels/     Commission, Slippage, Sizing, Risk models
+Backtester.Data.Yahoo/   Yahoo Finance provider (backtester.net.yahoo)
+Backtester.Data.Alpaca/  Alpaca provider (backtester.net.alpaca)
 Report/                HTML reporting (backtester.net.report)
 BacktesterTests/       Test suite
 samples/data/          Example OHLCV CSV
 CONTEXT.md             The engine's ubiquitous language (glossary)
 ```
 
-Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md) and
+Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md),
+[`Backtester.Data.Yahoo/README.md`](Backtester.Data.Yahoo/README.md),
+[`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md), and
 [`Report/README.md`](Report/README.md).
 
 ---
