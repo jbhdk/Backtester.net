@@ -1,0 +1,22 @@
+<Project>
+
+  <!-- Local NuGet feed that packable projects publish to after packing. -->
+  <PropertyGroup>
+    <LocalNugetFeed>C:\Source\NugetRepo</LocalNugetFeed>
+  </PropertyGroup>
+
+  <!--
+    Copies the freshly packed NuGet package into the local feed so consuming
+    projects on this machine can restore it immediately. Only runs for projects
+    that actually produce a package.
+  -->
+  <Target Name="PublishToLocalFeed"
+          AfterTargets="Pack"
+          Condition="'$(GeneratePackageOnBuild)' == 'true' And '$(Configuration)' == 'Release'">
+    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+          DestinationFolder="$(LocalNugetFeed)" />
+    <Message Importance="high"
+             Text="Published $(PackageId).$(PackageVersion).nupkg to $(LocalNugetFeed)." />
+  </Target>
+
+</Project>
