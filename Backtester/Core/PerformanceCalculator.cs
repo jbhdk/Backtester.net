@@ -176,7 +176,15 @@ namespace Backtester.Core
                 return 0m;
             }
 
-            return (decimal)(Math.Pow((double)(finalEquity / startingCash), 1.0 / years) - 1.0);
+            // For very short spans the exponent (1/years) is enormous; annualising a profit can
+            // exceed decimal range and overflow the cast. Validate in double before converting.
+            double cagr = Math.Pow((double)(finalEquity / startingCash), 1.0 / years) - 1.0;
+            if (!double.IsFinite(cagr) || Math.Abs(cagr) > (double)decimal.MaxValue)
+            {
+                return 0m;
+            }
+
+            return (decimal)cagr;
         }
 
         private static decimal ComputeSharpe(IReadOnlyList<EquitySnapshot> history)

@@ -163,6 +163,23 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void GetPerformanceStats_SubDayWinningRoundTrip_CagrFiniteAndDoesNotThrow()
+        {
+            // A ~45-minute round trip ending in profit produces a tiny annualisation span,
+            // making the CAGR exponent enormous. The result must be finite, not an overflow.
+            DateTime exit = T0.AddMinutes(45);
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, exit));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, exit));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.True(decimal.MinValue <= stats.Cagr && stats.Cagr <= decimal.MaxValue);
+        }
+
+        [Fact]
         public void GetPerformanceStats_MaxConsecLosses_LongestLosingStreak()
         {
             // Three round trips: loss, loss, win → MaxConsecLosses = 2
