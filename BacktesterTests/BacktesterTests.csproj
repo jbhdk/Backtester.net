@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Backtester\Backtester.csproj" />
     <ProjectReference Include="..\Report\Report.csproj" />
+    <ProjectReference Include="..\Backtester.Data.Alpaca\Backtester.Data.Alpaca.csproj" />
   </ItemGroup>
 
 </Project>
