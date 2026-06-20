@@ -12,10 +12,15 @@
     <Authors>Jesper Baagøe Hansen</Authors>
     <Description>Alpaca historical market-data provider for the backtester.net engine.</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <!-- File that persists the auto-incremented build number between builds. -->
     <BuildNumberFile>$(MSBuildProjectDirectory)\buildnumber.txt</BuildNumberFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <PropertyGroup>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
