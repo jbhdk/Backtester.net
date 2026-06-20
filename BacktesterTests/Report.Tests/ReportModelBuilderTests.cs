@@ -151,6 +151,18 @@ namespace BacktesterTests.Report.Tests
             Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedColor, marker.Color));
         }
 
+        [Fact]
+        public void Build_Chart_Markers_CarryOwningRoundTripNumber()
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            // The single round trip is number 1; both its entry and exit markers carry that number so
+            // the page can highlight the matching table row when a marker is hovered.
+            Assert.All(model.Chart.Markers, marker => Assert.Equal(1, marker.RoundTripNumber));
+        }
+
         [Theory]
         [InlineData(120, "+$200.00")] // winning trip P&L label
         [InlineData(80, "-$200.00")]  // losing trip P&L label
@@ -173,6 +185,17 @@ namespace BacktesterTests.Report.Tests
 
             ChartIndicator indicator = Assert.Single(model.Indicators);
             Assert.Equal("SMA(20)", indicator.Name);
+        }
+
+        [Fact]
+        public void Build_Indicators_CarrySymbolForPerSymbolScoping()
+        {
+            IndicatorSeries sma = new("SMA(20)", "AAPL", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            BacktestResult result = new(NoCandles(), new Portfolio(10_000m), new[] { sma });
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context());
+
+            Assert.Equal("AAPL", Assert.Single(model.Indicators).Symbol);
         }
 
         [Fact]
@@ -224,18 +247,33 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_EquityCurve_MapsMarkedEquityPerSnapshot()
+        public void Build_EquityCurve_StartsAtStartingEquityAsTradeZero()
         {
             BacktestResult result = new(NoCandles(), WinningPortfolio(), NoIndicators());
 
-            ReportModel model = new ReportModelBuilder().Build(result, Context());
+            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
 
-            // Marked equity across the three recorded bars: 10,000 → 10,100 → 10,200
-            Assert.Equal(3, model.EquityCurve.Count);
-            Assert.Equal(T0, model.EquityCurve[0].Timestamp);
-            Assert.Equal(10_000m, model.EquityCurve[0].Equity);
-            Assert.Equal(10_100m, model.EquityCurve[1].Equity);
-            Assert.Equal(10_200m, model.EquityCurve[2].Equity);
+            ReportEquityPoint start = model.EquityCurve[0];
+            Assert.Equal(0, start.Trade);
+            Assert.Equal(10_000m, start.Equity);
+        }
+
+        [Fact]
+        public void Build_EquityCurve_AccumulatesRealizedPnLPerClosedTrade()
+        {
+            Portfolio portfolio = new(10_000m);
+            // Trade 1: +200 (buy 10@100, sell 10@120); Trade 2: -50 (buy 10@100, sell 10@95).
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, T0));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, T0.AddDays(3)));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 95m, 10, T0.AddDays(5)));
+            BacktestResult result = new(NoCandles(), portfolio, NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result, Context(startingEquity: 10_000m));
+
+            // Trade-indexed cumulative realized equity: 10,000 → 10,200 → 10,150.
+            Assert.Equal(new[] { 0, 1, 2 }, model.EquityCurve.Select(point => point.Trade));
+            Assert.Equal(new[] { 10_000m, 10_200m, 10_150m }, model.EquityCurve.Select(point => point.Equity));
         }
 
         [Fact]

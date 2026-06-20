@@ -17,7 +17,7 @@ namespace Backtester.Report
         /// <summary>Gets or sets the chart-ready strategy-exposed indicator series, each with its pane placement.</summary>
         public IReadOnlyList<ChartIndicator> Indicators { get; set; }
 
-        /// <summary>Gets or sets the portfolio-wide equity curve.</summary>
+        /// <summary>Gets or sets the portfolio-wide equity curve, indexed by trade count.</summary>
         public IReadOnlyList<ReportEquityPoint> EquityCurve { get; set; }
 
         /// <summary>Gets or sets the chart-ready price section: per-symbol candle series the run executed on.</summary>

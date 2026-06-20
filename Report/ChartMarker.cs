@@ -9,6 +9,9 @@ namespace Backtester.Report
         /// <summary>Gets or sets the symbol the marker belongs to, so the page can show only the selected symbol's markers.</summary>
         public string Symbol { get; set; }
 
+        /// <summary>Gets or sets the 1-based number of the round trip this marker belongs to, linking it to its table row.</summary>
+        public int RoundTripNumber { get; set; }
+
         /// <summary>Gets or sets the marked bar's timestamp encoded as UTC seconds since the Unix epoch.</summary>
         public long Time { get; set; }
 

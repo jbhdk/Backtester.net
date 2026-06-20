@@ -12,7 +12,7 @@ namespace Backtester.Strategies
     {
         private readonly List<IndicatorSeries> _indicatorSeries = new();
 
-        /// <summary>Gets the indicator series the strategy has exposed via <see cref="RecordIndicator"/>.</summary>
+        /// <summary>Gets the indicator series the strategy has exposed via the <c>RecordIndicator</c> helpers.</summary>
         public IReadOnlyList<IndicatorSeries> IndicatorSeries => _indicatorSeries;
 
         /// <summary>
@@ -27,12 +27,22 @@ namespace Backtester.Strategies
         public abstract void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker);
 
         /// <summary>
-        /// Exposes a computed indicator series for reporting. Intended to be called from
-        /// <see cref="OnStart"/> after the series has been computed from the bar history.
+        /// Exposes a computed indicator series for reporting, not bound to any symbol (drawn on every
+        /// symbol's chart). Intended to be called from <see cref="OnStart"/> after the series has been
+        /// computed from the bar history.
         /// </summary>
         protected void RecordIndicator(string name, IndicatorPane pane, IReadOnlyList<IndicatorPoint> points)
         {
             _indicatorSeries.Add(new IndicatorSeries(name, pane, points));
+        }
+
+        /// <summary>
+        /// Exposes a computed indicator series for reporting, bound to a symbol so a multi-symbol report
+        /// draws it only on that symbol's chart. Intended to be called from <see cref="OnStart"/>.
+        /// </summary>
+        protected void RecordIndicator(string name, string symbol, IndicatorPane pane, IReadOnlyList<IndicatorPoint> points)
+        {
+            _indicatorSeries.Add(new IndicatorSeries(name, symbol, pane, points));
         }
     }
 }

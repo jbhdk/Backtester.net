@@ -12,6 +12,9 @@ namespace Backtester.Report
         /// <summary>Gets or sets the display name of the series (e.g. <c>"SMA(20)"</c>).</summary>
         public string Name { get; set; }
 
+        /// <summary>Gets or sets the symbol this series belongs to, or <c>null</c> to draw it on every symbol's chart.</summary>
+        public string Symbol { get; set; }
+
         /// <summary>
         /// Gets or sets the pane placement as a page-friendly string: <c>"priceOverlay"</c> to draw on
         /// the price pane, or <c>"separatePane"</c> to draw in its own sub-pane below.

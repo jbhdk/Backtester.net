@@ -34,7 +34,12 @@
   thead th[aria-sort="descending"]::after { content: " \25BC"; }
   tbody tr:hover { background: rgba(255,255,255,.03); }
   .footnote { color: var(--muted); font-size: 12px; margin-top: 16px; }
-  #price-chart { width: 100%; height: 420px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
+  #price-chart { width: 100%; height: 600px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
+  #equity-chart { width: 100%; height: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; }
+  #symbol-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
+  tbody tr { cursor: pointer; }
+  tbody tr.active { background: rgba(78,161,255,.15); }
 </style>
 </head>
 <body>
@@ -47,8 +52,11 @@
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
-<h2>Price</h2>
+<div class="chart-head"><h2>Price</h2><select id="symbol-select" hidden></select></div>
 <div id="price-chart"></div>
+
+<h2>Equity by trade</h2>
+<div id="equity-chart"></div>
 
 <h2>Round trips</h2>
 <table id="round-trips">
@@ -132,7 +140,7 @@
   function cell(value, cls) { return '<td class="' + (cls || "") + '">' + value + "</td>"; }
   function renderRows() {
     tbody.innerHTML = trips.map(function (t) {
-      return "<tr>" +
+      return '<tr data-number="' + t.number + '">' +
         cell(t.number) + cell(t.symbol) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
@@ -165,63 +173,176 @@
   });
 
   // --- Price chart ---
-  // All chart values are pre-derived in the model: candles already carry UTC-seconds timestamps and
-  // markers already carry their position, shape, win/loss colour, and P&L label. Drawing is dumb.
+  // All chart values are pre-derived in the model: candles, markers, indicators, and the equity curve
+  // already carry UTC-seconds timestamps; markers carry placement, colour, label, and the round-trip
+  // number linking them to a table row. Every pane lives on one chart, so they share one time axis.
   var chartData = model.chart || {};
   var allSeries = chartData.series || {};
-  var chartSymbols = (run.symbols && run.symbols.length) ? run.symbols : Object.keys(allSeries);
-  var selected = null;
-  for (var si = 0; si < chartSymbols.length; si++) {
-    var candidate = chartSymbols[si];
-    if (allSeries[candidate] && allSeries[candidate].length) { selected = candidate; break; }
-  }
+  var allMarkers = chartData.markers || [];
+  var equityCurve = model.equityCurve || [];
+  var indicatorPalette = ["#4ea1ff", "#f5a623", "#bd10e0", "#7ed321", "#50e3c2", "#e94f8a"];
+
+  // The symbols that actually have candle data, in run order.
+  var runSymbols = (run.symbols && run.symbols.length) ? run.symbols : Object.keys(allSeries);
+  var symbols = runSymbols.filter(function (s) { return allSeries[s] && allSeries[s].length; });
 
   var chartEl = document.getElementById("price-chart");
-  if (selected != null && chartEl && window.LightweightCharts) {
-    var chart = LightweightCharts.createChart(chartEl, {
-      autoSize: true,
-      layout: { background: { color: "#1a2027" }, textColor: "#e6e9ef" },
+  var selectEl = document.getElementById("symbol-select");
+  var chart = null, selected = null, applyPaneHeights = function () {};
+
+  function toSec(iso) { return Math.floor(new Date(iso).getTime() / 1000); }
+
+  // Toggle the .active highlight on the round-trip row matching the given number (null clears all).
+  function highlightRow(number) {
+    tbody.querySelectorAll("tr").forEach(function (r) {
+      r.classList.toggle("active", number != null && Number(r.getAttribute("data-number")) === number);
+    });
+  }
+
+  // (Re)build the price chart for the selected symbol. The price pane (pane 0) holds candles, markers,
+  // and price-overlay indicators and is the tallest; each separate-pane indicator gets its own short
+  // sub-pane beneath. The equity curve is a separate chart (see buildEquityChart). Rebuilding on a
+  // symbol switch keeps the code path identical for every symbol.
+  function buildChart(symbol) {
+    selected = symbol;
+    if (chart) { chart.remove(); chart = null; }
+    chart = LightweightCharts.createChart(chartEl, {
+      width: chartEl.clientWidth, height: chartEl.clientHeight,
+      layout: {
+        background: { color: "#1a2027" }, textColor: "#e6e9ef",
+        // A brighter separator visually divides the price pane from the indicator sub-panes.
+        panes: { separatorColor: "#3d4756", separatorHoverColor: "#4ea1ff", enableResize: true }
+      },
       grid: { vertLines: { color: "#2a313a" }, horzLines: { color: "#2a313a" } },
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#2a313a" },
       rightPriceScale: { borderColor: "#2a313a" }
     });
+
+    var pricePane = 0;
     var candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
       upColor: "#2ecc71", downColor: "#e74c3c",
       wickUpColor: "#2ecc71", wickDownColor: "#e74c3c",
       borderVisible: false
-    });
-    candleSeries.setData(allSeries[selected]);
+    }, pricePane);
+    candleSeries.setData(allSeries[symbol]);
 
-    // Markers must be in ascending time order for the library; show only the selected symbol's.
-    var markers = (chartData.markers || [])
-      .filter(function (m) { return m.symbol === selected; })
-      .map(function (m) { return { time: m.time, position: m.position, shape: m.shape, color: m.color, text: m.text }; })
+    // Only the selected symbol's markers, in ascending time order. Each marker's id is its round-trip
+    // number so a hover can highlight the matching table row.
+    var markers = allMarkers
+      .filter(function (m) { return m.symbol === symbol; })
+      .map(function (m) { return { time: m.time, position: m.position, shape: m.shape, color: m.color, text: m.text, id: m.roundTripNumber }; })
       .sort(function (a, b) { return a.time - b.time; });
     LightweightCharts.createSeriesMarkers(candleSeries, markers);
 
-    // --- Indicators ---
-    // Drawn straight from the model's exposed series (no re-derivation). Each series declares its
-    // pane: a "priceOverlay" shares the price pane (pane 0) and its vertical scale; a "separatePane"
-    // gets its own sub-pane beneath the price pane so it doesn't distort the price scale. The page
-    // assigns colours from a palette. With no indicators the loop is a no-op and the chart is unchanged.
-    var indicatorPalette = ["#4ea1ff", "#f5a623", "#bd10e0", "#7ed321", "#50e3c2", "#e94f8a"];
-    var nextPane = 1; // pane 0 is the price pane; separate sub-panes start at 1
-    (model.indicators || []).forEach(function (ind, idx) {
-      var points = (ind.points || []).slice().sort(function (a, b) { return a.time - b.time; });
-      if (!points.length) return;
-      var paneIndex = ind.pane === "separatePane" ? nextPane++ : 0;
-      var line = chart.addSeries(LightweightCharts.LineSeries, {
-        color: indicatorPalette[idx % indicatorPalette.length],
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: ind.pane === "separatePane",
-        title: ind.name
-      }, paneIndex);
-      line.setData(points);
+    // Indicators for this symbol only (an untagged series applies to every symbol). Price overlays
+    // share the price pane; separate-pane series each get their own sub-pane beneath it.
+    var separateSeries = [];
+    var nextPane = pricePane + 1;
+    (model.indicators || [])
+      .filter(function (ind) { return !ind.symbol || ind.symbol === symbol; })
+      .forEach(function (ind, idx) {
+        var points = (ind.points || []).slice().sort(function (a, b) { return a.time - b.time; });
+        if (!points.length) return;
+        var separate = ind.pane === "separatePane";
+        var line = chart.addSeries(LightweightCharts.LineSeries, {
+          color: indicatorPalette[idx % indicatorPalette.length],
+          lineWidth: 2, priceLineVisible: false, lastValueVisible: separate, title: ind.name
+        }, separate ? nextPane++ : pricePane);
+        line.setData(points);
+        if (separate) { separateSeries.push(line); }
+      });
+
+    // Give each indicator sub-pane a fixed height; the price pane (the main pane) absorbs the rest and
+    // is clearly the tallest. setHeight only takes effect once the chart has laid out, so it is applied
+    // on the next frame and re-applied on resize. Reached via the series so the right pane is sized.
+    applyPaneHeights = function () {
+      requestAnimationFrame(function () {
+        separateSeries.forEach(function (series) { series.getPane().setHeight(150); });
+      });
+    };
+    applyPaneHeights();
+
+    // Hover a marker -> highlight its row; moving off any marker clears the highlight.
+    chart.subscribeCrosshairMove(function (param) {
+      highlightRow(param && param.hoveredObjectId != null ? Number(param.hoveredObjectId) : null);
     });
 
     chart.timeScale().fitContent();
   }
+
+  // Build the portfolio-wide equity curve as its own chart, indexed by trade count (not time): point
+  // zero is the starting equity and each step adds a closed trade's realized P&L. A synthetic per-trade
+  // time spaces the points evenly; the axis and crosshair show the trade number, not a date.
+  function buildEquityChart() {
+    var equityEl = document.getElementById("equity-chart");
+    if (!equityEl || !equityCurve.length) return;
+
+    var ONE_DAY = 86400; // one synthetic "day" per trade so the time scale spaces points evenly
+    function tradeOf(time) { return Math.round(time / ONE_DAY) - 1; }
+
+    var equityChart = LightweightCharts.createChart(equityEl, {
+      width: equityEl.clientWidth, height: equityEl.clientHeight,
+      layout: { background: { color: "#1a2027" }, textColor: "#e6e9ef" },
+      grid: { vertLines: { color: "#2a313a" }, horzLines: { color: "#2a313a" } },
+      rightPriceScale: { borderColor: "#2a313a" },
+      timeScale: {
+        borderColor: "#2a313a",
+        tickMarkFormatter: function (time) { return "#" + tradeOf(time); }
+      },
+      localization: { timeFormatter: function (time) { return "Trade " + tradeOf(time); } }
+    });
+    var equitySeries = equityChart.addSeries(LightweightCharts.LineSeries, {
+      color: "#4ea1ff", lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: "Equity"
+    });
+    equitySeries.setData(equityCurve.map(function (p) { return { time: (p.trade + 1) * ONE_DAY, value: p.equity }; }));
+    equityChart.timeScale().fitContent();
+
+    window.addEventListener("resize", function () {
+      equityChart.resize(equityEl.clientWidth, equityEl.clientHeight);
+    });
+  }
+
+  // Focus a round trip: switch symbol if needed, frame its entry..exit span, and highlight its row.
+  function focusTrip(trip) {
+    if (!chart) return;
+    if (trip.symbol !== selected && allSeries[trip.symbol] && allSeries[trip.symbol].length) {
+      if (selectEl) selectEl.value = trip.symbol;
+      buildChart(trip.symbol);
+    }
+    var from = toSec(trip.entryTime), to = toSec(trip.exitTime);
+    var pad = Math.max(3600, (to - from) * 0.5); // breathing room around the trade
+    chart.timeScale().setVisibleRange({ from: from - pad, to: to + pad });
+    highlightRow(trip.number);
+  }
+
+  if (chartEl && window.LightweightCharts && symbols.length) {
+    // The selector switches the displayed symbol's chart; it is hidden for a single-symbol run.
+    if (selectEl && symbols.length > 1) {
+      selectEl.innerHTML = symbols.map(function (s) { return '<option value="' + s + '">' + s + "</option>"; }).join("");
+      selectEl.hidden = false;
+      selectEl.addEventListener("change", function () { buildChart(selectEl.value); });
+    }
+
+    buildChart(symbols[0]);
+
+    // The chart is explicitly sized, so keep it in step with the container and re-apply pane heights.
+    window.addEventListener("resize", function () {
+      if (!chart) return;
+      chart.resize(chartEl.clientWidth, chartEl.clientHeight);
+      applyPaneHeights();
+    });
+
+    // Click a round-trip row to focus that trade on the chart (switching symbol if needed).
+    tbody.addEventListener("click", function (event) {
+      var tr = event.target.closest("tr");
+      if (!tr) return;
+      var number = Number(tr.getAttribute("data-number"));
+      var trip = trips.filter(function (t) { return t.number === number; })[0];
+      if (trip) focusTrip(trip);
+    });
+  }
+
+  if (window.LightweightCharts) { buildEquityChart(); }
 })();
 </script>
 </body>

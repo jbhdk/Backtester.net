@@ -50,6 +50,17 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public void RecordIndicator_WithSymbol_BindsSeriesToSymbol()
+        {
+            SymbolRecordingStrategy strategy = new("MSFT");
+
+            strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
+
+            IIndicatorSource source = strategy;
+            Assert.Equal("MSFT", Assert.Single(source.IndicatorSeries).Symbol);
+        }
+
+        [Fact]
         public void RecordNothing_ExposesEmptyCollection()
         {
             RecordingStrategy strategy = new();
@@ -76,6 +87,24 @@ namespace BacktesterTests.Engine.Tests
                 {
                     RecordIndicator(name, pane, points);
                 }
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        /// <summary>Records a single symbol-tagged indicator during OnStart.</summary>
+        private class SymbolRecordingStrategy : StrategyBase
+        {
+            private readonly string _symbol;
+
+            public SymbolRecordingStrategy(string symbol)
+            {
+                _symbol = symbol;
+            }
+
+            public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
+            {
+                RecordIndicator("SMA", _symbol, IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
             }
 
             public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }

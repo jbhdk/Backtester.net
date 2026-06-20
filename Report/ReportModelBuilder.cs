@@ -31,7 +31,7 @@ namespace Backtester.Report
                 Stats = MapStats(stats, context.StartingEquity),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 Indicators = MapIndicators(result.IndicatorSeries),
-                EquityCurve = MapEquityCurve(result.Portfolio.EquityHistory),
+                EquityCurve = MapEquityCurve(stats.RoundTrips, context.StartingEquity),
                 Chart = MapChart(result.CandleHistory, stats.RoundTrips),
                 Run = new ReportRunInfo
                 {
@@ -110,6 +110,7 @@ namespace Backtester.Report
                 mapped.Add(new ChartIndicator
                 {
                     Name = series.Name,
+                    Symbol = series.Symbol,
                     Pane = MapPane(series.Pane),
                     Points = points
                 });
@@ -164,14 +165,18 @@ namespace Backtester.Report
         private static IReadOnlyList<ChartMarker> MapMarkers(IReadOnlyList<RoundTrip> roundTrips)
         {
             List<ChartMarker> markers = new(roundTrips.Count * 2);
-            foreach (RoundTrip trip in roundTrips)
+            for (int i = 0; i < roundTrips.Count; i++)
             {
+                RoundTrip trip = roundTrips[i];
+                // The 1-based round-trip number links both markers back to the matching table row.
+                int number = i + 1;
                 // Entry and exit share one colour and P&L label reflecting the round trip's outcome.
                 string color = trip.RealizedPnL >= 0m ? WinColor : LossColor;
                 string label = FormatPnL(trip.RealizedPnL);
                 markers.Add(new ChartMarker
                 {
                     Symbol = trip.Symbol,
+                    RoundTripNumber = number,
                     Time = ToUnixSeconds(trip.EntryTime),
                     Position = "belowBar",
                     Shape = "arrowUp",
@@ -181,6 +186,7 @@ namespace Backtester.Report
                 markers.Add(new ChartMarker
                 {
                     Symbol = trip.Symbol,
+                    RoundTripNumber = number,
                     Time = ToUnixSeconds(trip.ExitTime),
                     Position = "aboveBar",
                     Shape = "arrowDown",
@@ -211,12 +217,22 @@ namespace Backtester.Report
             return new DateTimeOffset(timestamp, TimeSpan.Zero).ToUnixTimeSeconds();
         }
 
-        private static IReadOnlyList<ReportEquityPoint> MapEquityCurve(IReadOnlyList<EquitySnapshot> history)
+        /// <summary>
+        /// Builds the portfolio-wide equity curve indexed by trade count: point zero is the starting
+        /// equity, and each subsequent point adds the next closed round trip's realized P&amp;L (round
+        /// trips taken in exit-time order).
+        /// </summary>
+        private static IReadOnlyList<ReportEquityPoint> MapEquityCurve(IReadOnlyList<RoundTrip> roundTrips, decimal startingEquity)
         {
-            List<ReportEquityPoint> curve = new(history.Count);
-            foreach (EquitySnapshot snapshot in history)
+            List<RoundTrip> ordered = new(roundTrips);
+            ordered.Sort((left, right) => left.ExitTime.CompareTo(right.ExitTime));
+
+            List<ReportEquityPoint> curve = new(ordered.Count + 1) { new ReportEquityPoint { Trade = 0, Equity = startingEquity } };
+            decimal equity = startingEquity;
+            for (int i = 0; i < ordered.Count; i++)
             {
-                curve.Add(new ReportEquityPoint { Timestamp = snapshot.Timestamp, Equity = snapshot.MarkedEquity });
+                equity += ordered[i].RealizedPnL;
+                curve.Add(new ReportEquityPoint { Trade = i + 1, Equity = equity });
             }
 
             return curve;

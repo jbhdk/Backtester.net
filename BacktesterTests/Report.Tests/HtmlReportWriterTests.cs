@@ -41,7 +41,7 @@ namespace BacktesterTests.Report.Tests
                     }
                 },
                 Indicators = Array.Empty<ChartIndicator>(),
-                EquityCurve = new[] { new ReportEquityPoint { Timestamp = T0, Equity = 10_000m } },
+                EquityCurve = new[] { new ReportEquityPoint { Trade = 0, Equity = 10_000m } },
                 Chart = new ReportChart { Series = new Dictionary<string, IReadOnlyList<ChartCandle>>() },
                 Run = new ReportRunInfo
                 {
