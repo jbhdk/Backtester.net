@@ -109,6 +109,15 @@ namespace Backtester.Core
         }
 
         /// <summary>
+        /// Computes performance statistics for each traded symbol independently, keyed by symbol.
+        /// </summary>
+        public IReadOnlyDictionary<string, PerformanceStats> GetPerformanceStatsBySymbol()
+        {
+            IReadOnlyList<RoundTrip> roundTrips = PerformanceCalculator.BuildRoundTrips(_trades, _equityHistory);
+            return PerformanceCalculator.CalculateBySymbol(roundTrips, StartingCash);
+        }
+
+        /// <summary>
         /// Records a mark-to-market equity snapshot using closing prices from the provided market slice.
         /// Falls back to average entry price for symbols not present in the slice.
         /// </summary>

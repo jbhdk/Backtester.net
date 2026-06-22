@@ -120,6 +120,26 @@ namespace Backtester.Core
             };
         }
 
+        /// <summary>
+        /// Computes performance statistics for each symbol independently. A symbol's trade metrics are
+        /// derived from its own round trips. (The equity-based metrics — max drawdown, CAGR, Sharpe —
+        /// require a per-symbol equity curve and are populated by a later change; here they are zero.)
+        /// </summary>
+        public static IReadOnlyDictionary<string, PerformanceStats> CalculateBySymbol(
+            IReadOnlyList<RoundTrip> roundTrips,
+            decimal startingCash)
+        {
+            // Key: symbol/ticker -> that symbol's standalone performance statistics.
+            Dictionary<string, PerformanceStats> statsBySymbol = new();
+            foreach (string symbol in roundTrips.Select(trip => trip.Symbol).Distinct())
+            {
+                List<RoundTrip> symbolTrips = roundTrips.Where(trip => trip.Symbol == symbol).ToList();
+                statsBySymbol[symbol] = Calculate(symbolTrips, Array.Empty<EquitySnapshot>(), startingCash);
+            }
+
+            return statsBySymbol;
+        }
+
         private static int BarIndexAt(IReadOnlyList<EquitySnapshot> history, DateTime ts)
         {
             for (int i = 0; i < history.Count; i++)

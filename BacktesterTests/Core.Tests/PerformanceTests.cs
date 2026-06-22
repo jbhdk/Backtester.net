@@ -53,6 +53,76 @@ namespace BacktesterTests.Core.Tests
             return new() { Timestamp = ts };
         }
 
+        private static MarketSlice Slice2(string symbolA, decimal markA, string symbolB, decimal markB, DateTime ts)
+        {
+            return new()
+            {
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbolA] = new Candle { Timestamp = ts, Open = markA, High = markA, Low = markA, Close = markA, Volume = 1 },
+                    [symbolB] = new Candle { Timestamp = ts, Open = markB, High = markB, Low = markB, Close = markB, Volume = 1 }
+                }
+            };
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_IsolatesNetProfitPerSymbol()
+        {
+            // AAPL: buy 10@100, sell 10@120 → +$200. MSFT: buy 5@50, sell 5@40 → -$50.
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Buy("MSFT", 50m, 5, T0));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 100m, "MSFT", 50m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("MSFT", 40m, 5, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 120m, "MSFT", 40m, T0.AddDays(1)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(200m, bySymbol["AAPL"].NetProfit);
+            Assert.Equal(-50m, bySymbol["MSFT"].NetProfit);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_TradeMetricsCountOnlyOwnRoundTrips()
+        {
+            // AAPL: one win (+$100) and one loss (-$100) → 2 trades, 0.5 win rate.
+            // MSFT: one win (+$50) → 1 trade, 1.0 win rate.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10, T0.AddDays(3)));
+            portfolio.ApplyTrade(Buy("MSFT", 50m, 10, T0));
+            portfolio.ApplyTrade(Sell("MSFT", 55m, 10, T0.AddDays(1)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(2, bySymbol["AAPL"].Trades);
+            Assert.Equal(0.5m, bySymbol["AAPL"].WinRate);
+            Assert.Equal(1, bySymbol["MSFT"].Trades);
+            Assert.Equal(1m, bySymbol["MSFT"].WinRate);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_SingleSymbol_TradeMetricsMatchPortfolio()
+        {
+            // With one symbol, its isolated trade metrics must equal the whole portfolio's.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(1)));
+
+            PerformanceStats portfolioStats = portfolio.GetPerformanceStats();
+            PerformanceStats symbolStats = portfolio.GetPerformanceStatsBySymbol()["AAPL"];
+
+            Assert.Equal(portfolioStats.NetProfit, symbolStats.NetProfit);
+            Assert.Equal(portfolioStats.Trades, symbolStats.Trades);
+            Assert.Equal(portfolioStats.Expectancy, symbolStats.Expectancy);
+        }
+
         [Fact]
         public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
         {

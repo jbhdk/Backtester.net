@@ -23,6 +23,9 @@
   .stat:last-child { border-bottom: none; }
   .stat .label { color: var(--muted); }
   .stat .value { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .stat-group.dual .stat { display: grid; grid-template-columns: 1fr auto auto; column-gap: 16px; }
+  .stat-group.dual .stat .value { min-width: 88px; text-align: right; }
+  .stat-group.dual .stat.head .value { color: var(--muted); font-weight: 600; font-size: 12px; }
   .pos { color: var(--green); }
   .neg { color: var(--red); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -56,8 +59,8 @@
 <div id="symbol-toolbar" class="toolbar" hidden><label for="symbol-select">Symbol</label><select id="symbol-select"></select></div>
 
 <section id="stats-panel">
-  <div class="stat-group" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
-  <div class="stat-group" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
@@ -110,22 +113,50 @@
 
   function fill(id, html) { document.querySelector("#" + id + " .stat-body").innerHTML = html; }
 
-  fill("headline-stats",
-    row("Net profit", fmtMoney(stats.netProfit), signClass(stats.netProfit)) +
-    row("Net profit %", fmtPct(stats.netProfitPercent), signClass(stats.netProfitPercent)) +
-    row("Total return", fmtPct(run.totalReturnPercent), signClass(run.totalReturnPercent)) +
-    row("CAGR", fmtPct(stats.cagr), signClass(stats.cagr)) +
-    row("Max drawdown", fmtPct(stats.maxDrawdown), stats.maxDrawdown > 0 ? "neg" : "") +
-    row("Sharpe", fmtNum(stats.sharpe)));
+  // A stat row with two value columns: all-symbols and the selected symbol.
+  function dualRow(label, allValue, selValue, allCls, selCls) {
+    return '<div class="stat"><span class="label">' + label + '</span>' +
+           '<span class="value ' + (allCls || "") + '">' + allValue + '</span>' +
+           '<span class="value ' + (selCls || "") + '">' + selValue + '</span></div>';
+  }
 
-  fill("trade-quality-stats",
-    row("Trades", fmtNum(stats.trades, 0)) +
-    row("Win rate", fmtPct(stats.winRate)) +
-    row("Profit factor", fmtNum(stats.profitFactor)) +
-    row("Expectancy", fmtMoney(stats.expectancy), signClass(stats.expectancy)) +
-    row("Avg win", fmtMoney(stats.avgWin), "pos") +
-    row("Avg loss", fmtMoney(stats.avgLoss), stats.avgLoss < 0 ? "neg" : "") +
-    row("Max consec. losses", fmtNum(stats.maxConsecLosses, 0)));
+  // The two-column header naming each value column.
+  function headRow() {
+    return '<div class="stat head"><span class="label"></span>' +
+           '<span class="value">All Symbols</span><span class="value">Selected Symbol</span></div>';
+  }
+
+  // (Re)render the Performance and Trade quality cards. The "All Symbols" column always shows the
+  // portfolio stats; the "Selected Symbol" column shows the chart's current symbol (or "–" when none is
+  // selected, and "–" for the equity-based metrics whose per-symbol values are not yet computed).
+  function renderStats() {
+    var sel = (selected && model.statsBySymbol) ? model.statsBySymbol[selected] : null;
+    var dash = "–";
+
+    fill("headline-stats", headRow() +
+      dualRow("Net profit", fmtMoney(stats.netProfit), sel ? fmtMoney(sel.netProfit) : dash,
+              signClass(stats.netProfit), sel ? signClass(sel.netProfit) : "") +
+      dualRow("Net profit %", fmtPct(stats.netProfitPercent), sel ? fmtPct(sel.netProfitPercent) : dash,
+              signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
+      dualRow("Total return", fmtPct(stats.totalReturnPercent), sel ? fmtPct(sel.totalReturnPercent) : dash,
+              signClass(stats.totalReturnPercent), sel ? signClass(sel.totalReturnPercent) : "") +
+      dualRow("CAGR", fmtPct(stats.cagr), dash, signClass(stats.cagr), "") +
+      dualRow("Max drawdown", fmtPct(stats.maxDrawdown), dash, stats.maxDrawdown > 0 ? "neg" : "", "") +
+      dualRow("Sharpe", fmtNum(stats.sharpe), dash));
+
+    fill("trade-quality-stats", headRow() +
+      dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +
+      dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash) +
+      dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash) +
+      dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
+              signClass(stats.expectancy), sel ? signClass(sel.expectancy) : "") +
+      dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash, "pos", sel ? "pos" : "") +
+      dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash,
+              stats.avgLoss < 0 ? "neg" : "", sel && sel.avgLoss < 0 ? "neg" : "") +
+      dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash));
+  }
+
+  renderStats();
 
   var symbols = (run.symbols || []).join(", ");
   fill("run-context",
@@ -330,8 +361,9 @@
 
     chart.timeScale().fitContent();
 
-    // Re-render the trade list so it follows the symbol now shown (unless "show all" is on).
+    // Re-render the trade list and stat cards so they follow the symbol now shown.
     renderRows();
+    renderStats();
   }
 
   // Build the portfolio-wide equity curve as its own chart, indexed by trade count (not time): point

@@ -27,10 +27,12 @@ namespace Backtester.Report
             PerformanceStats stats = result.Portfolio.GetPerformanceStats();
             decimal startingEquity = result.StartingEquity;
             decimal finalEquity = FinalEquity(result.Portfolio, startingEquity);
+            decimal totalReturn = startingEquity != 0m ? (finalEquity - startingEquity) / startingEquity : 0m;
 
             return new ReportModel
             {
-                Stats = MapStats(stats, startingEquity),
+                Stats = MapStats(stats, startingEquity, totalReturn),
+                StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 Indicators = MapIndicators(result.IndicatorSeries),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
@@ -43,9 +45,7 @@ namespace Backtester.Report
                     ToUtc = result.ToUtc,
                     StartingEquity = startingEquity,
                     FinalEquity = finalEquity,
-                    TotalReturnPercent = startingEquity != 0m
-                        ? (finalEquity - startingEquity) / startingEquity
-                        : 0m
+                    TotalReturnPercent = totalReturn
                 }
             };
         }
@@ -246,12 +246,32 @@ namespace Backtester.Report
             return history.Count > 0 ? history[history.Count - 1].MarkedEquity : startingEquity;
         }
 
-        private static ReportStats MapStats(PerformanceStats stats, decimal startingEquity)
+        /// <summary>
+        /// Projects each symbol's performance stats into report form, keyed by symbol.
+        /// </summary>
+        private static IReadOnlyDictionary<string, ReportStats> MapStatsBySymbol(
+            IReadOnlyDictionary<string, PerformanceStats> statsBySymbol,
+            decimal startingEquity)
+        {
+            // Key: symbol/ticker -> that symbol's stats projected for the report's per-symbol column.
+            Dictionary<string, ReportStats> mapped = new(statsBySymbol.Count);
+            foreach (KeyValuePair<string, PerformanceStats> entry in statsBySymbol)
+            {
+                // A symbol's total return is its own net profit as a fraction of starting equity.
+                decimal totalReturn = startingEquity != 0m ? entry.Value.NetProfit / startingEquity : 0m;
+                mapped[entry.Key] = MapStats(entry.Value, startingEquity, totalReturn);
+            }
+
+            return mapped;
+        }
+
+        private static ReportStats MapStats(PerformanceStats stats, decimal startingEquity, decimal totalReturnPercent)
         {
             return new ReportStats
             {
                 NetProfit = stats.NetProfit,
                 NetProfitPercent = startingEquity != 0m ? stats.NetProfit / startingEquity : 0m,
+                TotalReturnPercent = totalReturnPercent,
                 Trades = stats.Trades,
                 WinRate = stats.WinRate,
                 ProfitFactor = stats.ProfitFactor,

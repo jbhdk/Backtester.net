@@ -8,8 +8,12 @@ namespace Backtester.Report
     /// </summary>
     public class ReportModel
     {
-        /// <summary>Gets or sets the performance-stats section.</summary>
+        /// <summary>Gets or sets the performance-stats section (all symbols combined).</summary>
         public ReportStats Stats { get; set; }
+
+        // Key: symbol/ticker -> that symbol's standalone performance stats, for the report's per-symbol column.
+        /// <summary>Gets or sets the per-symbol performance stats, keyed by symbol.</summary>
+        public IReadOnlyDictionary<string, ReportStats> StatsBySymbol { get; set; }
 
         /// <summary>Gets or sets the round trips with their derived return and holding time.</summary>
         public IReadOnlyList<ReportRoundTrip> RoundTrips { get; set; }

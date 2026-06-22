@@ -339,6 +339,23 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_StatsBySymbol_KeyedBySymbolWithPerSymbolNetProfit()
+        {
+            // AAPL: +$200 (buy 10@100, sell 10@120). MSFT: -$50 (buy 10@50, sell 10@45).
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, T0));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Trade("MSFT", OrderSide.Buy, 50m, 10, T0));
+            portfolio.ApplyTrade(Trade("MSFT", OrderSide.Sell, 45m, 10, T0.AddDays(1)));
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(200m, model.StatsBySymbol["AAPL"].NetProfit);
+            Assert.Equal(-50m, model.StatsBySymbol["MSFT"].NetProfit);
+        }
+
+        [Fact]
         public void Build_Stats_DerivesNetProfitPercentFromStartingEquity()
         {
             Portfolio portfolio = WinningPortfolio();
@@ -348,6 +365,28 @@ namespace BacktesterTests.Report.Tests
 
             // Net profit 200 on 10,000 starting equity = 0.02
             Assert.Equal(0.02m, model.Stats.NetProfitPercent);
+        }
+
+        [Fact]
+        public void Build_Stats_CarriesTotalReturnPercent()
+        {
+            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            // Final marked equity 10,200 on 10,000 starting equity → (10200-10000)/10000 = 0.02
+            Assert.Equal(0.02m, model.Stats.TotalReturnPercent);
+        }
+
+        [Fact]
+        public void Build_StatsBySymbol_DerivesTotalReturnFromSymbolNetProfit()
+        {
+            // AAPL net profit +$200 on 10,000 starting equity → 0.02.
+            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(0.02m, model.StatsBySymbol["AAPL"].TotalReturnPercent);
         }
 
         [Fact]

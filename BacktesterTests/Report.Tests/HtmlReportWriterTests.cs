@@ -87,6 +87,16 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_StatCards_HaveAllAndSelectedSymbolColumns()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // The Performance and Trade quality cards render two value columns the page can fill.
+            Assert.Contains("All Symbols", html);
+            Assert.Contains("Selected Symbol", html);
+        }
+
+        [Fact]
         public void BuildHtml_ContainsRoundTripsTable()
         {
             string html = new HtmlReportWriter().BuildHtml(SampleModel());
