@@ -37,7 +37,8 @@
   #price-chart { width: 100%; height: 600px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   #equity-chart { width: 100%; height: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   .chart-head { display: flex; align-items: center; justify-content: space-between; }
-  #symbol-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
+  .chart-controls { display: flex; gap: 8px; }
+  #symbol-select, #series-type-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
   tbody tr { cursor: pointer; }
   tbody tr.active { background: rgba(78,161,255,.15); }
 </style>
@@ -55,7 +56,7 @@
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
-<div class="chart-head"><h2>Price</h2><select id="symbol-select" hidden></select></div>
+<div class="chart-head"><h2>Price</h2><div class="chart-controls"><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select><select id="symbol-select" hidden></select></div></div>
 <div id="price-chart"></div>
 
 <h2>Round trips</h2>
@@ -188,7 +189,8 @@
 
   var chartEl = document.getElementById("price-chart");
   var selectEl = document.getElementById("symbol-select");
-  var chart = null, selected = null, applyPaneHeights = function () {};
+  var typeEl = document.getElementById("series-type-select");
+  var chart = null, selected = null, seriesType = "candles", applyPaneHeights = function () {};
 
   function toSec(iso) { return Math.floor(new Date(iso).getTime() / 1000); }
 
@@ -197,6 +199,35 @@
     tbody.querySelectorAll("tr").forEach(function (r) {
       r.classList.toggle("active", number != null && Number(r.getAttribute("data-number")) === number);
     });
+  }
+
+  // Build the price series for the current chart type and attach it to the price pane, returning it so
+  // markers and pane sizing can hook onto it. Candles render hollow on up bars / filled on down bars:
+  // Lightweight Charts has no hollow mode, so up bodies take the pane background and only the green
+  // border and wick show. Bars are native OHLC; line tracks the close price.
+  function addPriceSeries(candles, pricePane) {
+    if (seriesType === "line") {
+      var lineSeries = chart.addSeries(LightweightCharts.LineSeries, {
+        color: "#4ea1ff", lineWidth: 2, priceLineVisible: false, lastValueVisible: true
+      }, pricePane);
+      lineSeries.setData(candles.map(function (candle) { return { time: candle.time, value: candle.close }; }));
+      return lineSeries;
+    }
+    if (seriesType === "bars") {
+      var barSeries = chart.addSeries(LightweightCharts.BarSeries, {
+        upColor: "#2ecc71", downColor: "#e74c3c", thinBars: false
+      }, pricePane);
+      barSeries.setData(candles);
+      return barSeries;
+    }
+    var candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+      upColor: "#1a2027", downColor: "#e74c3c",
+      borderUpColor: "#2ecc71", borderDownColor: "#e74c3c",
+      wickUpColor: "#2ecc71", wickDownColor: "#e74c3c",
+      borderVisible: true
+    }, pricePane);
+    candleSeries.setData(candles);
+    return candleSeries;
   }
 
   // (Re)build the price chart for the selected symbol. The price pane (pane 0) holds candles, markers,
@@ -221,12 +252,7 @@
     });
 
     var pricePane = 0;
-    var candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
-      upColor: "#2ecc71", downColor: "#e74c3c",
-      wickUpColor: "#2ecc71", wickDownColor: "#e74c3c",
-      borderVisible: false
-    }, pricePane);
-    candleSeries.setData(allSeries[symbol]);
+    var candleSeries = addPriceSeries(allSeries[symbol], pricePane);
 
     // Only the selected symbol's markers, in ascending time order. Each marker's id is its round-trip
     // number so a hover can highlight the matching table row.
@@ -338,6 +364,15 @@
       selectEl.innerHTML = symbols.map(function (s) { return '<option value="' + s + '">' + s + "</option>"; }).join("");
       selectEl.hidden = false;
       selectEl.addEventListener("change", function () { buildChart(selectEl.value); });
+    }
+
+    // Switch the price series type (candles / bars / line) and rebuild the current symbol in place.
+    if (typeEl) {
+      typeEl.value = seriesType;
+      typeEl.addEventListener("change", function () {
+        seriesType = typeEl.value;
+        buildChart(selected || symbols[0]);
+      });
     }
 
     buildChart(symbols[0]);
