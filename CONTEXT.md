@@ -150,3 +150,15 @@ _Avoid_: results, report.
 **Max drawdown**:
 The largest peak-to-trough decline in marked equity over the run.
 _Avoid_: loss, drop.
+
+**Per-symbol stats**:
+Performance stats computed for a single symbol in isolation, for the report's per-symbol column.
+Trade metrics come from that symbol's round trips.
+_Avoid_: per-ticker results.
+
+**Isolated equity**:
+A single symbol's equity curve, defined as if that symbol alone traded the **full** starting
+capital: `starting capital + the symbol's own realized + unrealized PnL` at each bar. The basis for a
+symbol's per-symbol max drawdown, CAGR, and Sharpe. For a single-symbol run it equals the portfolio's
+marked equity exactly. Per-symbol isolated curves do **not** sum to the portfolio curve.
+_Avoid_: symbol equity (unqualified), allocated equity.

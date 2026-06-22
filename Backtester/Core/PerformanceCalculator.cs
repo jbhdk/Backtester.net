@@ -122,11 +122,14 @@ namespace Backtester.Core
 
         /// <summary>
         /// Computes performance statistics for each symbol independently. A symbol's trade metrics are
-        /// derived from its own round trips. (The equity-based metrics — max drawdown, CAGR, Sharpe —
-        /// require a per-symbol equity curve and are populated by a later change; here they are zero.)
+        /// derived from its own round trips; the equity-based metrics (max drawdown, CAGR, Sharpe) are
+        /// derived from that symbol's isolated equity curve recorded on each snapshot
+        /// (<see cref="EquitySnapshot.EquityBySymbol"/>), so the per-symbol and portfolio figures use the
+        /// same routines.
         /// </summary>
         public static IReadOnlyDictionary<string, PerformanceStats> CalculateBySymbol(
             IReadOnlyList<RoundTrip> roundTrips,
+            IReadOnlyList<EquitySnapshot> equityHistory,
             decimal startingCash)
         {
             // Key: symbol/ticker -> that symbol's standalone performance statistics.
@@ -134,10 +137,32 @@ namespace Backtester.Core
             foreach (string symbol in roundTrips.Select(trip => trip.Symbol).Distinct())
             {
                 List<RoundTrip> symbolTrips = roundTrips.Where(trip => trip.Symbol == symbol).ToList();
-                statsBySymbol[symbol] = Calculate(symbolTrips, Array.Empty<EquitySnapshot>(), startingCash);
+                statsBySymbol[symbol] = Calculate(symbolTrips, IsolatedHistory(equityHistory, symbol, startingCash), startingCash);
             }
 
             return statsBySymbol;
+        }
+
+        /// <summary>
+        /// Projects the recorded equity history onto a single symbol, reading that symbol's isolated
+        /// equity at each snapshot and falling back to starting cash for snapshots taken before the
+        /// symbol first traded.
+        /// </summary>
+        private static IReadOnlyList<EquitySnapshot> IsolatedHistory(
+            IReadOnlyList<EquitySnapshot> equityHistory,
+            string symbol,
+            decimal startingCash)
+        {
+            List<EquitySnapshot> isolated = new(equityHistory.Count);
+            foreach (EquitySnapshot snapshot in equityHistory)
+            {
+                decimal equity = snapshot.EquityBySymbol != null && snapshot.EquityBySymbol.TryGetValue(symbol, out decimal value)
+                    ? value
+                    : startingCash;
+                isolated.Add(new EquitySnapshot { Timestamp = snapshot.Timestamp, MarkedEquity = equity });
+            }
+
+            return isolated;
         }
 
         private static int BarIndexAt(IReadOnlyList<EquitySnapshot> history, DateTime ts)

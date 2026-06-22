@@ -12,6 +12,9 @@ namespace Backtester.Core
         private readonly List<EquitySnapshot> _equityHistory = new();
         private readonly List<Trade> _trades = new();
 
+        // Key: symbol/ticker -> cumulative realized P&L from that symbol's closed trades.
+        private readonly Dictionary<string, decimal> _realizedPnLBySymbol = new();
+
         /// <summary>Gets the cash balance the portfolio started with (its starting equity).</summary>
         public decimal StartingCash { get; }
 
@@ -93,7 +96,10 @@ namespace Backtester.Core
                     Timestamp = trade.Timestamp
                 };
                 Cash += effective.Price * effective.Quantity - effective.Commission;
-                RealizedPnL += (effective.Price - position.AveragePrice) * effective.Quantity;
+                decimal tradeRealized = (effective.Price - position.AveragePrice) * effective.Quantity;
+                RealizedPnL += tradeRealized;
+                _realizedPnLBySymbol[effective.Symbol] =
+                    (_realizedPnLBySymbol.TryGetValue(effective.Symbol, out decimal prior) ? prior : 0m) + tradeRealized;
                 position.AddTrade(effective);
                 _trades.Add(effective);
             }
@@ -114,7 +120,7 @@ namespace Backtester.Core
         public IReadOnlyDictionary<string, PerformanceStats> GetPerformanceStatsBySymbol()
         {
             IReadOnlyList<RoundTrip> roundTrips = PerformanceCalculator.BuildRoundTrips(_trades, _equityHistory);
-            return PerformanceCalculator.CalculateBySymbol(roundTrips, StartingCash);
+            return PerformanceCalculator.CalculateBySymbol(roundTrips, _equityHistory, StartingCash);
         }
 
         /// <summary>
@@ -134,8 +140,36 @@ namespace Backtester.Core
                 Cash = Cash,
                 UnrealizedPnL = unrealized,
                 RealizedPnL = RealizedPnL,
-                MarkedEquity = Cash + unrealized
+                MarkedEquity = Cash + unrealized,
+                EquityBySymbol = MarkEquityBySymbol(slice)
             });
+        }
+
+        /// <summary>
+        /// Builds each traded symbol's isolated equity at the given slice: starting capital plus the
+        /// symbol's own realized P&amp;L to date and the unrealized P&amp;L of its open position marked at
+        /// the slice's close. Symbols with neither realized P&amp;L nor an open position are omitted (their
+        /// isolated equity is unchanged at starting capital).
+        /// </summary>
+        private IReadOnlyDictionary<string, decimal> MarkEquityBySymbol(MarketSlice slice)
+        {
+            // Key: symbol/ticker -> the symbol's isolated marked equity at this slice.
+            Dictionary<string, decimal> equityBySymbol = new();
+
+            foreach (KeyValuePair<string, decimal> realized in _realizedPnLBySymbol)
+            {
+                equityBySymbol[realized.Key] = StartingCash + realized.Value;
+            }
+
+            foreach (Position position in Positions)
+            {
+                decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
+                decimal unrealizedPnL = (markPrice - position.AveragePrice) * position.Quantity;
+                decimal realized = _realizedPnLBySymbol.TryGetValue(position.Symbol, out decimal value) ? value : 0m;
+                equityBySymbol[position.Symbol] = StartingCash + realized + unrealizedPnL;
+            }
+
+            return equityBySymbol;
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Backtester.Core
 {
@@ -21,5 +22,10 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the mark-to-market portfolio equity (cash plus current market value of open positions).</summary>
         public decimal MarkedEquity { get; set; }
+
+        // Key: symbol/ticker -> that symbol's isolated equity at this snapshot (starting capital plus the
+        // symbol's own realized and unrealized P&L, as if it alone traded the whole account).
+        /// <summary>Gets or sets each traded symbol's isolated equity at this snapshot.</summary>
+        public IReadOnlyDictionary<string, decimal> EquityBySymbol { get; set; }
     }
 }

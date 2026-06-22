@@ -124,6 +124,64 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void GetPerformanceStatsBySymbol_SingleSymbol_MaxDrawdownMatchesPortfolio()
+        {
+            // Buy 100@$100; mark to $200 (peak $40,000) then $100 (trough $30,000) = 25% drawdown.
+            // With one symbol, its isolated equity curve equals the portfolio's, so the drawdowns match.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 100, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(2)));
+
+            PerformanceStats portfolioStats = portfolio.GetPerformanceStats();
+            PerformanceStats symbolStats = portfolio.GetPerformanceStatsBySymbol()["AAPL"];
+
+            Assert.Equal(0.25m, portfolioStats.MaxDrawdown);
+            Assert.Equal(portfolioStats.MaxDrawdown, symbolStats.MaxDrawdown);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_DrawdownIsolatedPerSymbol()
+        {
+            // AAPL swings (isolated equity peak $50,000 → trough $40,000 = 20%); MSFT stays flat at $50.
+            Portfolio portfolio = new(40_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
+            portfolio.ApplyTrade(Buy("MSFT", 50m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 200m, "MSFT", 50m, T0));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 100m, "MSFT", 50m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 100, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("MSFT", 50m, 100, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 100m, "MSFT", 50m, T0.AddDays(2)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(0.2m, bySymbol["AAPL"].MaxDrawdown);
+            Assert.Equal(0m, bySymbol["MSFT"].MaxDrawdown);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_SingleSymbol_SharpeAndCagrMatchPortfolio()
+        {
+            // One symbol's isolated equity curve is the portfolio curve, so Sharpe and CAGR must match.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 50, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 130m, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 50, T0.AddDays(3)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(3)));
+
+            PerformanceStats portfolioStats = portfolio.GetPerformanceStats();
+            PerformanceStats symbolStats = portfolio.GetPerformanceStatsBySymbol()["AAPL"];
+
+            Assert.NotEqual(0m, portfolioStats.Sharpe);
+            Assert.Equal(portfolioStats.Sharpe, symbolStats.Sharpe);
+            Assert.Equal(portfolioStats.Cagr, symbolStats.Cagr);
+        }
+
+        [Fact]
         public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
         {
             // Buy at T0, sell one day later → EntryTime = T0, ExitTime = T0+1d

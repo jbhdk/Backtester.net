@@ -127,8 +127,8 @@
   }
 
   // (Re)render the Performance and Trade quality cards. The "All Symbols" column always shows the
-  // portfolio stats; the "Selected Symbol" column shows the chart's current symbol (or "–" when none is
-  // selected, and "–" for the equity-based metrics whose per-symbol values are not yet computed).
+  // portfolio stats; the "Selected Symbol" column shows the chart's current symbol's stats (or "–" when
+  // no symbol is selected).
   function renderStats() {
     var sel = (selected && model.statsBySymbol) ? model.statsBySymbol[selected] : null;
     var dash = "–";
@@ -140,9 +140,11 @@
               signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
       dualRow("Total return", fmtPct(stats.totalReturnPercent), sel ? fmtPct(sel.totalReturnPercent) : dash,
               signClass(stats.totalReturnPercent), sel ? signClass(sel.totalReturnPercent) : "") +
-      dualRow("CAGR", fmtPct(stats.cagr), dash, signClass(stats.cagr), "") +
-      dualRow("Max drawdown", fmtPct(stats.maxDrawdown), dash, stats.maxDrawdown > 0 ? "neg" : "", "") +
-      dualRow("Sharpe", fmtNum(stats.sharpe), dash));
+      dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash,
+              signClass(stats.cagr), sel ? signClass(sel.cagr) : "") +
+      dualRow("Max drawdown", fmtPct(stats.maxDrawdown), sel ? fmtPct(sel.maxDrawdown) : dash,
+              stats.maxDrawdown > 0 ? "neg" : "", sel && sel.maxDrawdown > 0 ? "neg" : "") +
+      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash));
 
     fill("trade-quality-stats", headRow() +
       dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +

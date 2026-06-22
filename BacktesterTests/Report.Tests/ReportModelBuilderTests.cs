@@ -356,6 +356,23 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_StatsBySymbol_PopulatesPerSymbolMaxDrawdown()
+        {
+            // AAPL isolated equity peaks at $40,000 then troughs at $30,000 = 25% drawdown.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 100m, 100, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(2)));
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(0.25m, model.StatsBySymbol["AAPL"].MaxDrawdown);
+        }
+
+        [Fact]
         public void Build_Stats_DerivesNetProfitPercentFromStartingEquity()
         {
             Portfolio portfolio = WinningPortfolio();
