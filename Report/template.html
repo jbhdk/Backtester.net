@@ -46,6 +46,9 @@
 <h1>Backtest Report</h1>
 <p class="sub" id="run-subtitle"></p>
 
+<h2>Equity by trade</h2>
+<div id="equity-chart"></div>
+
 <section id="stats-panel">
   <div class="stat-group" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
@@ -54,9 +57,6 @@
 
 <div class="chart-head"><h2>Price</h2><select id="symbol-select" hidden></select></div>
 <div id="price-chart"></div>
-
-<h2>Equity by trade</h2>
-<div id="equity-chart"></div>
 
 <h2>Round trips</h2>
 <table id="round-trips">
@@ -210,8 +210,10 @@
       width: chartEl.clientWidth, height: chartEl.clientHeight,
       layout: {
         background: { color: "#1a2027" }, textColor: "#e6e9ef",
-        // A brighter separator visually divides the price pane from the indicator sub-panes.
-        panes: { separatorColor: "#3d4756", separatorHoverColor: "#4ea1ff", enableResize: true }
+        // Thin separator between price and indicator panes; resize stays enabled so the divider can be
+        // dragged. The hover handle uses a muted blue (less glaring than the bright accent) to signal
+        // it is draggable without dominating. Its thickness is fixed by the library, not settable.
+        panes: { separatorColor: "#3d4756", separatorHoverColor: "#5a86b3", enableResize: true }
       },
       grid: { vertLines: { color: "#2a313a" }, horzLines: { color: "#2a313a" } },
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#2a313a" },
@@ -244,20 +246,33 @@
         var points = (ind.points || []).slice().sort(function (a, b) { return a.time - b.time; });
         if (!points.length) return;
         var separate = ind.pane === "separatePane";
-        var line = chart.addSeries(LightweightCharts.LineSeries, {
-          color: indicatorPalette[idx % indicatorPalette.length],
-          lineWidth: 2, priceLineVisible: false, lastValueVisible: separate, title: ind.name
-        }, separate ? nextPane++ : pricePane);
+        var color = indicatorPalette[idx % indicatorPalette.length];
+        var line;
+        if (separate) {
+          // Fill each indicator pane with a translucent area so it reads as a distinct block,
+          // visually set apart from the clean line-only price pane.
+          line = chart.addSeries(LightweightCharts.AreaSeries, {
+            lineColor: color, topColor: color + "55", bottomColor: color + "0a",
+            lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: ind.name
+          }, nextPane++);
+        } else {
+          line = chart.addSeries(LightweightCharts.LineSeries, {
+            color: color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: ind.name
+          }, pricePane);
+        }
         line.setData(points);
         if (separate) { separateSeries.push(line); }
       });
 
-    // Give each indicator sub-pane a fixed height; the price pane (the main pane) absorbs the rest and
-    // is clearly the tallest. setHeight only takes effect once the chart has laid out, so it is applied
-    // on the next frame and re-applied on resize. Reached via the series so the right pane is sized.
+    // Size the panes by relative stretch factor rather than absolute height: setHeight on multiple
+    // panes in one frame fights over a shared height budget (lightweight-charts #1847) and only one
+    // pane ends up resized. Stretch factors are order-independent. The price pane (the main pane) is
+    // the tallest; each indicator sub-pane is half its height, giving a 6:1:1 split of the chart.
+    // Applied on the next frame (after layout) and re-applied on resize, reached via the series.
     applyPaneHeights = function () {
       requestAnimationFrame(function () {
-        separateSeries.forEach(function (series) { series.getPane().setHeight(150); });
+        candleSeries.getPane().setStretchFactor(6);
+        separateSeries.forEach(function (series) { series.getPane().setStretchFactor(1); });
       });
     };
     applyPaneHeights();
@@ -282,6 +297,8 @@
 
     var equityChart = LightweightCharts.createChart(equityEl, {
       width: equityEl.clientWidth, height: equityEl.clientHeight,
+      // The equity curve is a static overview, so disable all pan/zoom interaction.
+      handleScroll: false, handleScale: false,
       layout: { background: { color: "#1a2027" }, textColor: "#e6e9ef" },
       grid: { vertLines: { color: "#2a313a" }, horzLines: { color: "#2a313a" } },
       rightPriceScale: { borderColor: "#2a313a" },
