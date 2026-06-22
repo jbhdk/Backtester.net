@@ -36,9 +36,11 @@
   .footnote { color: var(--muted); font-size: 12px; margin-top: 16px; }
   #price-chart { width: 100%; height: 600px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   #equity-chart { width: 100%; height: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
-  .chart-head, .section-head { display: flex; align-items: center; justify-content: space-between; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; }
+  .chart-head { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .toolbar label, .chart-head label { font-size: 13px; color: #9aa4b2; }
   .show-all { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9aa4b2; cursor: pointer; user-select: none; }
-  .chart-controls { display: flex; gap: 8px; }
   #symbol-select, #series-type-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
   tbody tr { cursor: pointer; }
   tbody tr.active { background: rgba(78,161,255,.15); }
@@ -51,13 +53,15 @@
 <h2>Equity by trade</h2>
 <div id="equity-chart"></div>
 
+<div id="symbol-toolbar" class="toolbar" hidden><label for="symbol-select">Symbol</label><select id="symbol-select"></select></div>
+
 <section id="stats-panel">
   <div class="stat-group" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
-<div class="chart-head"><h2>Price</h2><div class="chart-controls"><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select><select id="symbol-select" hidden></select></div></div>
+<div class="chart-head"><label for="series-type-select">Chart type</label><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select></div>
 <div id="price-chart"></div>
 
 <div class="section-head"><h2>Round trips</h2><label class="show-all" id="show-all-label" hidden><input type="checkbox" id="show-all-trips"> Show all symbols</label></div>
@@ -109,7 +113,6 @@
   fill("headline-stats",
     row("Net profit", fmtMoney(stats.netProfit), signClass(stats.netProfit)) +
     row("Net profit %", fmtPct(stats.netProfitPercent), signClass(stats.netProfitPercent)) +
-    row("Final equity", fmtMoney(run.finalEquity)) +
     row("Total return", fmtPct(run.totalReturnPercent), signClass(run.totalReturnPercent)) +
     row("CAGR", fmtPct(stats.cagr), signClass(stats.cagr)) +
     row("Max drawdown", fmtPct(stats.maxDrawdown), stats.maxDrawdown > 0 ? "neg" : "") +
@@ -130,7 +133,8 @@
     row("Interval", run.interval || "–") +
     row("From", fmtDate(run.fromUtc)) +
     row("To", fmtDate(run.toUtc)) +
-    row("Starting equity", fmtMoney(run.startingEquity)));
+    row("Starting equity", fmtMoney(run.startingEquity)) +
+    row("Final equity", fmtMoney(run.finalEquity)));
 
   document.getElementById("run-subtitle").textContent =
     symbols + " · " + (run.interval || "") + " · " + fmtDate(run.fromUtc) + " – " + fmtDate(run.toUtc);
@@ -204,6 +208,7 @@
 
   var chartEl = document.getElementById("price-chart");
   var selectEl = document.getElementById("symbol-select");
+  var symbolToolbar = document.getElementById("symbol-toolbar");
   var typeEl = document.getElementById("series-type-select");
   var chart = null, selected = null, seriesType = "candles", applyPaneHeights = function () {};
 
@@ -380,7 +385,7 @@
     // The selector switches the displayed symbol's chart; it is hidden for a single-symbol run.
     if (selectEl && symbols.length > 1) {
       selectEl.innerHTML = symbols.map(function (s) { return '<option value="' + s + '">' + s + "</option>"; }).join("");
-      selectEl.hidden = false;
+      if (symbolToolbar) { symbolToolbar.hidden = false; }
       selectEl.addEventListener("change", function () { buildChart(selectEl.value); });
       // The "show all symbols" toggle only matters when there's more than one symbol to filter by.
       if (showAllLabel) { showAllLabel.hidden = false; }
