@@ -36,7 +36,8 @@
   .footnote { color: var(--muted); font-size: 12px; margin-top: 16px; }
   #price-chart { width: 100%; height: 600px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   #equity-chart { width: 100%; height: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
-  .chart-head { display: flex; align-items: center; justify-content: space-between; }
+  .chart-head, .section-head { display: flex; align-items: center; justify-content: space-between; }
+  .show-all { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9aa4b2; cursor: pointer; user-select: none; }
   .chart-controls { display: flex; gap: 8px; }
   #symbol-select, #series-type-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
   tbody tr { cursor: pointer; }
@@ -59,7 +60,7 @@
 <div class="chart-head"><h2>Price</h2><div class="chart-controls"><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select><select id="symbol-select" hidden></select></div></div>
 <div id="price-chart"></div>
 
-<h2>Round trips</h2>
+<div class="section-head"><h2>Round trips</h2><label class="show-all" id="show-all-label" hidden><input type="checkbox" id="show-all-trips"> Show all symbols</label></div>
 <table id="round-trips">
   <thead>
     <tr>
@@ -137,10 +138,16 @@
   // --- Round-trips table ---
   var trips = (model.roundTrips || []).slice();
   var tbody = document.querySelector("#round-trips tbody");
+  var showAllEl = document.getElementById("show-all-trips");
+  var showAllLabel = document.getElementById("show-all-label");
+  // When false, the table shows only the chart's selected symbol; the checkbox switches to the full list.
+  var showAll = false;
 
   function cell(value, cls) { return '<td class="' + (cls || "") + '">' + value + "</td>"; }
   function renderRows() {
-    tbody.innerHTML = trips.map(function (t) {
+    // Sync to the chart's symbol unless "show all" is on (or no symbol is selected yet).
+    var rows = (showAll || !selected) ? trips : trips.filter(function (t) { return t.symbol === selected; });
+    tbody.innerHTML = rows.map(function (t) {
       return '<tr data-number="' + t.number + '">' +
         cell(t.number) + cell(t.symbol) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
@@ -172,6 +179,14 @@
       renderRows();
     });
   });
+
+  // Toggle between the chart-synced view and the full list.
+  if (showAllEl) {
+    showAllEl.addEventListener("change", function () {
+      showAll = showAllEl.checked;
+      renderRows();
+    });
+  }
 
   // --- Price chart ---
   // All chart values are pre-derived in the model: candles, markers, indicators, and the equity curve
@@ -309,6 +324,9 @@
     });
 
     chart.timeScale().fitContent();
+
+    // Re-render the trade list so it follows the symbol now shown (unless "show all" is on).
+    renderRows();
   }
 
   // Build the portfolio-wide equity curve as its own chart, indexed by trade count (not time): point
@@ -364,6 +382,8 @@
       selectEl.innerHTML = symbols.map(function (s) { return '<option value="' + s + '">' + s + "</option>"; }).join("");
       selectEl.hidden = false;
       selectEl.addEventListener("change", function () { buildChart(selectEl.value); });
+      // The "show all symbols" toggle only matters when there's more than one symbol to filter by.
+      if (showAllLabel) { showAllLabel.hidden = false; }
     }
 
     // Switch the price series type (candles / bars / line) and rebuild the current symbol in place.
