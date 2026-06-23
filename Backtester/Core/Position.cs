@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Backtester.Core
@@ -13,7 +14,7 @@ namespace Backtester.Core
         /// <summary>Gets or sets the ticker symbol held in this position.</summary>
         public string Symbol { get; set; }
 
-        /// <summary>Gets or sets the current net quantity (positive = long, zero = flat).</summary>
+        /// <summary>Gets or sets the current net quantity (positive = long, negative = short, zero = flat).</summary>
         public int Quantity { get; set; }
 
         /// <summary>Gets or sets the volume-weighted average entry price.</summary>
@@ -26,20 +27,24 @@ namespace Backtester.Core
         public PositionMetadata Metadata { get; set; }
 
         /// <summary>
-        /// Applies a trade to this position, updating quantity and average price.
+        /// Applies a trade to this position, updating signed quantity and average price. A fill in the
+        /// position's own direction (or from flat) grows the magnitude and recomputes the volume-weighted
+        /// average entry price; an opposing fill reduces the magnitude toward zero and leaves the average
+        /// unchanged. Callers must not pass a fill that would flip the sign — overshoot is clamped upstream.
         /// </summary>
         public void AddTrade(Trade trade)
         {
             Trades.Add(trade);
-            if (trade.Side == OrderSide.Buy)
+            int delta = trade.Side == OrderSide.Buy ? trade.Quantity : -trade.Quantity;
+            if (Quantity == 0 || Math.Sign(delta) == Math.Sign(Quantity))
             {
-                decimal totalCost = AveragePrice * Quantity + trade.Price * trade.Quantity;
-                Quantity += trade.Quantity;
-                AveragePrice = totalCost / Quantity;
+                decimal totalCost = AveragePrice * Math.Abs(Quantity) + trade.Price * trade.Quantity;
+                Quantity += delta;
+                AveragePrice = totalCost / Math.Abs(Quantity);
             }
             else
             {
-                Quantity -= trade.Quantity;
+                Quantity += delta;
             }
         }
     }

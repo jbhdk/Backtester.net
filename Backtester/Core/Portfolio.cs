@@ -59,50 +59,56 @@ namespace Backtester.Core
         }
 
         /// <summary>
-        /// Applies a filled trade to the portfolio, adjusting cash and creating or updating the relevant position.
+        /// Applies a filled trade to the portfolio, adjusting cash and creating or updating the relevant
+        /// position. Quantity is signed: a Sell from flat opens a short and credits cash by its proceeds,
+        /// a Buy covers a short and debits cash. A fill that opposes the open position reduces it and is
+        /// clamped at zero (overshoot discarded) so a single fill never flips the position's sign; on a
+        /// reduction it realizes <c>(price − averagePrice) · sign(quantity) · closedQuantity</c>.
         /// </summary>
         public void ApplyTrade(Trade trade)
         {
-            if (trade.Side == OrderSide.Buy)
-            {
-                Cash -= trade.Price * trade.Quantity + trade.Commission;
-                Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
-                if (position == null)
-                {
-                    position = new Position { Id = Guid.NewGuid().ToString(), Symbol = trade.Symbol };
-                    Positions.Add(position);
-                }
-                position.AddTrade(trade);
-                _trades.Add(trade);
-            }
-            else
-            {
-                Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
-                int effectiveQty = Math.Min(trade.Quantity, position?.Quantity ?? 0);
-                if (effectiveQty == 0)
-                {
-                    return;
-                }
+            Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
+            int currentQty = position?.Quantity ?? 0;
+            int delta = trade.Side == OrderSide.Buy ? trade.Quantity : -trade.Quantity;
+            bool isReducing = currentQty != 0 && Math.Sign(delta) != Math.Sign(currentQty);
 
-                Trade effective = effectiveQty == trade.Quantity ? trade : new Trade
-                {
-                    Id = trade.Id,
-                    Symbol = trade.Symbol,
-                    Side = trade.Side,
-                    Price = trade.Price,
-                    Quantity = effectiveQty,
-                    Commission = trade.Commission,
-                    Slippage = trade.Slippage,
-                    Timestamp = trade.Timestamp
-                };
-                Cash += effective.Price * effective.Quantity - effective.Commission;
-                decimal tradeRealized = (effective.Price - position.AveragePrice) * effective.Quantity;
+            int executedQty = isReducing ? Math.Min(trade.Quantity, Math.Abs(currentQty)) : trade.Quantity;
+            if (executedQty == 0)
+            {
+                return;
+            }
+
+            Trade effective = executedQty == trade.Quantity ? trade : new Trade
+            {
+                Id = trade.Id,
+                Symbol = trade.Symbol,
+                Side = trade.Side,
+                Price = trade.Price,
+                Quantity = executedQty,
+                Commission = trade.Commission,
+                Slippage = trade.Slippage,
+                Timestamp = trade.Timestamp
+            };
+
+            // A Buy spends cash, a Sell receives it; commission is always a cost.
+            decimal cashDirection = trade.Side == OrderSide.Sell ? 1m : -1m;
+            Cash += cashDirection * effective.Price * executedQty - effective.Commission;
+
+            if (isReducing)
+            {
+                decimal tradeRealized = (effective.Price - position.AveragePrice) * Math.Sign(currentQty) * executedQty;
                 RealizedPnL += tradeRealized;
                 _realizedPnLBySymbol[effective.Symbol] =
                     (_realizedPnLBySymbol.TryGetValue(effective.Symbol, out decimal prior) ? prior : 0m) + tradeRealized;
-                position.AddTrade(effective);
-                _trades.Add(effective);
             }
+            else if (position == null)
+            {
+                position = new Position { Id = Guid.NewGuid().ToString(), Symbol = trade.Symbol };
+                Positions.Add(position);
+            }
+
+            position.AddTrade(effective);
+            _trades.Add(effective);
         }
 
         /// <summary>

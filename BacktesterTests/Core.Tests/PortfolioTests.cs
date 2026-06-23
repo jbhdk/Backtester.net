@@ -140,27 +140,78 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(9_000m, snapshot.Cash);
         }
 
-        // --- Long-only guard ---
+        // --- Shorting ---
 
         [Fact]
-        public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoCashChange()
+        public void ApplyTrade_SellFromFlat_OpensShortPosition()
         {
             Portfolio portfolio = new(10_000m);
 
-            portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));
 
-            Assert.Equal(10_000m, portfolio.Cash);
+            Assert.Single(portfolio.Positions);
+            Assert.Equal(-10, portfolio.Positions[0].Quantity);
         }
 
         [Fact]
-        public void ApplyTrade_SellWithNoOpenLong_IsRejected_NoPositionCreated()
+        public void ApplyTrade_SellFromFlat_CreditsCashByProceeds()
         {
             Portfolio portfolio = new(10_000m);
 
-            portfolio.ApplyTrade(Sell("AAPL", 150m, 1));
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10, commission: 5m));
 
-            Assert.Empty(portfolio.Positions);
+            // 10000 + 1500 (proceeds) - 5 (commission)
+            Assert.Equal(11_495m, portfolio.Cash);
         }
+
+        [Fact]
+        public void ApplyTrade_BuyCoveringShort_DebitsCashByCoverCost()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));   // Cash = 11500, short 10@150
+
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10, commission: 5m));
+
+            // 11500 - 1400 (cover) - 5 (commission)
+            Assert.Equal(10_095m, portfolio.Cash);
+        }
+
+        [Fact]
+        public void ApplyTrade_BuyCoveringShort_RealizesShortPnL()
+        {
+            // Short 10@150, cover 10@140 → realized = (150-140)*10 = 100
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));
+
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10));
+
+            Assert.Equal(100m, portfolio.RealizedPnL);
+        }
+
+        [Fact]
+        public void ApplyTrade_BuyLargerThanShort_ClampedToOpenQuantity_SignNeverFlips()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 5));
+
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10));
+
+            Assert.Equal(0, portfolio.Positions[0].Quantity);
+        }
+
+        [Fact]
+        public void RecordEquitySnapshot_ShortPosition_MarkedEquityRisesAsPriceFalls()
+        {
+            // Short 10@150 → Cash = 11500. Mark at 140 → position value = -1400 → MarkedEquity = 10100
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));
+
+            portfolio.RecordEquitySnapshot(SliceWithBar("AAPL", 140m, T0));
+
+            Assert.Equal(10_100m, portfolio.EquityHistory[0].MarkedEquity);
+        }
+
+        // --- Long-only guard (no-flip invariant) ---
 
         [Fact]
         public void ApplyTrade_SellLargerThanLong_ClampedToOpenQuantity_QuantityNeverNegative()

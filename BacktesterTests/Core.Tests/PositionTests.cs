@@ -69,5 +69,40 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(5, position.Quantity);
             Assert.Equal(100m, position.AveragePrice);
         }
+
+        [Fact]
+        public void AddTrade_SellFromFlat_OpensShortWithNegativeQuantityAtFillPrice()
+        {
+            Position position = new() { Symbol = "AAPL" };
+
+            position.AddTrade(Sell(100m, 10));
+
+            Assert.Equal(-10, position.Quantity);
+            Assert.Equal(100m, position.AveragePrice);
+        }
+
+        [Fact]
+        public void AddTrade_SecondSellOnShort_AccumulatesMagnitudeAndUpdatesVwap()
+        {
+            Position position = new() { Symbol = "AAPL" };
+            position.AddTrade(Sell(100m, 10));
+
+            position.AddTrade(Sell(110m, 10));
+
+            Assert.Equal(-20, position.Quantity);
+            Assert.Equal(105m, position.AveragePrice);
+        }
+
+        [Fact]
+        public void AddTrade_BuyAgainstShort_ReducesMagnitudeAndKeepsCostBasis()
+        {
+            Position position = new() { Symbol = "AAPL" };
+            position.AddTrade(Sell(100m, 10));
+
+            position.AddTrade(Buy(90m, 5));
+
+            Assert.Equal(-5, position.Quantity);
+            Assert.Equal(100m, position.AveragePrice);
+        }
     }
 }
