@@ -64,6 +64,8 @@ namespace Backtester.Report
             for (int i = 0; i < roundTrips.Count; i++)
             {
                 RoundTrip trip = roundTrips[i];
+                // A short profits when the price falls, so its return is the raw price move negated.
+                decimal directionSign = trip.Direction == PositionDirection.Short ? -1m : 1m;
                 mapped.Add(new ReportRoundTrip
                 {
                     Number = i + 1,
@@ -75,7 +77,7 @@ namespace Backtester.Report
                     ExitPrice = trip.ExitPrice,
                     Quantity = trip.Quantity,
                     RealizedPnL = trip.RealizedPnL,
-                    ReturnPercent = trip.EntryPrice != 0m ? (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
+                    ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
                     TimeHeld = FormatTimeHeld(trip.ExitTime - trip.EntryTime)
                 });
             }

@@ -140,6 +140,18 @@ namespace BacktesterTests.Report.Tests
             Assert.Equal(0.2m, Assert.Single(model.RoundTrips).ReturnPercent);
         }
 
+        [Fact]
+        public void Build_ShortRoundTrip_DerivesNegatedReturnPercent()
+        {
+            // Short entered at 150, exited higher at 165: the price rose against the position, so the return is negative.
+            BacktestResult result = ResultWithShortRoundTrip(T0, T0.AddDays(2), 150m, 165m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            // -(165 - 150) / 150 = -0.1
+            Assert.Equal(-0.1m, Assert.Single(model.RoundTrips).ReturnPercent);
+        }
+
         [Theory]
         [InlineData(5, 6, 0, "5d 6h")]
         [InlineData(0, 3, 30, "3h 30m")]
