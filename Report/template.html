@@ -28,6 +28,9 @@
   .stat-group.dual .stat.head .value { color: var(--muted); font-weight: 600; font-size: 12px; }
   .pos { color: var(--green); }
   .neg { color: var(--red); }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .badge-long { color: var(--accent); background: rgba(78, 161, 255, .14); }
+  .badge-short { color: #e0a33e; background: rgba(224, 163, 62, .14); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
@@ -73,6 +76,7 @@
     <tr>
       <th data-key="number" data-type="num">#</th>
       <th data-key="symbol" data-type="str">Symbol</th>
+      <th data-key="direction" data-type="str">Side</th>
       <th data-key="entryTime" data-type="date">Entry</th>
       <th data-key="exitTime" data-type="date">Exit</th>
       <th data-key="entryPrice" data-type="num">Entry price</th>
@@ -181,12 +185,16 @@
   var showAll = false;
 
   function cell(value, cls) { return '<td class="' + (cls || "") + '">' + value + "</td>"; }
+  function directionBadge(d) {
+    var isShort = String(d).toLowerCase() === "short";
+    return '<span class="badge badge-' + (isShort ? "short" : "long") + '">' + (d || "Long") + "</span>";
+  }
   function renderRows() {
     // Sync to the chart's symbol unless "show all" is on (or no symbol is selected yet).
     var rows = (showAll || !selected) ? trips : trips.filter(function (t) { return t.symbol === selected; });
     tbody.innerHTML = rows.map(function (t) {
       return '<tr data-number="' + t.number + '">' +
-        cell(t.number) + cell(t.symbol) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
+        cell(t.number) + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
         cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +

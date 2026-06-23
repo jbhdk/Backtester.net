@@ -60,6 +60,7 @@ namespace Backtester.Report
                 {
                     Number = i + 1,
                     Symbol = trip.Symbol,
+                    Direction = trip.Direction == PositionDirection.Short ? "Short" : "Long",
                     EntryTime = trip.EntryTime,
                     ExitTime = trip.ExitTime,
                     EntryPrice = trip.EntryPrice,
@@ -161,8 +162,10 @@ namespace Backtester.Report
         }
 
         /// <summary>
-        /// Derives the entry/exit markers for the round trips. Each round trip yields an entry marker
-        /// (an arrow up below the entry bar) and an exit marker (an arrow down above the exit bar).
+        /// Derives the entry/exit markers for the round trips. The arrows follow the trade direction: a
+        /// long buys to enter (arrow up below the bar) and sells to exit (arrow down above the bar); a
+        /// short sells to enter (arrow down above the bar) and buys to cover (arrow up below the bar).
+        /// Colour and the P&amp;L label come from the round trip's outcome, independent of direction.
         /// </summary>
         private static IReadOnlyList<ChartMarker> MapMarkers(IReadOnlyList<RoundTrip> roundTrips)
         {
@@ -175,13 +178,14 @@ namespace Backtester.Report
                 // Entry and exit share one colour and P&L label reflecting the round trip's outcome.
                 string color = trip.RealizedPnL >= 0m ? WinColor : LossColor;
                 string label = FormatPnL(trip.RealizedPnL);
+                bool isShort = trip.Direction == PositionDirection.Short;
                 markers.Add(new ChartMarker
                 {
                     Symbol = trip.Symbol,
                     RoundTripNumber = number,
                     Time = ToUnixSeconds(trip.EntryTime),
-                    Position = "belowBar",
-                    Shape = "arrowUp",
+                    Position = isShort ? "aboveBar" : "belowBar",
+                    Shape = isShort ? "arrowDown" : "arrowUp",
                     Color = color,
                     Text = label
                 });
@@ -190,8 +194,8 @@ namespace Backtester.Report
                     Symbol = trip.Symbol,
                     RoundTripNumber = number,
                     Time = ToUnixSeconds(trip.ExitTime),
-                    Position = "aboveBar",
-                    Shape = "arrowDown",
+                    Position = isShort ? "belowBar" : "aboveBar",
+                    Shape = isShort ? "arrowUp" : "arrowDown",
                     Color = color,
                     Text = label
                 });

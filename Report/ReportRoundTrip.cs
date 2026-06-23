@@ -14,6 +14,9 @@ namespace Backtester.Report
         /// <summary>Gets or sets the ticker symbol traded.</summary>
         public string Symbol { get; set; }
 
+        /// <summary>Gets or sets the direction of the round trip as a page-friendly string (<c>"Long"</c> or <c>"Short"</c>).</summary>
+        public string Direction { get; set; }
+
         /// <summary>Gets or sets the UTC timestamp the position was entered.</summary>
         public DateTime EntryTime { get; set; }
 

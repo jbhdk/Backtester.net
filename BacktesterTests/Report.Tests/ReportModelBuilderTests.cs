@@ -72,6 +72,22 @@ namespace BacktesterTests.Report.Tests
             return Result(NoCandles(), portfolio, NoIndicators());
         }
 
+        /// <summary>A result with a single AAPL short round trip (sell entry, buy cover) over the given times.</summary>
+        private static BacktestResult ResultWithShortRoundTrip(DateTime entry, DateTime exit, decimal entryPrice, decimal exitPrice, int qty)
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, entryPrice, qty, entry));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", entryPrice, entry));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, exitPrice, qty, exit));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", exitPrice, exit));
+            return Result(NoCandles(), portfolio, NoIndicators());
+        }
+
+        private static long Unix(DateTime ts)
+        {
+            return new DateTimeOffset(ts, TimeSpan.Zero).ToUnixTimeSeconds();
+        }
+
         [Fact]
         public void Build_RoundTrip_MapsCoreFields()
         {
@@ -88,6 +104,26 @@ namespace BacktesterTests.Report.Tests
             Assert.Equal(120m, rt.ExitPrice);
             Assert.Equal(10, rt.Quantity);
             Assert.Equal(200m, rt.RealizedPnL);
+        }
+
+        [Fact]
+        public void Build_RoundTrip_CarriesLongDirection()
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal("Long", Assert.Single(model.RoundTrips).Direction);
+        }
+
+        [Fact]
+        public void Build_RoundTrip_CarriesShortDirection()
+        {
+            BacktestResult result = ResultWithShortRoundTrip(T0, T0.AddDays(2), 150m, 140m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal("Short", Assert.Single(model.RoundTrips).Direction);
         }
 
         [Fact]
@@ -141,6 +177,31 @@ namespace BacktesterTests.Report.Tests
             Assert.Equal("AAPL", exitMarker.Symbol);
             Assert.Equal(new DateTimeOffset(exit, TimeSpan.Zero).ToUnixTimeSeconds(), exitMarker.Time);
             Assert.Equal("aboveBar", exitMarker.Position);
+        }
+
+        [Fact]
+        public void Build_Chart_ShortEntryMarker_AboveBarArrowDownAtEntryTime()
+        {
+            BacktestResult result = ResultWithShortRoundTrip(T0, T0.AddDays(2), 150m, 140m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartMarker entry = Assert.Single(model.Chart.Markers, marker => marker.Time == Unix(T0));
+            Assert.Equal("arrowDown", entry.Shape);
+            Assert.Equal("aboveBar", entry.Position);
+        }
+
+        [Fact]
+        public void Build_Chart_ShortExitMarker_BelowBarArrowUpAtExitTime()
+        {
+            DateTime exit = T0.AddDays(2);
+            BacktestResult result = ResultWithShortRoundTrip(T0, exit, 150m, 140m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartMarker cover = Assert.Single(model.Chart.Markers, marker => marker.Time == Unix(exit));
+            Assert.Equal("arrowUp", cover.Shape);
+            Assert.Equal("belowBar", cover.Position);
         }
 
         [Theory]
