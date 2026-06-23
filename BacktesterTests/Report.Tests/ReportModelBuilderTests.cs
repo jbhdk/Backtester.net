@@ -532,6 +532,24 @@ namespace BacktesterTests.Report.Tests
             };
         }
 
+        /// <summary>AAPL (100 → 120, +20%) plus a flat second symbol, giving a two-symbol benchmark.</summary>
+        private static IReadOnlyDictionary<string, IReadOnlyList<Candle>> TwoSymbolCandles()
+        {
+            return new Dictionary<string, IReadOnlyList<Candle>>
+            {
+                ["AAPL"] = new[]
+                {
+                    new Candle { Timestamp = T0, Open = 100m, High = 100m, Low = 100m, Close = 100m, Volume = 1000 },
+                    new Candle { Timestamp = T0.AddDays(2), Open = 120m, High = 120m, Low = 120m, Close = 120m, Volume = 1000 }
+                },
+                ["MSFT"] = new[]
+                {
+                    new Candle { Timestamp = T0, Open = 200m, High = 200m, Low = 200m, Close = 200m, Volume = 1000 },
+                    new Candle { Timestamp = T0.AddDays(2), Open = 200m, High = 200m, Low = 200m, Close = 200m, Volume = 1000 }
+                }
+            };
+        }
+
         [Fact]
         public void Build_Stats_DerivesBuyHoldReturnFromCandleHistory()
         {
@@ -544,13 +562,15 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_StatsBySymbol_CarriesPerSymbolBuyHoldReturn()
+        public void Build_StatsBySymbol_ScalesBuyHoldToEqualWeightContribution()
         {
-            BacktestResult result = Result(AaplCandles(), WinningPortfolio(), NoIndicators());
+            // AAPL +20% buy-and-hold alongside one other benchmark symbol → its contribution to an
+            // equal-weight two-symbol benchmark is 0.2 / 2 = 0.1, the same capital base as net profit %.
+            BacktestResult result = Result(TwoSymbolCandles(), WinningPortfolio(), NoIndicators());
 
             ReportModel model = new ReportModelBuilder().Build(result);
 
-            Assert.Equal(0.2m, model.StatsBySymbol["AAPL"].BuyHoldReturnPercent);
+            Assert.Equal(0.1m, model.StatsBySymbol["AAPL"].BuyHoldReturnPercent);
         }
 
         [Fact]

@@ -284,19 +284,25 @@ namespace Backtester.Report
 
         /// <summary>
         /// Projects each symbol's performance stats into report form, keyed by symbol, attaching that
-        /// symbol's own buy-and-hold return (zero when it has no candles).
+        /// symbol's buy-and-hold return as its equal-weight contribution to the portfolio benchmark
+        /// (the symbol's own price return divided by the number of benchmark symbols), so the per-symbol
+        /// column compares against net profit % on the same whole-portfolio capital base and the
+        /// contributions sum to the portfolio's buy-and-hold figure.
         /// </summary>
         private static IReadOnlyDictionary<string, ReportStats> MapStatsBySymbol(
             IReadOnlyDictionary<string, PerformanceStats> statsBySymbol,
             decimal startingEquity,
             IReadOnlyDictionary<string, decimal> buyHoldBySymbol)
         {
+            int benchmarkSymbols = buyHoldBySymbol.Count;
+
             // Key: symbol/ticker -> that symbol's stats projected for the report's per-symbol column.
             Dictionary<string, ReportStats> mapped = new(statsBySymbol.Count);
             foreach (KeyValuePair<string, PerformanceStats> entry in statsBySymbol)
             {
                 decimal buyHold = buyHoldBySymbol.TryGetValue(entry.Key, out decimal value) ? value : 0m;
-                mapped[entry.Key] = MapStats(entry.Value, startingEquity, buyHold);
+                decimal buyHoldContribution = benchmarkSymbols > 0 ? buyHold / benchmarkSymbols : 0m;
+                mapped[entry.Key] = MapStats(entry.Value, startingEquity, buyHoldContribution);
             }
 
             return mapped;

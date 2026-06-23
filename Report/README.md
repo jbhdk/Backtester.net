@@ -53,8 +53,8 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 ### Performance
 
 - **Net profit** — net profit after commissions and slippage, in currency.
-- **Net profit %** — net profit as a fraction of starting equity.
-- **Buy & hold** — return of simply holding the instrument over the run; the benchmark, not the strategy.
+- **Net profit %** — net profit as a fraction of starting equity. Per symbol this is the symbol's profit over the *whole-portfolio* starting equity, i.e. its contribution to the portfolio return — not a return on the capital deployed in that symbol alone.
+- **Buy & hold** — return of an equal-weight buy-and-hold of all traded symbols over the run; the benchmark, not the strategy. The per-symbol value is that symbol's price return divided by the number of benchmark symbols, i.e. its equal-weight *contribution* to the benchmark, so it sits on the same whole-portfolio capital base as Net profit % and the per-symbol values sum to the portfolio figure. (A true per-symbol return on its own deployed capital would need per-symbol equity curves, which the engine does not yet produce.)
 - **CAGR** — compound annual growth rate.
 - **Sharpe** — annualised Sharpe ratio (daily bars, risk-free rate = 0): mean bar return over its standard deviation.
 - **Sortino** — like Sharpe but divided by downside deviation only, so upside volatility is not penalised.
