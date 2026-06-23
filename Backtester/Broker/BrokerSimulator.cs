@@ -24,6 +24,8 @@ namespace Backtester.Broker
         private readonly Dictionary<string, (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
         // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
         private readonly Dictionary<string, string> _ocoLinks = new();
+        // Orders the broker declined, in attempt order, captured for audit (e.g. margin-gate rejections).
+        private readonly List<RejectedOrder> _rejectedOrders = new();
         private DateTime _currentBarTimestamp;
 
         /// <summary>
@@ -42,6 +44,12 @@ namespace Backtester.Broker
             _slippageModel = slippageModel;
             _sizingModel = sizingModel;
         }
+
+        /// <summary>
+        /// Gets the orders the broker declined during the run, in attempt order, each capturing what was
+        /// attempted and why (currently the Reg-T margin gate rejecting for insufficient buying power).
+        /// </summary>
+        public IReadOnlyList<RejectedOrder> RejectedOrders => _rejectedOrders;
 
         /// <summary>
         /// Applies sizing and risk checks, then queues the order for fill processing on the next bar.
@@ -65,6 +73,15 @@ namespace Backtester.Broker
             decimal requiredMargin = _portfolio.InitialMarginForOrder(request);
             if (requiredMargin > 0m && requiredMargin > _portfolio.BuyingPower)
             {
+                _rejectedOrders.Add(new RejectedOrder
+                {
+                    Symbol = request.Symbol,
+                    Side = request.Side,
+                    Quantity = request.Quantity,
+                    Price = _portfolio.ValuationPriceForOrder(request),
+                    Timestamp = _currentBarTimestamp,
+                    Reason = "Not enough funds"
+                });
                 return null;
             }
 

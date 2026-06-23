@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Engine;
 
@@ -34,6 +35,7 @@ namespace Backtester.Report
                 Stats = MapStats(stats, startingEquity, totalReturn),
                 StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
+                RejectedOrders = MapRejectedOrders(result.RejectedOrders),
                 Indicators = MapIndicators(result.IndicatorSeries),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
                 Chart = MapChart(result.CandleHistory, stats.RoundTrips),
@@ -69,6 +71,30 @@ namespace Backtester.Report
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
                     TimeHeld = FormatTimeHeld(trip.ExitTime - trip.EntryTime)
+                });
+            }
+
+            return mapped;
+        }
+
+        /// <summary>
+        /// Projects the broker's rejected orders into report form, mapping the attempted side to a
+        /// direction (Buy → Long, Sell → Short) and carrying the instrument, size, price, time, and reason
+        /// straight through. Empty when no orders were rejected.
+        /// </summary>
+        private static IReadOnlyList<ReportRejectedOrder> MapRejectedOrders(IReadOnlyList<RejectedOrder> rejectedOrders)
+        {
+            List<ReportRejectedOrder> mapped = new(rejectedOrders.Count);
+            foreach (RejectedOrder rejected in rejectedOrders)
+            {
+                mapped.Add(new ReportRejectedOrder
+                {
+                    Symbol = rejected.Symbol,
+                    Direction = rejected.Side == OrderSide.Sell ? "Short" : "Long",
+                    Time = rejected.Timestamp,
+                    Price = rejected.Price,
+                    Quantity = rejected.Quantity,
+                    Reason = rejected.Reason
                 });
             }
 

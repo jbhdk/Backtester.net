@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Engine;
 using Backtester.Report;
@@ -184,7 +185,7 @@ namespace BacktesterTests.Report.Tests
                 ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }
             };
             return new BacktestResult(history, new Portfolio(10_000m), Array.Empty<IndicatorSeries>(),
-                new[] { "AAPL" }, "1d", T0, T0.AddYears(1));
+                new[] { "AAPL" }, "1d", T0, T0.AddYears(1), Array.Empty<RejectedOrder>());
         }
 
         [Fact]

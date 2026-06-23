@@ -234,6 +234,51 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitOrder_RejectedByMarginGate_CapturedWithFullDetail()
+        {
+            // Process a bar first so the rejection is stamped with the bar's timestamp.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.ProcessBar(SliceWithBar("AAPL", 50m));
+
+            // Buy 500 @ 50 → long margin 12,500 > 10,000 buying power → rejected.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 500 });
+
+            RejectedOrder rejected = Assert.Single(broker.RejectedOrders);
+            Assert.Equal("AAPL", rejected.Symbol);
+            Assert.Equal(OrderSide.Buy, rejected.Side);
+            Assert.Equal(500, rejected.Quantity);
+            Assert.Equal(50m, rejected.Price);
+            Assert.Equal(T0, rejected.Timestamp);
+            Assert.Equal("Not enough funds", rejected.Reason);
+        }
+
+        [Fact]
+        public void SubmitOrder_AcceptedOrder_RecordsNoRejection()
+        {
+            // Buy 300 @ 50 → long margin 7,500 ≤ 10,000 buying power → accepted, nothing rejected.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 300 });
+
+            Assert.Empty(broker.RejectedOrders);
+        }
+
+        [Fact]
+        public void SubmitOrder_ReducingOrder_RecordsNoRejection()
+        {
+            // A closing Sell opposes the open long → commits no margin → accepted, nothing rejected.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(new Trade { Id = "1", Symbol = "AAPL", Side = OrderSide.Buy, Price = 50m, Quantity = 100, Timestamp = T0 });
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Limit, Price = 50m, Quantity = 100 });
+
+            Assert.Empty(broker.RejectedOrders);
+        }
+
+        [Fact]
         public void SubmitOrder_AfterProcessBar_SubmittedAtReflectsBarTimestamp()
         {
             DateTime barTime = new(2020, 6, 1, 9, 30, 0, DateTimeKind.Utc);

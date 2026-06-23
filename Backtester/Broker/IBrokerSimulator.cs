@@ -20,5 +20,11 @@ namespace Backtester.Broker
         /// Unfilled orders remain working (GTC) and are evaluated again on subsequent bars.
         /// </summary>
         IEnumerable<Trade> ProcessBar(MarketSlice slice);
+
+        /// <summary>
+        /// Gets the orders the broker declined during the run, in attempt order, each capturing what was
+        /// attempted and why (e.g. rejected by the Reg-T margin gate for insufficient buying power).
+        /// </summary>
+        IReadOnlyList<RejectedOrder> RejectedOrders { get; }
     }
 }

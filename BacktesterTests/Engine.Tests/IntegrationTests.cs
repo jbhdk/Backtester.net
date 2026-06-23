@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
+using Backtester.Engine;
 using Backtester.ExecutionModels.Commission;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
@@ -84,6 +85,31 @@ namespace BacktesterTests.Engine.Tests
             // Final equity differs from starting cash (position was opened)
             decimal finalEquity = portfolio.EquityHistory.Last().MarkedEquity;
             Assert.NotEqual(10_000m, finalEquity);
+        }
+
+        [Fact]
+        public async Task MovingAverageCross_OrderExceedsBuyingPower_RejectionSurfacedInResult()
+        {
+            // Same series as the full-stack test: the golden cross fires at bar 7 (price 90), producing a
+            // market buy. A tiny account sized 100 shares needs 0.5·90·100 = 4,500 margin — far beyond the
+            // ~100 buying power — so the order is rejected and captured for audit.
+            decimal[] closes = new[] { 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m, 100m, 110m };
+            Candle[] candles = closes.Select((c, i) => Bar(T0.AddDays(i), c)).ToArray();
+
+            Portfolio portfolio = new(100m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 100 });
+            MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", candles));
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            BacktestResult result = await engine.StartAsync();
+
+            Assert.Empty(portfolio.Trades);
+            RejectedOrder rejected = Assert.Single(result.RejectedOrders);
+            Assert.Equal("AAPL", rejected.Symbol);
+            Assert.Equal(OrderSide.Buy, rejected.Side);
+            Assert.Equal(100, rejected.Quantity);
+            Assert.Equal("Not enough funds", rejected.Reason);
         }
 
         [Fact]

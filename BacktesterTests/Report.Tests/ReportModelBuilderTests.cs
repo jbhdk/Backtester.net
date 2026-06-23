@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Engine;
 using Backtester.Report;
@@ -27,9 +28,11 @@ namespace BacktesterTests.Report.Tests
         private static BacktestResult Result(
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
             Portfolio portfolio,
-            IReadOnlyList<IndicatorSeries> indicators)
+            IReadOnlyList<IndicatorSeries> indicators,
+            IReadOnlyList<RejectedOrder> rejectedOrders = null)
         {
-            return new(candleHistory, portfolio, indicators, new[] { "AAPL" }, "1d", T0, T0.AddYears(1));
+            return new(candleHistory, portfolio, indicators, new[] { "AAPL" }, "1d", T0, T0.AddYears(1),
+                rejectedOrders ?? Array.Empty<RejectedOrder>());
         }
 
         private static Trade Trade(string symbol, OrderSide side, decimal price, int qty, DateTime ts)
@@ -150,6 +153,39 @@ namespace BacktesterTests.Report.Tests
             ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.Equal(expected, Assert.Single(model.RoundTrips).TimeHeld);
+        }
+
+        [Fact]
+        public void Build_RejectedOrders_MapsAttemptDetailAndSideToDirection()
+        {
+            RejectedOrder[] rejected =
+            {
+                new() { Symbol = "IEF", Side = OrderSide.Buy, Quantity = 210, Price = 95.10m, Timestamp = T0, Reason = "Not enough funds" },
+                new() { Symbol = "QQQ", Side = OrderSide.Sell, Quantity = 40, Price = 480m, Timestamp = T0.AddHours(1), Reason = "Not enough funds" }
+            };
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), NoIndicators(), rejected);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(2, model.RejectedOrders.Count);
+            ReportRejectedOrder buy = model.RejectedOrders[0];
+            Assert.Equal("IEF", buy.Symbol);
+            Assert.Equal("Long", buy.Direction);
+            Assert.Equal(T0, buy.Time);
+            Assert.Equal(95.10m, buy.Price);
+            Assert.Equal(210, buy.Quantity);
+            Assert.Equal("Not enough funds", buy.Reason);
+            Assert.Equal("Short", model.RejectedOrders[1].Direction);
+        }
+
+        [Fact]
+        public void Build_RejectedOrders_NoneRejected_YieldsEmptyList()
+        {
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Empty(model.RejectedOrders);
         }
 
         [Fact]
@@ -484,7 +520,7 @@ namespace BacktesterTests.Report.Tests
         public void Build_RunInfo_EchoesRunInputs()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators(), new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30));
+            BacktestResult result = new(NoCandles(), portfolio, NoIndicators(), new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30), Array.Empty<RejectedOrder>());
 
             ReportModel model = new ReportModelBuilder().Build(result);
 

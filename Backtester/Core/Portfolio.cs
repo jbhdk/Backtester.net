@@ -71,8 +71,7 @@ namespace Backtester.Core
                 return 0m;
             }
 
-            decimal price = request.Price
-                ?? (_lastCloseBySymbol.TryGetValue(request.Symbol, out decimal close) ? close : 0m);
+            decimal price = ValuationPriceForOrder(request);
             if (price <= 0m)
             {
                 return 0m;
@@ -80,6 +79,16 @@ namespace Backtester.Core
 
             decimal rate = request.Side == OrderSide.Buy ? LongInitialMarginRate : ShortInitialMarginRate;
             return rate * price * request.Quantity;
+        }
+
+        /// <summary>
+        /// Returns the price used to value an order: the order's own price, or the symbol's latest close
+        /// when it has none, or zero when neither is known (so the order cannot be valued).
+        /// </summary>
+        public decimal ValuationPriceForOrder(OrderRequest request)
+        {
+            return request.Price
+                ?? (_lastCloseBySymbol.TryGetValue(request.Symbol, out decimal close) ? close : 0m);
         }
 
         private decimal MarkPrice(Position position)

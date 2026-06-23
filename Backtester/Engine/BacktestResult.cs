@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Backtester.Broker;
 using Backtester.Core;
 
 namespace Backtester.Engine
@@ -23,7 +24,8 @@ namespace Backtester.Engine
             IReadOnlyList<string> symbols,
             string interval,
             DateTime fromUtc,
-            DateTime toUtc)
+            DateTime toUtc,
+            IReadOnlyList<RejectedOrder> rejectedOrders)
         {
             CandleHistory = candleHistory;
             Portfolio = portfolio;
@@ -32,6 +34,7 @@ namespace Backtester.Engine
             Interval = interval;
             FromUtc = fromUtc;
             ToUtc = toUtc;
+            RejectedOrders = rejectedOrders;
         }
 
         /// <summary>
@@ -60,6 +63,12 @@ namespace Backtester.Engine
 
         /// <summary>Gets the requested end of the run's date range (UTC).</summary>
         public DateTime ToUtc { get; }
+
+        /// <summary>
+        /// Gets the orders the broker declined during the run, in attempt order, each capturing what was
+        /// attempted and why (e.g. rejected by the Reg-T margin gate for insufficient buying power).
+        /// </summary>
+        public IReadOnlyList<RejectedOrder> RejectedOrders { get; }
 
         /// <summary>
         /// Gets the equity the portfolio started with. Sourced from the run's <see cref="Portfolio"/> so it

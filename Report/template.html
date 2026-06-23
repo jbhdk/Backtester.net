@@ -31,6 +31,8 @@
   .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .badge-long { color: var(--accent); background: rgba(78, 161, 255, .14); }
   .badge-short { color: #e0a33e; background: rgba(224, 163, 62, .14); }
+  .badge-rejected { color: var(--red); background: rgba(231, 76, 60, .14); text-transform: none; letter-spacing: 0; }
+  tbody tr.rejected td { color: var(--muted); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
@@ -178,6 +180,19 @@
 
   // --- Round-trips table ---
   var trips = (model.roundTrips || []).slice();
+  // Orders the broker declined share the trade log as time-ordered "rejected" rows: they carry the
+  // attempt's symbol, side, time, price, and size, but no exit, P&L, or holding time.
+  var rejectedRows = (model.rejectedOrders || []).map(function (r) {
+    return {
+      rejected: true, number: null, symbol: r.symbol, direction: r.direction,
+      entryTime: r.time, exitTime: null, entryPrice: r.price, exitPrice: null,
+      quantity: r.quantity, realizedPnL: null, returnPercent: null, timeHeld: null, reason: r.reason
+    };
+  });
+  // The combined trade log: real round trips interleaved with rejected attempts, ordered by time.
+  var entries = trips.concat(rejectedRows).sort(function (a, b) {
+    return new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime();
+  });
   var tbody = document.querySelector("#round-trips tbody");
   var showAllEl = document.getElementById("show-all-trips");
   var showAllLabel = document.getElementById("show-all-label");
@@ -189,10 +204,22 @@
     var isShort = String(d).toLowerCase() === "short";
     return '<span class="badge badge-' + (isShort ? "short" : "long") + '">' + (d || "Long") + "</span>";
   }
+  function rejectedBadge(reason) {
+    return '<span class="badge badge-rejected">Rejected — ' + (reason || "rejected") + "</span>";
+  }
   function renderRows() {
     // Sync to the chart's symbol unless "show all" is on (or no symbol is selected yet).
-    var rows = (showAll || !selected) ? trips : trips.filter(function (t) { return t.symbol === selected; });
+    var rows = (showAll || !selected) ? entries : entries.filter(function (t) { return t.symbol === selected; });
     tbody.innerHTML = rows.map(function (t) {
+      if (t.rejected) {
+        // A rejected attempt: no trade number, exit, P&L, return, or holding time — the dash columns
+        // stay empty and the reason shows where the P&L would be.
+        return '<tr data-number="" class="rejected">' +
+          cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
+          cell(fmtMoney(t.entryPrice)) + cell("–") + cell(t.quantity) +
+          cell(rejectedBadge(t.reason)) + cell("–") + cell("–") +
+          "</tr>";
+      }
       return '<tr data-number="' + t.number + '">' +
         cell(t.number) + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
@@ -214,7 +241,7 @@
       sortKey = key;
       headers.forEach(function (h) { h.removeAttribute("aria-sort"); });
       th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
-      trips.sort(function (a, b) {
+      entries.sort(function (a, b) {
         var av = a[key], bv = b[key];
         if (type === "num") { av = Number(av); bv = Number(bv); }
         else if (type === "date") { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }

@@ -18,6 +18,9 @@ namespace Backtester.Report
         /// <summary>Gets or sets the round trips with their derived return and holding time.</summary>
         public IReadOnlyList<ReportRoundTrip> RoundTrips { get; set; }
 
+        /// <summary>Gets or sets the orders the broker declined, surfaced in the trade log marked as rejected.</summary>
+        public IReadOnlyList<ReportRejectedOrder> RejectedOrders { get; set; }
+
         /// <summary>Gets or sets the chart-ready strategy-exposed indicator series, each with its pane placement.</summary>
         public IReadOnlyList<ChartIndicator> Indicators { get; set; }
 
