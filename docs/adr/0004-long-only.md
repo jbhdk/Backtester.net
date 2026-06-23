@@ -1,5 +1,9 @@
 # Long-only positions
 
+> **Status: Superseded by [ADR 0011](0011-margin-account-shorting.md).** The engine now supports
+> shorting under a Reg-T initial-margin model. This ADR is retained for the history of why shorts
+> were originally deferred.
+
 The reference strategy's README describes both long and short setups, but modelling shorts
 correctly requires short cash/margin accounting we have chosen to defer. For now the engine is
 **long-only**: `Position.Quantity` is never negative and a Sell may only reduce or close an

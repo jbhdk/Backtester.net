@@ -76,9 +76,19 @@ _Avoid_: execution (in prose).
 ### Positions & accounting
 
 **Position**:
-The net holding in a symbol. **Long-only** in this engine: quantity is never negative; a Sell
-may only reduce or close a long.
-_Avoid_: short, holding, lot.
+The net holding in a symbol, as a **signed** quantity: positive is **long**, negative is **short**,
+zero is flat. A single fill never flips the sign — an order opposite to the open position reduces it
+and clamps at zero (any overshoot is discarded); reversing direction takes a second order from flat.
+_Avoid_: holding, lot.
+
+**Short**:
+A position with negative quantity, opened by a Sell from flat (selling shares not held) and closed by
+a Buy. Realized PnL on close is `(entry − exit)·quantity` — the mirror of a long.
+_Avoid_: short-sell (as a noun), naked.
+
+**Cover**:
+Buying to close or reduce a short — the Buy-side mirror of selling to close a long.
+_Avoid_: buy-to-close, unwind.
 
 **Trade**:
 The record of one fill (the `Trade` type). NOT a complete trade in the trader's sense.
@@ -86,17 +96,20 @@ _Avoid_: using "trade" for an entry-to-exit cycle — that is a Round trip.
 
 **Round trip**:
 A complete entry-to-exit cycle for a position, carrying realized PnL and bars held. The unit
-of per-trade performance analytics.
+of per-trade performance analytics. Either direction: a long round trip pairs a Buy entry with a
+Sell exit; a short round trip pairs a Sell entry with a Buy exit.
 _Avoid_: trade, deal, position close.
 
 **Realized equity** (cost-basis equity):
-Cash plus the cost basis of open positions (`Cash + Σ AveragePrice·Quantity`); excludes
-unrealized PnL. Equals cash when flat. The base for risk sizing.
+Cash plus the cost basis of open positions (`Cash + Σ AveragePrice·Quantity`, Quantity signed so a
+short contributes negative cost basis); excludes unrealized PnL. Equals cash when flat. The base for
+risk sizing.
 _Avoid_: equity (unqualified), book value.
 
 **Marked equity**:
-Cash plus open positions marked to the latest close (`Cash + Σ Close·Quantity`); includes
-unrealized PnL. The basis of the equity curve.
+Cash plus open positions marked to the latest close (`Cash + Σ Close·Quantity`, Quantity signed so a
+short's value falls as price rises); includes unrealized PnL. The basis of the equity curve and of
+buying power.
 _Avoid_: equity (unqualified), NAV.
 
 ### Risk & sizing
@@ -109,6 +122,27 @@ _Avoid_: notional sizing, percent sizing.
 **Stop distance**:
 The per-share loss if the stop is hit: `|entry − stopPrice|`.
 _Avoid_: risk, spread.
+
+### Margin
+
+**Margin account**:
+The account operates on Reg-T **initial** margin: opening or adding to a position commits margin
+rather than full cash. Longs require 50% of notional, shorts 150%. Margin is *held* against buying
+power, not debited from cash — a short sale credits cash by its full proceeds. Only initial margin is
+modelled; there is no maintenance margin and the engine never force-liquidates, so a runaway loss can
+drive marked equity negative and the run simply reports it.
+_Avoid_: cash account, leverage (as the model name).
+
+**Initial margin**:
+The equity an order must commit to open or add to a position: `rate · |price · quantity|`, rate 0.5
+long / 1.5 short. A reducing order commits none and releases the closed portion's margin.
+_Avoid_: margin requirement (unqualified), maintenance margin.
+
+**Buying power**:
+Marked equity above the initial margin already committed by open positions
+(`MarkedEquity − Σ held initial margin`). An order is accepted only if its initial margin does not
+exceed buying power. Always enforced by the account — it is **not** a pluggable execution model.
+_Avoid_: margin (unqualified), excess equity.
 
 ### Execution models
 
