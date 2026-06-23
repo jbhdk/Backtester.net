@@ -228,11 +228,17 @@ namespace Backtester.Core
                 }
             }
 
-            decimal unrealized = Positions.Sum(p =>
+            // Key: symbol/ticker -> the signed market value of its open position at this slice.
+            Dictionary<string, decimal> positionValueBySymbol = new(Positions.Count);
+            decimal unrealized = 0m;
+            foreach (Position position in Positions)
             {
-                decimal markPrice = slice.HasBar(p.Symbol) ? slice.BarsBySymbol[p.Symbol].Close : p.AveragePrice;
-                return markPrice * p.Quantity;
-            });
+                decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
+                decimal value = markPrice * position.Quantity;
+                positionValueBySymbol[position.Symbol] = value;
+                unrealized += value;
+            }
+
             _equityHistory.Add(new EquitySnapshot
             {
                 Timestamp = slice.Timestamp,
@@ -240,7 +246,8 @@ namespace Backtester.Core
                 UnrealizedPnL = unrealized,
                 RealizedPnL = RealizedPnL,
                 MarkedEquity = Cash + unrealized,
-                EquityBySymbol = MarkEquityBySymbol(slice)
+                EquityBySymbol = MarkEquityBySymbol(slice),
+                PositionValueBySymbol = positionValueBySymbol
             });
         }
 

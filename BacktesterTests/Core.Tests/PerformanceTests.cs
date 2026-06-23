@@ -400,5 +400,226 @@ namespace BacktesterTests.Core.Tests
 
             Assert.Equal(2, stats.MaxConsecLosses);
         }
+
+        [Fact]
+        public void GetPerformanceStats_MaxConsecWins_LongestWinningStreak()
+        {
+            // Three round trips: win, win, loss → MaxConsecWins = 2.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 1, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 1, T0.AddDays(1)));   // win
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 1, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 1, T0.AddDays(3)));   // win
+            portfolio.ApplyTrade(Buy("AAPL", 120m, 1, T0.AddDays(4)));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 1, T0.AddDays(5)));   // loss
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(2, stats.MaxConsecWins);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_MedianTrade_MiddleRealizedPnL()
+        {
+            // Three round trips with P&L -100, +100, +300 → median +100.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 90m, 10, T0.AddDays(1)));    // -100
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(3)));   // +100
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(4)));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(5)));   // +300
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(100m, stats.MedianTrade);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_LargestWinAndLoss_ExtremeRealizedPnL()
+        {
+            // P&L -100, +100, +300 → largest win +300, largest loss -100.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 90m, 10, T0.AddDays(1)));    // -100
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(3)));   // +100
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(4)));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(5)));   // +300
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(300m, stats.LargestWin);
+            Assert.Equal(-100m, stats.LargestLoss);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_DirectionalWinRates_SplitLongAndShort()
+        {
+            // Longs: one win (+$100), one loss (-$100) → 0.5. Shorts: one win (+$100) → 1.0.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));   // long win
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10, T0.AddDays(3)));   // long loss
+            portfolio.ApplyTrade(Sell("MSFT", 150m, 10, T0.AddDays(4)));
+            portfolio.ApplyTrade(Buy("MSFT", 140m, 10, T0.AddDays(5)));    // short win
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(0.5m, stats.LongWinRate);
+            Assert.Equal(1m, stats.ShortWinRate);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_TradeDurations_MeanMedianLongestShortest()
+        {
+            // Two round trips held 1 day and 3 days → avg 2d, median 2d, longest 3d, shortest 1d.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(5)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(TimeSpan.FromDays(2), stats.AvgTradeDuration);
+            Assert.Equal(TimeSpan.FromDays(2), stats.MedianTradeDuration);
+            Assert.Equal(TimeSpan.FromDays(3), stats.LongestTradeDuration);
+            Assert.Equal(TimeSpan.FromDays(1), stats.ShortestTradeDuration);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_MarketExposure_FractionOfBarsHoldingAPosition()
+        {
+            // Position open over the first two bars, flat on the third (the exit bar) → exposure 2/3.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(2)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(2m / 3m, stats.MarketExposure);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_CapitalInvested_TimeWeightedAverageAndPeak()
+        {
+            // Position values: $1,000 (10@100), $1,100 (10@110), $0 (flat at exit) → avg 700, peak 1,100.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(2)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(700m, stats.AvgCapitalInvested);
+            Assert.Equal(1_100m, stats.MaxCapitalInvested);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_ShortPosition_CapitalInvestedCountsGrossValue()
+        {
+            // A short carries a negative market value; capital invested counts its gross (absolute) value.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0));   // position value -$1,500 → gross $1,500
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(1_500m, stats.MaxCapitalInvested);
+            Assert.Equal(1m, stats.MarketExposure);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_RecoveryFactorAndAvgDrawdown_FromDeepestEpisode()
+        {
+            // Equity peaks at $40,000, troughs at $35,000 (12.5% / $5,000) and never recovers; the round
+            // trip nets +$5,000 → recovery factor = 5,000 / 5,000 = 1, average drawdown = 0.125.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));            // equity $40,000 (peak)
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0.AddDays(1))); // equity $35,000 (trough)
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 100, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0.AddDays(2))); // flat, equity $35,000
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(5_000m, stats.NetProfit);
+            Assert.Equal(0.125m, stats.AvgDrawdown);
+            Assert.Equal(1m, stats.RecoveryFactor);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_MaxDrawdownDuration_SpansPeakToRunEndWhenNeverRecovered()
+        {
+            // Peak at T0, underwater through to the final bar at T0+2d → longest drawdown duration = 2 days.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));            // peak
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0.AddDays(2)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(TimeSpan.FromDays(2), stats.MaxDrawdownDuration);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_Calmar_IsCagrOverMaxDrawdown()
+        {
+            // Calmar relates the two equity-derived metrics; assert the relationship on a drawdown run.
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 100, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0.AddYears(1)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.NotEqual(0m, stats.MaxDrawdown);
+            Assert.Equal(stats.Cagr / stats.MaxDrawdown, stats.Calmar);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_SingleSymbol_SortinoMatchesPortfolio()
+        {
+            // One symbol's isolated equity curve is the portfolio curve, so Sortino must match.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 50, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 90m, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 130m, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 50, T0.AddDays(3)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(3)));
+
+            PerformanceStats portfolioStats = portfolio.GetPerformanceStats();
+            PerformanceStats symbolStats = portfolio.GetPerformanceStatsBySymbol()["AAPL"];
+
+            Assert.NotEqual(0m, portfolioStats.Sortino);
+            Assert.Equal(portfolioStats.Sortino, symbolStats.Sortino);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_IsolatesMarketExposurePerSymbol()
+        {
+            // AAPL holds over two of three bars, flat on its exit bar (exposure 2/3); MSFT never trades, so
+            // it has no round trip and is absent from the per-symbol stats.
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 100m, "MSFT", 50m, T0));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 110m, "MSFT", 50m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice2("AAPL", 120m, "MSFT", 50m, T0.AddDays(2)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(2m / 3m, bySymbol["AAPL"].MarketExposure);
+            Assert.False(bySymbol.ContainsKey("MSFT"));
+        }
     }
 }

@@ -19,12 +19,12 @@
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
   #stats-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
   .stat-group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
-  .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
   .stat:last-child { border-bottom: none; }
   .stat .label { color: var(--muted); }
   .stat .value { font-variant-numeric: tabular-nums; font-weight: 600; }
   .stat-group.dual .stat { display: grid; grid-template-columns: 1fr auto auto; column-gap: 16px; }
-  .stat-group.dual .stat .value { min-width: 88px; text-align: right; }
+  .stat-group.dual .stat .value { min-width: 74px; text-align: right; }
   .stat-group.dual .stat.head .value { color: var(--muted); font-weight: 600; font-size: 12px; }
   .pos { color: var(--green); }
   .neg { color: var(--red); }
@@ -65,7 +65,11 @@
 
 <section id="stats-panel">
   <div class="stat-group dual" id="headline-stats"><h2>Performance</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="drawdown-stats"><h2>Drawdown &amp; recovery</h2><div class="stat-body"></div></div>
   <div class="stat-group dual" id="trade-quality-stats"><h2>Trade quality</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="win-loss-stats"><h2>Wins &amp; losses</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="duration-stats"><h2>Trade duration</h2><div class="stat-body"></div></div>
+  <div class="stat-group dual" id="exposure-stats"><h2>Exposure &amp; capital</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
@@ -109,6 +113,8 @@
   function fmtPct(v) { return v == null ? "–" : (v * 100).toFixed(2) + "%"; }
   function fmtNum(v, d) { return v == null ? "–" : Number(v).toFixed(d == null ? 2 : d); }
   function fmtDate(v) { return v == null ? "–" : new Date(v).toISOString().replace("T", " ").slice(0, 16) + "Z"; }
+  // Pre-formatted duration strings (e.g. "3d 14h") pass straight through; absent values show a dash.
+  function fmtDur(v) { return v == null ? "–" : v; }
   function signClass(v) { return v > 0 ? "pos" : v < 0 ? "neg" : ""; }
 
   // value may carry an explicit css class for P&L colour-coding
@@ -146,11 +152,22 @@
               signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
       dualRow("Total return", fmtPct(stats.totalReturnPercent), sel ? fmtPct(sel.totalReturnPercent) : dash,
               signClass(stats.totalReturnPercent), sel ? signClass(sel.totalReturnPercent) : "") +
+      dualRow("Buy &amp; hold", fmtPct(stats.buyHoldReturnPercent), sel ? fmtPct(sel.buyHoldReturnPercent) : dash,
+              signClass(stats.buyHoldReturnPercent), sel ? signClass(sel.buyHoldReturnPercent) : "") +
       dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash,
               signClass(stats.cagr), sel ? signClass(sel.cagr) : "") +
+      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash) +
+      dualRow("Sortino", fmtNum(stats.sortino), sel ? fmtNum(sel.sortino) : dash));
+
+    fill("drawdown-stats", headRow() +
       dualRow("Max drawdown", fmtPct(stats.maxDrawdown), sel ? fmtPct(sel.maxDrawdown) : dash,
               stats.maxDrawdown > 0 ? "neg" : "", sel && sel.maxDrawdown > 0 ? "neg" : "") +
-      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash));
+      dualRow("Avg drawdown", fmtPct(stats.avgDrawdown), sel ? fmtPct(sel.avgDrawdown) : dash,
+              stats.avgDrawdown > 0 ? "neg" : "", sel && sel.avgDrawdown > 0 ? "neg" : "") +
+      dualRow("Drawdown length", fmtDur(stats.maxDrawdownDuration), sel ? fmtDur(sel.maxDrawdownDuration) : dash) +
+      dualRow("Time to recover", fmtDur(stats.timeToRecover), sel ? fmtDur(sel.timeToRecover) : dash) +
+      dualRow("Recovery factor", fmtNum(stats.recoveryFactor), sel ? fmtNum(sel.recoveryFactor) : dash) +
+      dualRow("Calmar", fmtNum(stats.calmar), sel ? fmtNum(sel.calmar) : dash));
 
     fill("trade-quality-stats", headRow() +
       dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +
@@ -158,10 +175,33 @@
       dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash) +
       dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
               signClass(stats.expectancy), sel ? signClass(sel.expectancy) : "") +
+      dualRow("Avg R", fmtNum(stats.avgRMultiple), sel ? fmtNum(sel.avgRMultiple) : dash,
+              signClass(stats.avgRMultiple), sel ? signClass(sel.avgRMultiple) : "") +
       dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash, "pos", sel ? "pos" : "") +
       dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash,
               stats.avgLoss < 0 ? "neg" : "", sel && sel.avgLoss < 0 ? "neg" : "") +
-      dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash));
+      dualRow("Median trade", fmtMoney(stats.medianTrade), sel ? fmtMoney(sel.medianTrade) : dash,
+              signClass(stats.medianTrade), sel ? signClass(sel.medianTrade) : ""));
+
+    fill("win-loss-stats", headRow() +
+      dualRow("Largest win", fmtMoney(stats.largestWin), sel ? fmtMoney(sel.largestWin) : dash, "pos", sel ? "pos" : "") +
+      dualRow("Largest loss", fmtMoney(stats.largestLoss), sel ? fmtMoney(sel.largestLoss) : dash,
+              stats.largestLoss < 0 ? "neg" : "", sel && sel.largestLoss < 0 ? "neg" : "") +
+      dualRow("Max consec. wins", fmtNum(stats.maxConsecWins, 0), sel ? fmtNum(sel.maxConsecWins, 0) : dash) +
+      dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash) +
+      dualRow("Profitable long", fmtPct(stats.longWinRate), sel ? fmtPct(sel.longWinRate) : dash) +
+      dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash));
+
+    fill("duration-stats", headRow() +
+      dualRow("Avg duration", fmtDur(stats.avgTradeDuration), sel ? fmtDur(sel.avgTradeDuration) : dash) +
+      dualRow("Median duration", fmtDur(stats.medianTradeDuration), sel ? fmtDur(sel.medianTradeDuration) : dash) +
+      dualRow("Longest trade", fmtDur(stats.longestTradeDuration), sel ? fmtDur(sel.longestTradeDuration) : dash) +
+      dualRow("Shortest trade", fmtDur(stats.shortestTradeDuration), sel ? fmtDur(sel.shortestTradeDuration) : dash));
+
+    fill("exposure-stats", headRow() +
+      dualRow("Market exposure", fmtPct(stats.marketExposure), sel ? fmtPct(sel.marketExposure) : dash) +
+      dualRow("Avg capital", fmtMoney(stats.avgCapitalInvested), sel ? fmtMoney(sel.avgCapitalInvested) : dash) +
+      dualRow("Max capital", fmtMoney(stats.maxCapitalInvested), sel ? fmtMoney(sel.maxCapitalInvested) : dash));
   }
 
   renderStats();

@@ -27,5 +27,12 @@ namespace Backtester.Core
         // symbol's own realized and unrealized P&L, as if it alone traded the whole account).
         /// <summary>Gets or sets each traded symbol's isolated equity at this snapshot.</summary>
         public IReadOnlyDictionary<string, decimal> EquityBySymbol { get; set; }
+
+        // Key: symbol/ticker -> the signed market value of that symbol's open position at this snapshot
+        // (latest close × signed quantity; negative for a short). Only symbols with an open position
+        // appear, so the map is empty when the account is flat. Underpins the market-exposure and
+        // capital-invested metrics; null on snapshots recorded before this field existed.
+        /// <summary>Gets or sets the market value of each open position at this snapshot, keyed by symbol.</summary>
+        public IReadOnlyDictionary<string, decimal> PositionValueBySymbol { get; set; }
     }
 }

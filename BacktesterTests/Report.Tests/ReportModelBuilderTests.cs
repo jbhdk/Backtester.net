@@ -540,5 +540,69 @@ namespace BacktesterTests.Report.Tests
 
             Assert.Equal(10_000m, model.Run.StartingEquity);
         }
+
+        /// <summary>An AAPL candle series running 100 → 120 (a +20% buy-and-hold return).</summary>
+        private static IReadOnlyDictionary<string, IReadOnlyList<Candle>> AaplCandles()
+        {
+            return new Dictionary<string, IReadOnlyList<Candle>>
+            {
+                ["AAPL"] = new[]
+                {
+                    new Candle { Timestamp = T0, Open = 100m, High = 100m, Low = 100m, Close = 100m, Volume = 1000 },
+                    new Candle { Timestamp = T0.AddDays(2), Open = 120m, High = 120m, Low = 120m, Close = 120m, Volume = 1000 }
+                }
+            };
+        }
+
+        [Fact]
+        public void Build_Stats_DerivesBuyHoldReturnFromCandleHistory()
+        {
+            // AAPL closes 100 → 120 over the run → buy-and-hold return = 0.2.
+            BacktestResult result = Result(AaplCandles(), WinningPortfolio(), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(0.2m, model.Stats.BuyHoldReturnPercent);
+        }
+
+        [Fact]
+        public void Build_StatsBySymbol_CarriesPerSymbolBuyHoldReturn()
+        {
+            BacktestResult result = Result(AaplCandles(), WinningPortfolio(), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(0.2m, model.StatsBySymbol["AAPL"].BuyHoldReturnPercent);
+        }
+
+        [Fact]
+        public void Build_Stats_FormatsTradeDurationsAsCompactStrings()
+        {
+            // A single round trip held exactly two days → every duration metric formats to "2d 0h".
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal("2d 0h", model.Stats.AvgTradeDuration);
+            Assert.Equal("2d 0h", model.Stats.LongestTradeDuration);
+            Assert.Equal("2d 0h", model.Stats.ShortestTradeDuration);
+        }
+
+        [Fact]
+        public void Build_Stats_MapsExpandedScalarMetrics()
+        {
+            Portfolio portfolio = WinningPortfolio();
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
+            PerformanceStats expected = portfolio.GetPerformanceStats();
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(expected.MaxConsecWins, model.Stats.MaxConsecWins);
+            Assert.Equal(expected.Sortino, model.Stats.Sortino);
+            Assert.Equal(expected.Calmar, model.Stats.Calmar);
+            Assert.Equal(expected.MarketExposure, model.Stats.MarketExposure);
+            Assert.Equal(expected.MaxCapitalInvested, model.Stats.MaxCapitalInvested);
+            Assert.Equal(expected.LargestWin, model.Stats.LargestWin);
+        }
     }
 }

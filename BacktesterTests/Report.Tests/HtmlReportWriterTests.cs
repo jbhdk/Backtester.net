@@ -88,6 +88,17 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_GroupsExpandedStatsIntoDrawdownDurationExposureAndWinLossCards()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            Assert.Contains("id=\"drawdown-stats\"", html);
+            Assert.Contains("id=\"win-loss-stats\"", html);
+            Assert.Contains("id=\"duration-stats\"", html);
+            Assert.Contains("id=\"exposure-stats\"", html);
+        }
+
+        [Fact]
         public void BuildHtml_StatCards_HaveAllAndSelectedSymbolColumns()
         {
             string html = new HtmlReportWriter().BuildHtml(SampleModel());

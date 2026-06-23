@@ -30,10 +30,16 @@ namespace Backtester.Report
             decimal finalEquity = FinalEquity(result.Portfolio, startingEquity);
             decimal totalReturn = startingEquity != 0m ? (finalEquity - startingEquity) / startingEquity : 0m;
 
+            // Buy-and-hold is a price benchmark, so it is derived here (the report layer holds the candle
+            // history) rather than in the engine's stats. Per-symbol it is that symbol's first-to-last close
+            // return; for the portfolio it is the equal-weight average across the symbols that have candles.
+            IReadOnlyDictionary<string, decimal> buyHoldBySymbol = BuyHoldReturns(result.CandleHistory);
+            decimal portfolioBuyHold = buyHoldBySymbol.Count > 0 ? Average(buyHoldBySymbol.Values) : 0m;
+
             return new ReportModel
             {
-                Stats = MapStats(stats, startingEquity, totalReturn),
-                StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity),
+                Stats = MapStats(stats, startingEquity, totalReturn, portfolioBuyHold),
+                StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity, buyHoldBySymbol),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
                 Indicators = MapIndicators(result.IndicatorSeries),
@@ -277,11 +283,13 @@ namespace Backtester.Report
         }
 
         /// <summary>
-        /// Projects each symbol's performance stats into report form, keyed by symbol.
+        /// Projects each symbol's performance stats into report form, keyed by symbol, attaching that
+        /// symbol's own buy-and-hold return (zero when it has no candles).
         /// </summary>
         private static IReadOnlyDictionary<string, ReportStats> MapStatsBySymbol(
             IReadOnlyDictionary<string, PerformanceStats> statsBySymbol,
-            decimal startingEquity)
+            decimal startingEquity,
+            IReadOnlyDictionary<string, decimal> buyHoldBySymbol)
         {
             // Key: symbol/ticker -> that symbol's stats projected for the report's per-symbol column.
             Dictionary<string, ReportStats> mapped = new(statsBySymbol.Count);
@@ -289,13 +297,18 @@ namespace Backtester.Report
             {
                 // A symbol's total return is its own net profit as a fraction of starting equity.
                 decimal totalReturn = startingEquity != 0m ? entry.Value.NetProfit / startingEquity : 0m;
-                mapped[entry.Key] = MapStats(entry.Value, startingEquity, totalReturn);
+                decimal buyHold = buyHoldBySymbol.TryGetValue(entry.Key, out decimal value) ? value : 0m;
+                mapped[entry.Key] = MapStats(entry.Value, startingEquity, totalReturn, buyHold);
             }
 
             return mapped;
         }
 
-        private static ReportStats MapStats(PerformanceStats stats, decimal startingEquity, decimal totalReturnPercent)
+        private static ReportStats MapStats(
+            PerformanceStats stats,
+            decimal startingEquity,
+            decimal totalReturnPercent,
+            decimal buyHoldReturnPercent)
         {
             return new ReportStats
             {
@@ -311,8 +324,74 @@ namespace Backtester.Report
                 MaxDrawdown = stats.MaxDrawdown,
                 Cagr = stats.Cagr,
                 Sharpe = stats.Sharpe,
-                MaxConsecLosses = stats.MaxConsecLosses
+                MaxConsecLosses = stats.MaxConsecLosses,
+                MaxConsecWins = stats.MaxConsecWins,
+                BuyHoldReturnPercent = buyHoldReturnPercent,
+                Sortino = stats.Sortino,
+                Calmar = stats.Calmar,
+                RecoveryFactor = stats.RecoveryFactor,
+                AvgDrawdown = stats.AvgDrawdown,
+                MaxDrawdownDuration = FormatTimeHeld(stats.MaxDrawdownDuration),
+                TimeToRecover = FormatTimeHeld(stats.TimeToRecover),
+                MedianTrade = stats.MedianTrade,
+                LargestWin = stats.LargestWin,
+                LargestLoss = stats.LargestLoss,
+                AvgRMultiple = stats.AvgRMultiple,
+                LongWinRate = stats.LongWinRate,
+                ShortWinRate = stats.ShortWinRate,
+                MarketExposure = stats.MarketExposure,
+                AvgCapitalInvested = stats.AvgCapitalInvested,
+                MaxCapitalInvested = stats.MaxCapitalInvested,
+                AvgTradeDuration = FormatTimeHeld(stats.AvgTradeDuration),
+                MedianTradeDuration = FormatTimeHeld(stats.MedianTradeDuration),
+                LongestTradeDuration = FormatTimeHeld(stats.LongestTradeDuration),
+                ShortestTradeDuration = FormatTimeHeld(stats.ShortestTradeDuration)
             };
+        }
+
+        /// <summary>
+        /// Computes each symbol's buy-and-hold return — its last close over its first close, minus one —
+        /// from the candle history. Symbols with fewer than two bars or a non-positive first close are
+        /// omitted (no meaningful benchmark).
+        /// </summary>
+        private static IReadOnlyDictionary<string, decimal> BuyHoldReturns(
+            IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory)
+        {
+            // Key: symbol/ticker -> that symbol's buy-and-hold return over the run as a fraction.
+            Dictionary<string, decimal> returns = new(candleHistory.Count);
+            foreach (KeyValuePair<string, IReadOnlyList<Candle>> entry in candleHistory)
+            {
+                IReadOnlyList<Candle> candles = entry.Value;
+                if (candles.Count < 2)
+                {
+                    continue;
+                }
+
+                decimal first = candles[0].Close;
+                decimal last = candles[candles.Count - 1].Close;
+                if (first <= 0m)
+                {
+                    continue;
+                }
+
+                returns[entry.Key] = (last - first) / first;
+            }
+
+            return returns;
+        }
+
+        /// <summary>Returns the arithmetic mean of the given values; zero when the sequence is empty.</summary>
+        private static decimal Average(IEnumerable<decimal> values)
+        {
+            decimal sum = 0m;
+            int count = 0;
+            foreach (decimal value in values)
+            {
+                sum += value;
+                count++;
+            }
+
+            return count > 0 ? sum / count : 0m;
         }
     }
 }
