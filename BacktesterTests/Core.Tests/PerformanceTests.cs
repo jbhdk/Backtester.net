@@ -182,6 +182,35 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void BuildRoundTrips_SellThenBuy_PairsShortRoundTripWithMirroredPnL()
+        {
+            // Short 10 @ 150, cover 10 @ 140 → realized = (150-140)*10 = 100, Direction = Short
+            DateTime entry = T0;
+            DateTime exit = T0.AddDays(1);
+            List<Trade> trades = new() { Sell("AAPL", 150m, 10, entry), Buy("AAPL", 140m, 10, exit) };
+            List<EquitySnapshot> history = new() { Snapshot(entry), Snapshot(exit) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Single(trips);
+            Assert.Equal(PositionDirection.Short, trips[0].Direction);
+            Assert.Equal(150m, trips[0].EntryPrice);
+            Assert.Equal(140m, trips[0].ExitPrice);
+            Assert.Equal(100m, trips[0].RealizedPnL);
+        }
+
+        [Fact]
+        public void BuildRoundTrips_BuyThenSell_TagsRoundTripLong()
+        {
+            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), Sell("AAPL", 120m, 10, T0.AddDays(1)) };
+            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(PositionDirection.Long, trips[0].Direction);
+        }
+
+        [Fact]
         public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
         {
             // Buy at T0, sell one day later → EntryTime = T0, ExitTime = T0+1d
@@ -305,6 +334,39 @@ namespace BacktesterTests.Core.Tests
             PerformanceStats stats = portfolio.GetPerformanceStats();
 
             Assert.True(decimal.MinValue <= stats.Cagr && stats.Cagr <= decimal.MaxValue);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_ProfitableShort_CountsAsWin()
+        {
+            // Short 10 @ 150, cover 10 @ 140 → +$100 → one winning round trip
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0));
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 140m, T0.AddDays(1)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(1, stats.Trades);
+            Assert.Equal(1m, stats.WinRate);
+            Assert.Equal(100m, stats.NetProfit);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_IncludesShortRoundTrip()
+        {
+            // AAPL traded only short: short 10 @ 150, cover 10 @ 140 → +$100
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 150m, T0));
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 140m, T0.AddDays(1)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(1, bySymbol["AAPL"].Trades);
+            Assert.Equal(100m, bySymbol["AAPL"].NetProfit);
         }
 
         [Fact]

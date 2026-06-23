@@ -10,6 +10,9 @@ namespace Backtester.Core
         /// <summary>Gets or sets the ticker symbol traded in this round trip.</summary>
         public string Symbol { get; set; }
 
+        /// <summary>Gets or sets the direction of this round trip (long: buy then sell; short: sell then buy).</summary>
+        public PositionDirection Direction { get; set; }
+
         /// <summary>Gets or sets the volume-weighted average entry price.</summary>
         public decimal EntryPrice { get; set; }
 

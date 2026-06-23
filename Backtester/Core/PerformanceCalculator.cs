@@ -10,63 +10,62 @@ namespace Backtester.Core
     public static class PerformanceCalculator
     {
         /// <summary>
-        /// Pairs buy and sell trades into round trips. Each sell creates one round trip
-        /// carrying the running average entry price, realized PnL, and bars held.
+        /// Pairs trades into round trips for either direction. A fill in the open position's direction
+        /// (or from flat) opens or averages it; an opposing fill closes it, creating one round trip that
+        /// carries the running average entry price, the direction, realized PnL, and bars held. Realized
+        /// PnL is mirrored for shorts: <c>(exit − avgEntry) · sign(quantity) · closedQuantity</c>.
         /// </summary>
         public static IReadOnlyList<RoundTrip> BuildRoundTrips(
             IReadOnlyList<Trade> trades,
             IReadOnlyList<EquitySnapshot> equityHistory)
         {
-            // key: symbol → (runningAvgEntry, runningQty, entryBarIndex, entryTime)
+            // key: symbol → (runningAvgEntry, signedQty, entryBarIndex, entryTime); signedQty is positive
+            // for an open long and negative for an open short.
             Dictionary<string, (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime)> open = new();
             List<RoundTrip> trips = new();
 
             foreach (Trade trade in trades)
             {
-                if (trade.Side == OrderSide.Buy)
+                int delta = trade.Side == OrderSide.Buy ? trade.Quantity : -trade.Quantity;
+
+                if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
                 {
-                    if (open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
-                    {
-                        decimal totalCost = pos.avgEntry * pos.qty + trade.Price * trade.Quantity;
-                        int newQty = pos.qty + trade.Quantity;
-                        open[trade.Symbol] = (totalCost / newQty, newQty, pos.entryBarIdx, pos.entryTime);
-                    }
-                    else
-                    {
-                        int entryBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
-                        open[trade.Symbol] = (trade.Price, trade.Quantity, entryBarIdx, trade.Timestamp);
-                    }
+                    int entryBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
+                    open[trade.Symbol] = (trade.Price, delta, entryBarIdx, trade.Timestamp);
+                    continue;
+                }
+
+                if (Math.Sign(delta) == Math.Sign(pos.qty))
+                {
+                    decimal totalCost = pos.avgEntry * Math.Abs(pos.qty) + trade.Price * trade.Quantity;
+                    int newQty = pos.qty + delta;
+                    open[trade.Symbol] = (totalCost / Math.Abs(newQty), newQty, pos.entryBarIdx, pos.entryTime);
+                    continue;
+                }
+
+                int direction = Math.Sign(pos.qty);
+                int exitBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
+                trips.Add(new RoundTrip
+                {
+                    Symbol      = trade.Symbol,
+                    Direction   = direction > 0 ? PositionDirection.Long : PositionDirection.Short,
+                    EntryPrice  = pos.avgEntry,
+                    ExitPrice   = trade.Price,
+                    Quantity    = trade.Quantity,
+                    RealizedPnL = (trade.Price - pos.avgEntry) * direction * trade.Quantity,
+                    BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx),
+                    EntryTime   = pos.entryTime,
+                    ExitTime    = trade.Timestamp
+                });
+
+                int remaining = pos.qty + delta;
+                if (remaining == 0)
+                {
+                    open.Remove(trade.Symbol);
                 }
                 else
                 {
-                    if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
-                    {
-                        continue;
-                    }
-
-                    int exitBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
-                    trips.Add(new RoundTrip
-                    {
-                        Symbol      = trade.Symbol,
-                        EntryPrice  = pos.avgEntry,
-                        ExitPrice   = trade.Price,
-                        Quantity    = trade.Quantity,
-                        RealizedPnL = (trade.Price - pos.avgEntry) * trade.Quantity,
-                        BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx),
-                        EntryTime   = pos.entryTime,
-                        ExitTime    = trade.Timestamp
-                    });
-
-                    int remaining = pos.qty - trade.Quantity;
-                    if (remaining <= 0)
-                    {
-                        open.Remove(trade.Symbol);
-                    }
-                    else
-                    {
-                        open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx, pos.entryTime);
-                    }
-
+                    open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx, pos.entryTime);
                 }
             }
 
