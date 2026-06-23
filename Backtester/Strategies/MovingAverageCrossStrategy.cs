@@ -43,18 +43,34 @@ namespace Backtester.Strategies
         }
 
         /// <summary>
-        /// Checks whether the current bar carries a pre-computed crossover signal and submits
-        /// a market order if so.
+        /// Acts on a pre-computed crossover at the current bar. A golden cross targets a long, a death
+        /// cross targets a short. Because no single fill may flip the position's sign, reversing from one
+        /// side to the other emits two market orders — one to flatten the existing position and one to
+        /// open the opposite — while entering from flat emits a single order.
         /// </summary>
         public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
         {
-            if (_buySignals.Contains((symbol, bar.Timestamp)))
+            int currentQuantity = snapshot.Positions
+                .Where(p => p.Symbol == symbol)
+                .Select(p => p.Quantity)
+                .FirstOrDefault();
+
+            if (_buySignals.Contains((symbol, bar.Timestamp)) && currentQuantity <= 0)
             {
+                if (currentQuantity < 0)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market });
+                }
+
                 broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market });
             }
-            else if (_sellSignals.Contains((symbol, bar.Timestamp))
-                     && snapshot.Positions.Any(p => p.Symbol == symbol && p.Quantity > 0))
+            else if (_sellSignals.Contains((symbol, bar.Timestamp)) && currentQuantity >= 0)
             {
+                if (currentQuantity > 0)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market });
+                }
+
                 broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market });
             }
         }

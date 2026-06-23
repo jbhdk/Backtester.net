@@ -48,6 +48,17 @@ namespace BacktesterTests.Engine.Tests
             };
         }
 
+        private static PortfolioSnapshot SnapshotWithShortPosition(string symbol)
+        {
+            return new()
+            {
+                Timestamp = T0,
+                Cash = 11_000m,
+                CostBasisEquity = 10_000m,
+                Positions = new List<Position> { new() { Symbol = symbol, Quantity = -10, AveragePrice = 100m } }
+            };
+        }
+
 
         /// <summary>
         /// Seeds the strategy via OnStart with the given price series, then calls OnBar for each bar.
@@ -118,10 +129,32 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public void EmitsSell_OnDeathCross_WhenPositionExists()
+        public void ReversesToLong_OnGoldenCross_WhenShort_EmitsTwoBuys()
+        {
+            // Golden-cross series [100,90,80,70,60,70,80,90] crosses up on bar 8 (index 7). Holding a short
+            // at the signal bar, the golden cross reverses: cover the short, then open a long.
+            MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
+            decimal[] prices = new[] { 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m };
+            List<Candle> bars = prices.Select((c, i) => Bar(T0.AddDays(i), c)).ToList();
+            IBroker broker = A.Fake<IBroker>();
+
+            strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>> { ["AAPL"] = bars });
+            for (int i = 0; i < bars.Count; i++)
+            {
+                PortfolioSnapshot snapshot = i >= 6 ? SnapshotWithShortPosition("AAPL") : EmptySnapshot();
+                strategy.OnBar("AAPL", bars[i], snapshot, broker);
+            }
+
+            A.CallTo(() => broker.Submit(A<OrderRequest>.That.Matches(r => r.Side == OrderSide.Buy)))
+             .MustHaveHappenedTwiceExactly();
+        }
+
+        [Fact]
+        public void ReversesToShort_OnDeathCross_WhenLong_EmitsTwoSells()
         {
             // Rising then falling: fast crosses below slow → death cross on bar 8 (index 7)
-            // [60,70,80,90,100,90,80,70]: on bar 8 fastMA=80 < slowMA=86 (was above on bar 7)
+            // [60,70,80,90,100,90,80,70]: on bar 8 fastMA=80 < slowMA=86 (was above on bar 7).
+            // Holding a long at the signal bar, the death cross reverses: flatten the long, then open a short.
             MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
             decimal[] prices = new[] { 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m };
             List<Candle> bars = prices.Select((c, i) => Bar(T0.AddDays(i), c)).ToList();
@@ -130,24 +163,26 @@ namespace BacktesterTests.Engine.Tests
             strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>> { ["AAPL"] = bars });
             for (int i = 0; i < bars.Count; i++)
             {
-                // Provide a position in the snapshot so the sell guard passes on the signal bar
+                // Hold a long at the signal bar so the death cross triggers a reversal rather than an entry
                 PortfolioSnapshot snapshot = i >= 6 ? SnapshotWithPosition("AAPL") : EmptySnapshot();
                 strategy.OnBar("AAPL", bars[i], snapshot, broker);
             }
 
             A.CallTo(() => broker.Submit(A<OrderRequest>.That.Matches(r => r.Side == OrderSide.Sell)))
-             .MustHaveHappenedOnceExactly();
+             .MustHaveHappenedTwiceExactly();
         }
 
         [Fact]
-        public void NoSell_OnDeathCross_WhenNoPositionExists()
+        public void EmitsSell_OnDeathCross_FromFlat_OpensShort()
         {
-            // Same death-cross series but snapshot always has no position → sell is suppressed
+            // Death-cross series with no open position → a single Sell opens a short
             MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
 
             IBroker broker = RunBars(strategy, "AAPL", 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m);
 
-            A.CallTo(() => broker.Submit(A<OrderRequest>.Ignored)).MustNotHaveHappened();
+            A.CallTo(() => broker.Submit(A<OrderRequest>.That.Matches(r =>
+                r.Side == OrderSide.Sell && r.Type == OrderType.Market && r.Symbol == "AAPL")))
+             .MustHaveHappenedOnceExactly();
         }
     }
 }

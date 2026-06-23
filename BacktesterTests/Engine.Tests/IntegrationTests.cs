@@ -87,6 +87,34 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task ReversingMaCross_FullStack_ProducesShortRoundTrip()
+        {
+            // Rises then falls (a death cross from flat → short), then rises again (a golden cross →
+            // cover the short and reverse to long), then falls again. The short opened on the first death
+            // cross and covered on the golden cross forms a completed short round trip.
+            decimal[] closes = new[] { 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m, 60m, 70m, 80m, 90m, 100m, 90m, 80m, 70m };
+            Candle[] candles = closes.Select((c, i) => Bar(T0.AddDays(i), c)).ToArray();
+
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 10 });
+            MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", candles));
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            // The run completed at least one short round trip end-to-end.
+            Assert.Contains(stats.RoundTrips, trip => trip.Direction == PositionDirection.Short);
+            // The short round trip's realized PnL is booked in the mirrored direction: (entry − exit)·qty.
+            RoundTrip shortTrip = stats.RoundTrips.First(trip => trip.Direction == PositionDirection.Short);
+            Assert.Equal((shortTrip.EntryPrice - shortTrip.ExitPrice) * shortTrip.Quantity, shortTrip.RealizedPnL);
+            // The equity curve recorded a snapshot per bar and reflects the short's contribution.
+            Assert.Equal(closes.Length, portfolio.EquityHistory.Count);
+        }
+
+        [Fact]
         public async Task AtrBracket_TwoSymbols_OneEntersOnce_OtherEntersTwice()
         {
             // AAPL — flat throughout (H=103, L=97). ATR=6, stop=94, target=112. Neither ever hit.
