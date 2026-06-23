@@ -369,6 +369,30 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_ShortEntry_ArmsBuyProtectiveLegs_StopFillsAsBuyCover()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 110m,   // stop-loss ABOVE entry for a short
+                TargetPrice = 90m   // take-profit BELOW entry
+            });
+
+            // Bar 1: market short entry fills at Open=100
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: High=115 → stop at 110 triggers as a Buy that covers the short
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 108m, 115m, 107m, 112m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+            Assert.Equal(OrderSide.Buy, trades[0].Side);
+            Assert.Equal(110m, trades[0].Price);
+        }
+
+        [Fact]
         public void SubmitBracket_BarSpansBothLegs_ExactlyOneFillsAndSiblingCancelled()
         {
             Portfolio portfolio = new(10_000m);

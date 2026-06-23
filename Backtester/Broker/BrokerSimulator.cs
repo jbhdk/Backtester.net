@@ -171,8 +171,11 @@ namespace Backtester.Broker
                     if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) bracket))
                     {
                         _pendingBrackets.Remove(fill.OrderId);
-                        string stopId = ArmBracketLeg(symbol, OrderType.Stop, bracket.stopPrice, bracket.quantity);
-                        string targetId = ArmBracketLeg(symbol, OrderType.Limit, bracket.targetPrice, bracket.quantity);
+                        // Protective legs close the entry, so they take the side opposite the entry:
+                        // a long entry arms Sell legs, a short entry arms Buy legs.
+                        OrderSide legSide = filledOrder.Side == OrderSide.Buy ? OrderSide.Sell : OrderSide.Buy;
+                        string stopId = ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice, bracket.quantity);
+                        string targetId = ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice, bracket.quantity);
                         _ocoLinks[stopId] = targetId;
                         _ocoLinks[targetId] = stopId;
                         bracket.handle.StopOrderId = stopId;
@@ -184,13 +187,13 @@ namespace Backtester.Broker
             return trades;
         }
 
-        private string ArmBracketLeg(string symbol, OrderType type, decimal price, int quantity)
+        private string ArmBracketLeg(string symbol, OrderSide side, OrderType type, decimal price, int quantity)
         {
             Order order = new()
             {
                 Id = Guid.NewGuid().ToString(),
                 Symbol = symbol,
-                Side = OrderSide.Sell,
+                Side = side,
                 Type = type,
                 Price = price,
                 Quantity = quantity,
