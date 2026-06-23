@@ -218,7 +218,10 @@ are optional arguments to `BrokerSimulator`.
 | Commission | `ICommissionModel` | `FixedCommission`, `PercentCommission`, `PerShareCommission` |
 | Slippage | `ISlippageModel` | `FixedSlippage`, `PercentSlippage` |
 | Sizing | `ISizingModel` | `FixedSizeModel`, `PercentNotionalSizing`, `RiskPerTradeSizing` |
-| Risk | `IRiskModel` | `PortfolioRiskModel` |
+
+Order acceptance against **Reg-T initial margin** (50% long, 150% short) is not a pluggable model — it
+is enforced intrinsically by the account, which rejects any opening order whose margin exceeds
+`Portfolio.BuyingPower`.
 
 **Risk-per-trade sizing** sizes a position so a stop-out loses a fixed fraction of realized equity.
 Set both `Price` and `StopPrice` on the order so it can compute the stop distance:

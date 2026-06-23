@@ -7,7 +7,6 @@ using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
 using Backtester.ExecutionModels.Commission;
-using Backtester.ExecutionModels.Risk;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
 using Backtester.Strategies;
@@ -62,8 +61,7 @@ namespace BacktesterTests.Engine.Tests
                 portfolio,
                 commissionModel: new FixedCommission { Amount = 5m },
                 slippageModel: new FixedSlippage { Amount = 0.10m },
-                sizingModel: new FixedSizeModel { FixedSize = 10 },
-                riskModel: new PortfolioRiskModel { MaxPortfolioHeatPercent = 1.0m });
+                sizingModel: new FixedSizeModel { FixedSize = 10 });
 
             MovingAverageCrossStrategy strategy = new(fastPeriod: 3, slowPeriod: 5);
             IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", candles));

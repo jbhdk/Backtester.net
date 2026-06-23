@@ -211,6 +211,26 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(10_100m, portfolio.EquityHistory[0].MarkedEquity);
         }
 
+        // --- Buying power / margin ---
+
+        [Fact]
+        public void BuyingPower_FlatAccount_EqualsCash()
+        {
+            Portfolio portfolio = new(10_000m);
+
+            Assert.Equal(10_000m, portfolio.BuyingPower);
+        }
+
+        [Fact]
+        public void BuyingPower_WithOpenLong_ReflectsCommittedInitialMargin()
+        {
+            // Long 100 @ 50 → MarkedEquity 10,000; committed margin 0.5 * 5,000 = 2,500 → buying power 7,500
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 50m, 100));
+
+            Assert.Equal(7_500m, portfolio.BuyingPower);
+        }
+
         // --- Long-only guard (no-flip invariant) ---
 
         [Fact]

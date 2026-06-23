@@ -4,7 +4,6 @@ using System.Linq;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.ExecutionModels.Commission;
-using Backtester.ExecutionModels.Risk;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
 using Xunit;
@@ -159,18 +158,79 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(10, trades[0].Quantity);
         }
 
+        // --- Reg-T initial-margin gate ---
+
         [Fact]
-        public void SubmitOrder_RejectedByRiskModel_ProducesNoTrade()
+        public void SubmitOrder_LongExceedsBuyingPower_ReturnsNull()
         {
-            // portfolio $500, risk model blocks orders costing > cash, buying 10@$100 = $1000 → rejected
-            Portfolio portfolio = new(500m);
-            PortfolioRiskModel risk = new() { MaxPortfolioHeatPercent = 1.0m };
-            BrokerSimulator broker = new(portfolio, riskModel: risk);
+            // Flat $10,000; Buy 500 @ 50 → notional 25,000, long margin 12,500 > 10,000 buying power
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Price = 100m, Quantity = 10 });
-            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 500 });
 
-            Assert.Empty(trades);
+            Assert.Null(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_LongWithinBuyingPower_Accepted()
+        {
+            // Buy 300 @ 50 → notional 15,000, long margin 7,500 ≤ 10,000 buying power (2:1)
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 300 });
+
+            Assert.NotNull(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_ShortExceedsBuyingPower_ReturnsNull()
+        {
+            // Sell 200 @ 50 → notional 10,000, short margin 15,000 > 10,000 buying power
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Limit, Price = 50m, Quantity = 200 });
+
+            Assert.Null(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_ShortWithinBuyingPower_Accepted()
+        {
+            // Sell 100 @ 50 → notional 5,000, short margin 7,500 ≤ 10,000 buying power
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Limit, Price = 50m, Quantity = 100 });
+
+            Assert.NotNull(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_ReducingOrder_AcceptedRegardlessOfBuyingPower()
+        {
+            // Long 100 @ 50 committed; a closing Sell opposes the position → commits no margin → always accepted
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(new Trade { Id = "1", Symbol = "AAPL", Side = OrderSide.Buy, Price = 50m, Quantity = 100, Timestamp = T0 });
+            BrokerSimulator broker = new(portfolio);
+
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Limit, Price = 50m, Quantity = 100 });
+
+            Assert.NotNull(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_ConfigurableLongRate_TightensTheGate()
+        {
+            // At a 1.0 long rate, Buy 300 @ 50 → margin 15,000 > 10,000 — rejected where the 0.5 default accepts
+            Portfolio portfolio = new(10_000m) { LongInitialMarginRate = 1.0m };
+            BrokerSimulator broker = new(portfolio);
+
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 300 });
+
+            Assert.Null(id);
         }
 
         [Fact]

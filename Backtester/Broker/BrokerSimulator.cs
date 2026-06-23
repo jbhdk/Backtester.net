@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Backtester.Core;
 using Backtester.ExecutionModels.Commission;
-using Backtester.ExecutionModels.Risk;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
 
@@ -19,7 +18,6 @@ namespace Backtester.Broker
         private readonly ICommissionModel _commissionModel;
         private readonly ISlippageModel _slippageModel;
         private readonly ISizingModel _sizingModel;
-        private readonly IRiskModel _riskModel;
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
         // key: entry order ID → (stopPrice, targetPrice, quantity, handle) for pending bracket legs
@@ -36,15 +34,13 @@ namespace Backtester.Broker
             IFillModel fillModel = null,
             ICommissionModel commissionModel = null,
             ISlippageModel slippageModel = null,
-            ISizingModel sizingModel = null,
-            IRiskModel riskModel = null)
+            ISizingModel sizingModel = null)
         {
             _portfolio = portfolio;
             _fillModel = fillModel ?? new FillModel_OHLCHeuristic();
             _commissionModel = commissionModel;
             _slippageModel = slippageModel;
             _sizingModel = sizingModel;
-            _riskModel = riskModel;
         }
 
         /// <summary>
@@ -64,7 +60,10 @@ namespace Backtester.Broker
                 request.Quantity = sized;
             }
 
-            if (_riskModel != null && !_riskModel.Accept(request, _portfolio))
+            // Reg-T initial-margin gate, always enforced by the account. A reducing or unvaluable order
+            // commits no margin and is never rejected here; an opening order must fit within buying power.
+            decimal requiredMargin = _portfolio.InitialMarginForOrder(request);
+            if (requiredMargin > 0m && requiredMargin > _portfolio.BuyingPower)
             {
                 return null;
             }
