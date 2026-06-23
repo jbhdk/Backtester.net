@@ -38,7 +38,7 @@ namespace Backtester.Report
 
             return new ReportModel
             {
-                Stats = MapStats(stats, startingEquity, totalReturn, portfolioBuyHold),
+                Stats = MapStats(stats, startingEquity, portfolioBuyHold),
                 StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity, buyHoldBySymbol),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
@@ -295,10 +295,8 @@ namespace Backtester.Report
             Dictionary<string, ReportStats> mapped = new(statsBySymbol.Count);
             foreach (KeyValuePair<string, PerformanceStats> entry in statsBySymbol)
             {
-                // A symbol's total return is its own net profit as a fraction of starting equity.
-                decimal totalReturn = startingEquity != 0m ? entry.Value.NetProfit / startingEquity : 0m;
                 decimal buyHold = buyHoldBySymbol.TryGetValue(entry.Key, out decimal value) ? value : 0m;
-                mapped[entry.Key] = MapStats(entry.Value, startingEquity, totalReturn, buyHold);
+                mapped[entry.Key] = MapStats(entry.Value, startingEquity, buyHold);
             }
 
             return mapped;
@@ -307,14 +305,12 @@ namespace Backtester.Report
         private static ReportStats MapStats(
             PerformanceStats stats,
             decimal startingEquity,
-            decimal totalReturnPercent,
             decimal buyHoldReturnPercent)
         {
             return new ReportStats
             {
                 NetProfit = stats.NetProfit,
                 NetProfitPercent = startingEquity != 0m ? stats.NetProfit / startingEquity : 0m,
-                TotalReturnPercent = totalReturnPercent,
                 Trades = stats.Trades,
                 WinRate = stats.WinRate,
                 ProfitFactor = stats.ProfitFactor,

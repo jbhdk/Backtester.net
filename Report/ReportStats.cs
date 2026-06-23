@@ -12,9 +12,6 @@ namespace Backtester.Report
         /// <summary>Gets or sets the net profit as a fraction of starting equity.</summary>
         public decimal NetProfitPercent { get; set; }
 
-        /// <summary>Gets or sets the total return over the run as a fraction of starting equity.</summary>
-        public decimal TotalReturnPercent { get; set; }
-
         /// <summary>Gets or sets the number of completed round trips.</summary>
         public int Trades { get; set; }
 

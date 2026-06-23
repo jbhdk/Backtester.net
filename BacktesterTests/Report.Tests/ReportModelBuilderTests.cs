@@ -482,28 +482,6 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_Stats_CarriesTotalReturnPercent()
-        {
-            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
-
-            ReportModel model = new ReportModelBuilder().Build(result);
-
-            // Final marked equity 10,200 on 10,000 starting equity → (10200-10000)/10000 = 0.02
-            Assert.Equal(0.02m, model.Stats.TotalReturnPercent);
-        }
-
-        [Fact]
-        public void Build_StatsBySymbol_DerivesTotalReturnFromSymbolNetProfit()
-        {
-            // AAPL net profit +$200 on 10,000 starting equity → 0.02.
-            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
-
-            ReportModel model = new ReportModelBuilder().Build(result);
-
-            Assert.Equal(0.02m, model.StatsBySymbol["AAPL"].TotalReturnPercent);
-        }
-
-        [Fact]
         public void Build_RunInfo_DerivesFinalEquityAndTotalReturn()
         {
             Portfolio portfolio = WinningPortfolio();

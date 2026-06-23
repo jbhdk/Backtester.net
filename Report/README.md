@@ -54,7 +54,6 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 
 - **Net profit** — net profit after commissions and slippage, in currency.
 - **Net profit %** — net profit as a fraction of starting equity.
-- **Total return** — total equity change over the run as a fraction of starting equity.
 - **Buy & hold** — return of simply holding the instrument over the run; the benchmark, not the strategy.
 - **CAGR** — compound annual growth rate.
 - **Sharpe** — annualised Sharpe ratio (daily bars, risk-free rate = 0): mean bar return over its standard deviation.
