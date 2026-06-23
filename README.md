@@ -137,11 +137,14 @@ essentials:
 - **Order** — a resting instruction (Market, Limit, or Stop) that persists across bars until filled
   or cancelled (GTC). A **bracket** is an entry plus an attached stop-loss and take-profit that form
   an OCO group.
-- **Position** — the net holding in a symbol. This engine is **long-only**: a Sell may only reduce
-  or close a long.
-- **Round trip** — a complete entry-to-exit cycle, carrying realized P&L. The unit of per-trade
-  analytics.
-- **Execution model** — a pluggable rule the broker applies: commission, slippage, sizing, or risk.
+- **Position** — the net holding in a symbol, as a **signed** quantity: positive is long, negative is
+  short, zero is flat. No single fill flips the sign — an opposing order reduces the position and
+  clamps at zero, so reversing direction takes a second order from flat.
+- **Round trip** — a complete entry-to-exit cycle (either direction: a long buys then sells, a short
+  sells then covers), carrying realized P&L. The unit of per-trade analytics.
+- **Execution model** — a pluggable rule the broker applies: commission, slippage, or sizing.
+  (Order acceptance against Reg-T initial margin is enforced intrinsically by the account, not as a
+  pluggable model — see below.)
 
 ---
 
@@ -186,7 +189,8 @@ public class BreakoutStrategy : StrategyBase
 The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. For a
 worked example of bracket orders and a trailing stop, see
 [`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs); for pre-computed signals from
-history, see [`MovingAverageCrossStrategy`](Backtester/Strategies/MovingAverageCrossStrategy.cs).
+history and long/short reversal (going short on a death cross, long on a golden cross), see
+[`MovingAverageCrossStrategy`](Backtester/Strategies/MovingAverageCrossStrategy.cs).
 
 ### Pre-computing indicators
 

@@ -7,8 +7,9 @@ A bar-by-bar backtesting engine for financial market strategies, written in C# o
 - **Bar-by-bar simulation** — the engine fetches historical candles, synchronizes them, and steps through them one bar at a time, matching the rhythm of a live trading loop.
 - **Strategy interface** — implement `IStrategy.OnStart(history)` to pre-compute indicators from the full bar history (using any library), then `IStrategy.OnBar(symbol, bar, snapshot, broker)` to submit orders directly via the broker.
 - **Broker simulation** — `BrokerSimulator` fills orders using an OHLC heuristic, supports market, limit, and stop order types, bracket orders with OCO exit legs, and tracks open positions through `Portfolio`.
+- **Long and short** — positions carry a signed quantity (long, short, or flat). A sell from flat opens a short, a buy covers it, and short brackets arm opposite-side protective legs. No single fill flips a position's sign, so reversing direction flattens first, then opens the opposite side.
 - **Pluggable models** — swap in your own implementations of `IFillModel`, `ICommissionModel`, `ISlippageModel`, and `ISizingModel` without touching engine code.
-- **Reg-T margin account** — the account enforces initial margin intrinsically (50% long, 150% short), rejecting any opening order whose margin exceeds `Portfolio.BuyingPower`.
+- **Reg-T margin account** — the account enforces initial margin intrinsically (50% long, 150% short), rejecting any opening order whose margin exceeds `Portfolio.BuyingPower` (marked equity less the margin already committed).
 - **Data seams** — the engine fetches each symbol through `IHistoricalDataFetcher` and synchronizes multi-symbol data internally. The core ships the cache-aware `HistoricalDataFetcher`, the offline `CsvHistoricalDataFetcher`, and `CsvBarLoader`; live network providers are opt-in packages (`backtester.net.yahoo`, `backtester.net.alpaca`).
 - **Performance stats** — `Portfolio.GetPerformanceStats()` returns win rate, profit factor, expectancy, max drawdown, CAGR, Sharpe, and more, computed from completed round trips.
 
