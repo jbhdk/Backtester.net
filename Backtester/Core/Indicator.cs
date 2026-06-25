@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Backtester.Core
@@ -25,6 +26,22 @@ namespace Backtester.Core
         /// </summary>
         public Indicator(string name, string symbol, IndicatorPane pane, IReadOnlyList<IndicatorSeries> series)
         {
+            // A histogram is a zero-baseline oscillator. On the price overlay it shares the candles'
+            // scale, where it collapses to an invisible sliver and drags the price axis toward zero,
+            // compressing the candles. A histogram therefore belongs only in its own separate pane.
+            if (pane == IndicatorPane.PriceOverlay && series != null)
+            {
+                foreach (IndicatorSeries line in series)
+                {
+                    if (line.Shape == IndicatorShape.Histogram)
+                    {
+                        throw new ArgumentException(
+                            "A histogram series cannot be drawn on the price overlay; place it in a separate pane.",
+                            nameof(series));
+                    }
+                }
+            }
+
             Name = name;
             Symbol = symbol;
             Pane = pane;
