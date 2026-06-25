@@ -184,6 +184,37 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_InlinesMultiSeriesIndicatorInOnePane()
+        {
+            ReportModel model = SampleModel();
+            model.Indicators = new[]
+            {
+                new ChartIndicator
+                {
+                    Name = "MACD",
+                    Pane = "separatePane",
+                    Series = new[]
+                    {
+                        new ChartIndicatorSeries { Name = "MACD", Shape = "line", Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 1m } } },
+                        new ChartIndicatorSeries { Name = "Signal", Shape = "line", Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 0.8m } } },
+                        new ChartIndicatorSeries { Name = "Histogram", Shape = "histogram", Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 0.2m } } }
+                    }
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // The whole MACD-shaped indicator reaches the page: its container name and pane, and all
+            // three series with their names, shapes, and points, inlined for the page to draw in one pane.
+            Assert.Contains("\"name\":\"MACD\"", html);
+            Assert.Contains("\"pane\":\"separatePane\"", html);
+            Assert.Contains("\"name\":\"Signal\"", html);
+            Assert.Contains("\"name\":\"Histogram\"", html);
+            Assert.Contains("\"shape\":\"histogram\"", html);
+            Assert.Contains("\"value\":0.8", html);
+        }
+
+        [Fact]
         public void Write_ProducesFileWithSameContentAsBuildHtml()
         {
             HtmlReportWriter writer = new();

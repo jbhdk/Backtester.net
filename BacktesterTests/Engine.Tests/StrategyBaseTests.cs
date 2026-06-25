@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Strategies;
@@ -97,6 +98,27 @@ namespace BacktesterTests.Engine.Tests
             Assert.Empty(source.Indicators);
         }
 
+        [Fact]
+        public void RecordIndicator_Composite_ExposesMultiSeriesIndicatorIntact()
+        {
+            Indicator macd = new("MACD", IndicatorPane.SeparatePane, new[]
+            {
+                new IndicatorSeries("MACD", IndicatorShape.Line, new[] { new IndicatorPoint { Timestamp = T0, Value = 1m } }),
+                new IndicatorSeries("Signal", IndicatorShape.Line, new[] { new IndicatorPoint { Timestamp = T0, Value = 0.8m } }),
+                new IndicatorSeries("Histogram", IndicatorShape.Histogram, new[] { new IndicatorPoint { Timestamp = T0, Value = 0.2m } })
+            });
+            CompositeRecordingStrategy strategy = new(macd);
+
+            strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
+
+            IIndicatorSource source = strategy;
+            Indicator exposed = Assert.Single(source.Indicators);
+            Assert.Equal("MACD", exposed.Name);
+            Assert.Equal(IndicatorPane.SeparatePane, exposed.Pane);
+            Assert.Equal(new[] { "MACD", "Signal", "Histogram" }, exposed.Series.Select(series => series.Name));
+            Assert.Equal(IndicatorShape.Histogram, exposed.Series[2].Shape);
+        }
+
         /// <summary>Records the supplied series during OnStart via the protected helper.</summary>
         private class RecordingStrategy : StrategyBase
         {
@@ -113,6 +135,24 @@ namespace BacktesterTests.Engine.Tests
                 {
                     RecordIndicator(name, pane, points);
                 }
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        /// <summary>Records a pre-built composite indicator during OnStart via the Indicator overload.</summary>
+        private class CompositeRecordingStrategy : StrategyBase
+        {
+            private readonly Indicator _indicator;
+
+            public CompositeRecordingStrategy(Indicator indicator)
+            {
+                _indicator = indicator;
+            }
+
+            public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
+            {
+                RecordIndicator(_indicator);
             }
 
             public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }

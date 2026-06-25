@@ -27,6 +27,17 @@ namespace Backtester.Strategies
         public abstract void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker);
 
         /// <summary>
+        /// Exposes a pre-built composite indicator for reporting, intact. The overload for a multi-series
+        /// study (e.g. a MACD's line, signal, and histogram in one shared pane): construct the
+        /// <see cref="Indicator"/> with its series and placement and hand it over. Intended to be called
+        /// from <see cref="OnStart"/> after the series have been computed from the bar history.
+        /// </summary>
+        protected void RecordIndicator(Indicator indicator)
+        {
+            _indicators.Add(indicator);
+        }
+
+        /// <summary>
         /// Exposes a computed single-line indicator for reporting, not bound to any symbol (drawn on
         /// every symbol's chart). Wraps the line in a one-series <see cref="Indicator"/>, defaulting the
         /// series shape by pane (line on the price overlay, area in a separate pane). Intended to be

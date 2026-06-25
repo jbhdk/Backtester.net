@@ -412,21 +412,29 @@
 
     // Indicators for this symbol only (an untagged indicator applies to every symbol). A price-overlay
     // indicator draws all its series on the price pane; a separate-pane indicator gets one sub-pane that
-    // all of its series share. Each series is drawn by its own shape (line / area / histogram).
+    // all of its series share. Each series is drawn by its own shape (line / area / histogram) and takes
+    // the next palette colour in the order exposed, so several series in one indicator stay distinct.
     var separateSeries = [];
     var nextPane = pricePane + 1;
+    var colorIndex = 0;
     (model.indicators || [])
       .filter(function (ind) { return !ind.symbol || ind.symbol === symbol; })
-      .forEach(function (ind, idx) {
+      .forEach(function (ind) {
         var separate = ind.pane === "separatePane";
-        var color = indicatorPalette[idx % indicatorPalette.length];
         // Allocate this indicator's pane once: its own sub-pane when separate, else the price pane.
         var paneIndex = separate ? nextPane++ : pricePane;
+        // Colour each series in exposed order, then draw histograms first so they sit behind the lines
+        // (Lightweight Charts z-orders by creation), keeping the relative order within each group.
+        var coloured = (ind.series || []).map(function (s) {
+          return { series: s, color: indicatorPalette[colorIndex++ % indicatorPalette.length] };
+        });
+        var drawOrder = coloured.filter(function (e) { return e.series.shape === "histogram"; })
+          .concat(coloured.filter(function (e) { return e.series.shape !== "histogram"; }));
         var firstInPane = null;
-        (ind.series || []).forEach(function (s) {
-          var points = (s.points || []).slice().sort(function (a, b) { return a.time - b.time; });
+        drawOrder.forEach(function (entry) {
+          var points = (entry.series.points || []).slice().sort(function (a, b) { return a.time - b.time; });
           if (!points.length) return;
-          var drawn = addIndicatorSeries(s.shape, color, paneIndex, s.name);
+          var drawn = addIndicatorSeries(entry.series.shape, entry.color, paneIndex, entry.series.name);
           drawn.setData(points);
           if (separate && !firstInPane) { firstInPane = drawn; }
         });

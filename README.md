@@ -209,9 +209,18 @@ public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> 
 ```
 
 `RecordIndicator` wraps your line in a single-series `Indicator` placed on the pane you choose
-(defaulting its shape by pane — a line on the price overlay, a filled area in a separate pane). An
-`Indicator` can carry more than one `IndicatorSeries` in a shared pane (e.g. a MACD line, signal, and
-histogram), each with its own `IndicatorShape`.
+(defaulting its shape by pane — a line on the price overlay, a filled area in a separate pane). For a
+multi-series study, build the `Indicator` yourself and expose it with the `RecordIndicator(Indicator)`
+overload — every series shares the indicator's pane and scale, each drawn by its own `IndicatorShape`:
+
+```csharp
+RecordIndicator(new Indicator("MACD", symbol, IndicatorPane.SeparatePane, new[]
+{
+    new IndicatorSeries("MACD", IndicatorShape.Line, macdLine),
+    new IndicatorSeries("Signal", IndicatorShape.Line, signalLine),
+    new IndicatorSeries("Histogram", IndicatorShape.Histogram, histogram)
+}));
+```
 
 Reading indicator values aligned to the current bar is lookahead-free because indicators are causal.
 

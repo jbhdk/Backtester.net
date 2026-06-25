@@ -384,6 +384,28 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_Indicators_MultiSeries_ProjectsToOneContainerPreservingSeriesOrderShapeAndPoints()
+        {
+            Indicator macd = new("MACD", IndicatorPane.SeparatePane, new[]
+            {
+                new IndicatorSeries("MACD", IndicatorShape.Line, new[] { new IndicatorPoint { Timestamp = T0, Value = 1m } }),
+                new IndicatorSeries("Signal", IndicatorShape.Line, new[] { new IndicatorPoint { Timestamp = T0, Value = 0.8m } }),
+                new IndicatorSeries("Histogram", IndicatorShape.Histogram, new[] { new IndicatorPoint { Timestamp = T0, Value = 0.2m } })
+            });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { macd });
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartIndicator indicator = Assert.Single(model.Indicators);
+            Assert.Equal("separatePane", indicator.Pane);
+            Assert.Equal(new[] { "MACD", "Signal", "Histogram" }, indicator.Series.Select(series => series.Name));
+            Assert.Equal(new[] { "line", "line", "histogram" }, indicator.Series.Select(series => series.Shape));
+            ChartLinePoint histogramPoint = Assert.Single(indicator.Series[2].Points);
+            Assert.Equal(Unix(T0), histogramPoint.Time);
+            Assert.Equal(0.2m, histogramPoint.Value);
+        }
+
+        [Fact]
         public void Build_Indicators_NoneExposed_YieldsEmptyList()
         {
             BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), NoIndicators());
