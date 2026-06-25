@@ -21,6 +21,24 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void Constructor_PriceOverlayWithAreaSeries_Throws()
+        {
+            // An area fills from its line down to the bottom of the pane, obscuring the candles, so it is
+            // not a valid price overlay either: an overlay must be a plain line.
+            Assert.Throws<ArgumentException>(() =>
+                new Indicator("Band", IndicatorPane.PriceOverlay, new[] { Series(IndicatorShape.Area) }));
+        }
+
+        [Fact]
+        public void Constructor_PriceOverlayWithLineSeries_IsAllowed()
+        {
+            // A line is the one valid overlay shape (e.g. a moving average over price).
+            Indicator indicator = new("SMA", IndicatorPane.PriceOverlay, new[] { Series(IndicatorShape.Line) });
+
+            Assert.Equal(IndicatorShape.Line, indicator.Series[0].Shape);
+        }
+
+        [Fact]
         public void Constructor_SeparatePaneWithHistogramSeries_IsAllowed()
         {
             // A histogram is valid in its own pane (the MACD case), so the guard must not reject it there.

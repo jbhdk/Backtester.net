@@ -26,17 +26,18 @@ namespace Backtester.Core
         /// </summary>
         public Indicator(string name, string symbol, IndicatorPane pane, IReadOnlyList<IndicatorSeries> series)
         {
-            // A histogram is a zero-baseline oscillator. On the price overlay it shares the candles'
-            // scale, where it collapses to an invisible sliver and drags the price axis toward zero,
-            // compressing the candles. A histogram therefore belongs only in its own separate pane.
+            // The price overlay shares the candles' scale, so only a plain line belongs there (e.g. a
+            // moving average). An area fills down to the bottom of the pane and obscures the candles; a
+            // histogram is a zero-baseline oscillator that collapses to a sliver and drags the price axis
+            // toward zero. Both belong in their own separate pane, so reject any non-line overlay series.
             if (pane == IndicatorPane.PriceOverlay && series != null)
             {
                 foreach (IndicatorSeries line in series)
                 {
-                    if (line.Shape == IndicatorShape.Histogram)
+                    if (line.Shape != IndicatorShape.Line)
                     {
                         throw new ArgumentException(
-                            "A histogram series cannot be drawn on the price overlay; place it in a separate pane.",
+                            "Only a line series can be drawn on the price overlay; place an area or histogram in a separate pane.",
                             nameof(series));
                     }
                 }
