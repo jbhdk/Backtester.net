@@ -12,7 +12,7 @@ namespace BacktesterTests.Engine.Tests
         private static readonly DateTime T0 = new(2024, 1, 2, 0, 0, 0, DateTimeKind.Utc);
 
         [Fact]
-        public void RecordIndicator_InOnStart_ExposesSeriesViaIndicatorSource()
+        public void RecordIndicator_InOnStart_ExposesOneSeriesIndicatorViaSource()
         {
             RecordingStrategy strategy = new(
                 ("SMA", IndicatorPane.PriceOverlay, new[]
@@ -24,15 +24,41 @@ namespace BacktesterTests.Engine.Tests
             strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
 
             IIndicatorSource source = strategy;
-            IndicatorSeries series = Assert.Single(source.IndicatorSeries);
+            Indicator indicator = Assert.Single(source.Indicators);
+            Assert.Equal("SMA", indicator.Name);
+            Assert.Equal(IndicatorPane.PriceOverlay, indicator.Pane);
+            IndicatorSeries series = Assert.Single(indicator.Series);
             Assert.Equal("SMA", series.Name);
-            Assert.Equal(IndicatorPane.PriceOverlay, series.Pane);
             Assert.Equal(2, series.Points.Count);
             Assert.Equal(101m, series.Points[1].Value);
         }
 
         [Fact]
-        public void RecordIndicator_TwoSeries_ExposesBothWithPanes()
+        public void RecordIndicator_OnPriceOverlay_DefaultsSeriesShapeToLine()
+        {
+            RecordingStrategy strategy = new(
+                ("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } }));
+
+            strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
+
+            IIndicatorSource source = strategy;
+            Assert.Equal(IndicatorShape.Line, Assert.Single(Assert.Single(source.Indicators).Series).Shape);
+        }
+
+        [Fact]
+        public void RecordIndicator_OnSeparatePane_DefaultsSeriesShapeToArea()
+        {
+            RecordingStrategy strategy = new(
+                ("RSI", IndicatorPane.SeparatePane, new[] { new IndicatorPoint { Timestamp = T0, Value = 55m } }));
+
+            strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
+
+            IIndicatorSource source = strategy;
+            Assert.Equal(IndicatorShape.Area, Assert.Single(Assert.Single(source.Indicators).Series).Shape);
+        }
+
+        [Fact]
+        public void RecordIndicator_TwoIndicators_ExposesBothWithPanes()
         {
             RecordingStrategy strategy = new(
                 ("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } }),
@@ -41,23 +67,23 @@ namespace BacktesterTests.Engine.Tests
             strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
 
             IIndicatorSource source = strategy;
-            Assert.Equal(2, source.IndicatorSeries.Count);
-            Assert.Equal("SMA", source.IndicatorSeries[0].Name);
-            Assert.Equal(IndicatorPane.PriceOverlay, source.IndicatorSeries[0].Pane);
-            Assert.Equal("RSI", source.IndicatorSeries[1].Name);
-            Assert.Equal(IndicatorPane.SeparatePane, source.IndicatorSeries[1].Pane);
-            Assert.Equal(55m, source.IndicatorSeries[1].Points[0].Value);
+            Assert.Equal(2, source.Indicators.Count);
+            Assert.Equal("SMA", source.Indicators[0].Name);
+            Assert.Equal(IndicatorPane.PriceOverlay, source.Indicators[0].Pane);
+            Assert.Equal("RSI", source.Indicators[1].Name);
+            Assert.Equal(IndicatorPane.SeparatePane, source.Indicators[1].Pane);
+            Assert.Equal(55m, Assert.Single(source.Indicators[1].Series).Points[0].Value);
         }
 
         [Fact]
-        public void RecordIndicator_WithSymbol_BindsSeriesToSymbol()
+        public void RecordIndicator_WithSymbol_BindsIndicatorToSymbol()
         {
             SymbolRecordingStrategy strategy = new("MSFT");
 
             strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
 
             IIndicatorSource source = strategy;
-            Assert.Equal("MSFT", Assert.Single(source.IndicatorSeries).Symbol);
+            Assert.Equal("MSFT", Assert.Single(source.Indicators).Symbol);
         }
 
         [Fact]
@@ -68,7 +94,7 @@ namespace BacktesterTests.Engine.Tests
             strategy.OnStart(new Dictionary<string, IReadOnlyList<Candle>>());
 
             IIndicatorSource source = strategy;
-            Assert.Empty(source.IndicatorSeries);
+            Assert.Empty(source.Indicators);
         }
 
         /// <summary>Records the supplied series during OnStart via the protected helper.</summary>

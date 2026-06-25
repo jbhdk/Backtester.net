@@ -195,7 +195,7 @@ history and long/short reversal (going short on a death cross, long on a golden 
 ### Pre-computing indicators
 
 The engine ships no indicators. Compute yours in `OnStart` from the full history (with any library
-you like), and optionally expose a named series so the report can draw it:
+you like), and optionally expose a named indicator so the report can draw it:
 
 ```csharp
 public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
@@ -207,6 +207,11 @@ public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> 
     }
 }
 ```
+
+`RecordIndicator` wraps your line in a single-series `Indicator` placed on the pane you choose
+(defaulting its shape by pane — a line on the price overlay, a filled area in a separate pane). An
+`Indicator` can carry more than one `IndicatorSeries` in a shared pane (e.g. a MACD line, signal, and
+histogram), each with its own `IndicatorShape`.
 
 Reading indicator values aligned to the current bar is lookahead-free because indicators are causal.
 

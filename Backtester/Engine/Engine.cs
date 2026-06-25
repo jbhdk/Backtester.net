@@ -73,11 +73,11 @@ namespace Backtester.Engine
                 RunOnce(slice);
             }
 
-            // Collect any indicator series the strategy chose to expose (ADR 0007); a strategy that
+            // Collect any indicators the strategy chose to expose (ADR 0007 / 0012); a strategy that
             // does not implement the seam contributes none.
-            IReadOnlyList<IndicatorSeries> indicators = _strategy is IIndicatorSource source
-                ? source.IndicatorSeries
-                : Array.Empty<IndicatorSeries>();
+            IReadOnlyList<Indicator> indicators = _strategy is IIndicatorSource source
+                ? source.Indicators
+                : Array.Empty<Indicator>();
 
             return new BacktestResult(series, _portfolio, indicators, _symbols, _interval, _fromUtc, _toUtc, _broker.RejectedOrders);
         }

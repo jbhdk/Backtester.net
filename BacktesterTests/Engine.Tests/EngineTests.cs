@@ -81,7 +81,7 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public async Task StartAsync_Result_HasEmptyIndicatorSeries()
+        public async Task StartAsync_Result_HasEmptyIndicators()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
             Portfolio portfolio = new(10_000m);
@@ -90,12 +90,12 @@ namespace BacktesterTests.Engine.Tests
             BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
             Backtester.Engine.BacktestResult result = await engine.StartAsync();
 
-            Assert.NotNull(result.IndicatorSeries);
-            Assert.Empty(result.IndicatorSeries);
+            Assert.NotNull(result.Indicators);
+            Assert.Empty(result.Indicators);
         }
 
         [Fact]
-        public async Task StartAsync_CollectsExposedIndicatorSeries_OntoResult()
+        public async Task StartAsync_CollectsExposedIndicators_OntoResult()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
             Portfolio portfolio = new(10_000m);
@@ -105,13 +105,13 @@ namespace BacktesterTests.Engine.Tests
             BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
             Backtester.Engine.BacktestResult result = await engine.StartAsync();
 
-            IndicatorSeries series = Assert.Single(result.IndicatorSeries);
-            Assert.Equal("SMA", series.Name);
-            Assert.Equal(IndicatorPane.PriceOverlay, series.Pane);
+            Indicator indicator = Assert.Single(result.Indicators);
+            Assert.Equal("SMA", indicator.Name);
+            Assert.Equal(IndicatorPane.PriceOverlay, indicator.Pane);
         }
 
         [Fact]
-        public async Task StartAsync_NonIndicatorSourceStrategy_YieldsEmptyIndicatorSeries()
+        public async Task StartAsync_NonIndicatorSourceStrategy_YieldsEmptyIndicators()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", new[] { Bar(T0, 100m) }));
             Portfolio portfolio = new(10_000m);
@@ -120,7 +120,7 @@ namespace BacktesterTests.Engine.Tests
             BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new RawStrategy(), broker, portfolio);
             Backtester.Engine.BacktestResult result = await engine.StartAsync();
 
-            Assert.Empty(result.IndicatorSeries);
+            Assert.Empty(result.Indicators);
         }
 
         [Fact]

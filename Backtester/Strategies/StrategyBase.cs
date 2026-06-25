@@ -10,10 +10,10 @@ namespace Backtester.Strategies
     /// </summary>
     public abstract class StrategyBase : IStrategy, IIndicatorSource
     {
-        private readonly List<IndicatorSeries> _indicatorSeries = new();
+        private readonly List<Indicator> _indicators = new();
 
-        /// <summary>Gets the indicator series the strategy has exposed via the <c>RecordIndicator</c> helpers.</summary>
-        public IReadOnlyList<IndicatorSeries> IndicatorSeries => _indicatorSeries;
+        /// <summary>Gets the composite indicators the strategy has exposed via the <c>RecordIndicator</c> helpers.</summary>
+        public IReadOnlyList<Indicator> Indicators => _indicators;
 
         /// <summary>
         /// Called once before the first bar with the complete per-symbol bar history from the feed.
@@ -27,22 +27,34 @@ namespace Backtester.Strategies
         public abstract void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker);
 
         /// <summary>
-        /// Exposes a computed indicator series for reporting, not bound to any symbol (drawn on every
-        /// symbol's chart). Intended to be called from <see cref="OnStart"/> after the series has been
-        /// computed from the bar history.
+        /// Exposes a computed single-line indicator for reporting, not bound to any symbol (drawn on
+        /// every symbol's chart). Wraps the line in a one-series <see cref="Indicator"/>, defaulting the
+        /// series shape by pane (line on the price overlay, area in a separate pane). Intended to be
+        /// called from <see cref="OnStart"/> after the series has been computed from the bar history.
         /// </summary>
         protected void RecordIndicator(string name, IndicatorPane pane, IReadOnlyList<IndicatorPoint> points)
         {
-            _indicatorSeries.Add(new IndicatorSeries(name, pane, points));
+            _indicators.Add(new Indicator(name, pane, new[] { new IndicatorSeries(name, DefaultShape(pane), points) }));
         }
 
         /// <summary>
-        /// Exposes a computed indicator series for reporting, bound to a symbol so a multi-symbol report
-        /// draws it only on that symbol's chart. Intended to be called from <see cref="OnStart"/>.
+        /// Exposes a computed single-line indicator for reporting, bound to a symbol so a multi-symbol
+        /// report draws it only on that symbol's chart. Wraps the line in a one-series
+        /// <see cref="Indicator"/>, defaulting the series shape by pane. Intended to be called from
+        /// <see cref="OnStart"/>.
         /// </summary>
         protected void RecordIndicator(string name, string symbol, IndicatorPane pane, IReadOnlyList<IndicatorPoint> points)
         {
-            _indicatorSeries.Add(new IndicatorSeries(name, symbol, pane, points));
+            _indicators.Add(new Indicator(name, symbol, pane, new[] { new IndicatorSeries(name, DefaultShape(pane), points) }));
+        }
+
+        /// <summary>
+        /// Picks the default shape for a single-line indicator from its pane, preserving the report's
+        /// existing look: a line on the price overlay, a filled area in its own separate pane.
+        /// </summary>
+        private static IndicatorShape DefaultShape(IndicatorPane pane)
+        {
+            return pane == IndicatorPane.PriceOverlay ? IndicatorShape.Line : IndicatorShape.Area;
         }
     }
 }

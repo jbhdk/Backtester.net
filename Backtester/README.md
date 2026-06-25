@@ -54,7 +54,7 @@ PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 
 | Namespace | Contents |
 |---|---|
-| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `IndicatorSeries`, `IndicatorPoint`, `IndicatorPane` |
+| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `Indicator`, `IndicatorSeries`, `IndicatorShape`, `IndicatorPoint`, `IndicatorPane` |
 | `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
 | `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader` |

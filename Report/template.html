@@ -357,6 +357,27 @@
     return candleSeries;
   }
 
+  // Add one indicator series of the given shape to a pane, styled from the indicator's colour. An area
+  // fills beneath its line so a separate pane reads as a distinct block and shows its last value; a line
+  // is unfilled with the value tag hidden (matching a price overlay); a histogram draws sign-coloured
+  // bars. Returns the created series so the caller can set its data and size its pane.
+  function addIndicatorSeries(shape, color, paneIndex, title) {
+    if (shape === "area") {
+      return chart.addSeries(LightweightCharts.AreaSeries, {
+        lineColor: color, topColor: color + "55", bottomColor: color + "0a",
+        lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: title
+      }, paneIndex);
+    }
+    if (shape === "histogram") {
+      return chart.addSeries(LightweightCharts.HistogramSeries, {
+        color: color, priceLineVisible: false, lastValueVisible: true, title: title
+      }, paneIndex);
+    }
+    return chart.addSeries(LightweightCharts.LineSeries, {
+      color: color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: title
+    }, paneIndex);
+  }
+
   // (Re)build the price chart for the selected symbol. The price pane (pane 0) holds candles, markers,
   // and price-overlay indicators and is the tallest; each separate-pane indicator gets its own short
   // sub-pane beneath. The equity curve is a separate chart (see buildEquityChart). Rebuilding on a
@@ -389,32 +410,28 @@
       .sort(function (a, b) { return a.time - b.time; });
     LightweightCharts.createSeriesMarkers(candleSeries, markers);
 
-    // Indicators for this symbol only (an untagged series applies to every symbol). Price overlays
-    // share the price pane; separate-pane series each get their own sub-pane beneath it.
+    // Indicators for this symbol only (an untagged indicator applies to every symbol). A price-overlay
+    // indicator draws all its series on the price pane; a separate-pane indicator gets one sub-pane that
+    // all of its series share. Each series is drawn by its own shape (line / area / histogram).
     var separateSeries = [];
     var nextPane = pricePane + 1;
     (model.indicators || [])
       .filter(function (ind) { return !ind.symbol || ind.symbol === symbol; })
       .forEach(function (ind, idx) {
-        var points = (ind.points || []).slice().sort(function (a, b) { return a.time - b.time; });
-        if (!points.length) return;
         var separate = ind.pane === "separatePane";
         var color = indicatorPalette[idx % indicatorPalette.length];
-        var line;
-        if (separate) {
-          // Fill each indicator pane with a translucent area so it reads as a distinct block,
-          // visually set apart from the clean line-only price pane.
-          line = chart.addSeries(LightweightCharts.AreaSeries, {
-            lineColor: color, topColor: color + "55", bottomColor: color + "0a",
-            lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: ind.name
-          }, nextPane++);
-        } else {
-          line = chart.addSeries(LightweightCharts.LineSeries, {
-            color: color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, title: ind.name
-          }, pricePane);
-        }
-        line.setData(points);
-        if (separate) { separateSeries.push(line); }
+        // Allocate this indicator's pane once: its own sub-pane when separate, else the price pane.
+        var paneIndex = separate ? nextPane++ : pricePane;
+        var firstInPane = null;
+        (ind.series || []).forEach(function (s) {
+          var points = (s.points || []).slice().sort(function (a, b) { return a.time - b.time; });
+          if (!points.length) return;
+          var drawn = addIndicatorSeries(s.shape, color, paneIndex, s.name);
+          drawn.setData(points);
+          if (separate && !firstInPane) { firstInPane = drawn; }
+        });
+        // One representative series per separate pane drives that pane's stretch factor.
+        if (firstInPane) { separateSeries.push(firstInPane); }
       });
 
     // Size the panes by relative stretch factor rather than absolute height: setHeight on multiple

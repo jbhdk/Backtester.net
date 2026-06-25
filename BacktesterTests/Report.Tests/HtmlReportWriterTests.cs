@@ -152,7 +152,7 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void BuildHtml_InlinesIndicatorSeriesWithPaneDesignation()
+        public void BuildHtml_InlinesIndicatorWithNestedSeriesShape()
         {
             ReportModel model = SampleModel();
             model.Indicators = new[]
@@ -161,16 +161,25 @@ namespace BacktesterTests.Report.Tests
                 {
                     Name = "ATR(14)",
                     Pane = "separatePane",
-                    Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 2.5m } }
+                    Series = new[]
+                    {
+                        new ChartIndicatorSeries
+                        {
+                            Name = "ATR(14)",
+                            Shape = "area",
+                            Points = new[] { new ChartLinePoint { Time = 1_704_153_600, Value = 2.5m } }
+                        }
+                    }
                 }
             };
 
             string html = new HtmlReportWriter().BuildHtml(model);
 
-            // The chart-ready indicator reaches the page: its name, pane designation, and time-aligned
-            // point are inlined in the serialized model for the page to draw.
+            // The chart-ready indicator reaches the page: its container name and pane, and its nested
+            // series with shape and time-aligned point, are inlined in the serialized model to draw.
             Assert.Contains("\"name\":\"ATR(14)\"", html);
             Assert.Contains("\"pane\":\"separatePane\"", html);
+            Assert.Contains("\"shape\":\"area\"", html);
             Assert.Contains("\"time\":1704153600", html);
         }
 
@@ -195,7 +204,7 @@ namespace BacktesterTests.Report.Tests
             {
                 ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }
             };
-            return new BacktestResult(history, new Portfolio(10_000m), Array.Empty<IndicatorSeries>(),
+            return new BacktestResult(history, new Portfolio(10_000m), Array.Empty<Indicator>(),
                 new[] { "AAPL" }, "1d", T0, T0.AddYears(1), Array.Empty<RejectedOrder>());
         }
 

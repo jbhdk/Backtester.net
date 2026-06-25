@@ -8,19 +8,19 @@ namespace Backtester.Engine
     /// <summary>
     /// Bundles everything a single backtest run produced and how it was configured: the run inputs
     /// (symbols, interval, requested date range, starting equity), the exact per-symbol candle history
-    /// the engine ran its slices on, the run's portfolio, and the strategy's exposed indicator series.
+    /// the engine ran its slices on, the run's portfolio, and the strategy's exposed indicators.
     /// Serves as the single source of truth for report generation (ADR 0008): a report can be produced
     /// from this result alone, with no separately-supplied run context.
     /// </summary>
     public class BacktestResult
     {
         /// <summary>
-        /// Initializes a new result bundling the run's inputs, candle history, portfolio, and indicator series.
+        /// Initializes a new result bundling the run's inputs, candle history, portfolio, and indicators.
         /// </summary>
         public BacktestResult(
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
             Portfolio portfolio,
-            IReadOnlyList<IndicatorSeries> indicatorSeries,
+            IReadOnlyList<Indicator> indicators,
             IReadOnlyList<string> symbols,
             string interval,
             DateTime fromUtc,
@@ -29,7 +29,7 @@ namespace Backtester.Engine
         {
             CandleHistory = candleHistory;
             Portfolio = portfolio;
-            IndicatorSeries = indicatorSeries;
+            Indicators = indicators;
             Symbols = symbols;
             Interval = interval;
             FromUtc = fromUtc;
@@ -47,10 +47,10 @@ namespace Backtester.Engine
         public Portfolio Portfolio { get; }
 
         /// <summary>
-        /// Gets the indicator series the strategy exposed during the run, collected by the engine from
+        /// Gets the composite indicators the strategy exposed during the run, collected by the engine from
         /// any <see cref="Backtester.Strategies.IIndicatorSource"/> strategy. Empty when none were exposed.
         /// </summary>
-        public IReadOnlyList<IndicatorSeries> IndicatorSeries { get; }
+        public IReadOnlyList<Indicator> Indicators { get; }
 
         /// <summary>Gets the symbols the run covered, in the order they were requested.</summary>
         public IReadOnlyList<string> Symbols { get; }

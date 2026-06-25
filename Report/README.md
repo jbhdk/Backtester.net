@@ -15,7 +15,7 @@ which the `BacktestResult` now carries — is derived from the result alone:
 - **Round trips** — number, symbol, entry/exit time and price, quantity, P&L, plus derived
   **Return %** `(Exit − Entry) / Entry` and compact **Time Held** (e.g. `5d 6h`).
 - **Run** — symbols, interval, date range, starting equity, and derived final equity and total return %.
-- **Per-symbol candles**, **indicator series** with pane placement, and the portfolio **equity curve**.
+- **Per-symbol candles**, **indicators** (each grouping one or more series in a shared pane), and the portfolio **equity curve**.
 
 ```csharp
 ReportModel model = new ReportModelBuilder().Build(result);

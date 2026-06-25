@@ -42,7 +42,7 @@ namespace Backtester.Report
                 StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity, buyHoldBySymbol),
                 RoundTrips = MapRoundTrips(stats.RoundTrips),
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
-                Indicators = MapIndicators(result.IndicatorSeries),
+                Indicators = MapIndicators(result.Indicators),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
                 Chart = MapChart(result.CandleHistory, stats.RoundTrips),
                 Run = new ReportRunInfo
@@ -129,26 +129,47 @@ namespace Backtester.Report
         }
 
         /// <summary>
-        /// Projects the strategy-exposed indicator series into chart-ready form, preserving their order
-        /// (no re-derivation): each point's timestamp encoded as UTC seconds so it aligns to the candle
-        /// time axis, and each series' pane designation mapped to a page-friendly string.
+        /// Projects the strategy-exposed composite indicators into chart-ready form, preserving their
+        /// order (no re-derivation): the pane designation and symbol map to page-friendly values on the
+        /// container, and each contained series carries its shape as a page-friendly string and its
+        /// points with timestamps encoded as UTC seconds so they align to the candle time axis.
         /// </summary>
-        private static IReadOnlyList<ChartIndicator> MapIndicators(IReadOnlyList<IndicatorSeries> indicators)
+        private static IReadOnlyList<ChartIndicator> MapIndicators(IReadOnlyList<Indicator> indicators)
         {
             List<ChartIndicator> mapped = new(indicators.Count);
-            foreach (IndicatorSeries series in indicators)
+            foreach (Indicator indicator in indicators)
             {
-                List<ChartLinePoint> points = new(series.Points.Count);
-                foreach (IndicatorPoint point in series.Points)
+                mapped.Add(new ChartIndicator
+                {
+                    Name = indicator.Name,
+                    Symbol = indicator.Symbol,
+                    Pane = MapPane(indicator.Pane),
+                    Series = MapIndicatorSeries(indicator.Series)
+                });
+            }
+
+            return mapped;
+        }
+
+        /// <summary>
+        /// Projects an indicator's series into chart-ready form, preserving order: each series' shape
+        /// mapped to a page-friendly string and each point's timestamp encoded as UTC seconds.
+        /// </summary>
+        private static IReadOnlyList<ChartIndicatorSeries> MapIndicatorSeries(IReadOnlyList<IndicatorSeries> series)
+        {
+            List<ChartIndicatorSeries> mapped = new(series.Count);
+            foreach (IndicatorSeries line in series)
+            {
+                List<ChartLinePoint> points = new(line.Points.Count);
+                foreach (IndicatorPoint point in line.Points)
                 {
                     points.Add(new ChartLinePoint { Time = ToUnixSeconds(point.Timestamp), Value = point.Value });
                 }
 
-                mapped.Add(new ChartIndicator
+                mapped.Add(new ChartIndicatorSeries
                 {
-                    Name = series.Name,
-                    Symbol = series.Symbol,
-                    Pane = MapPane(series.Pane),
+                    Name = line.Name,
+                    Shape = MapShape(line.Shape),
                     Points = points
                 });
             }
@@ -162,6 +183,19 @@ namespace Backtester.Report
         private static string MapPane(IndicatorPane pane)
         {
             return pane == IndicatorPane.PriceOverlay ? "priceOverlay" : "separatePane";
+        }
+
+        /// <summary>
+        /// Maps a series' shape to the page-friendly string the chart rendering reads.
+        /// </summary>
+        private static string MapShape(IndicatorShape shape)
+        {
+            return shape switch
+            {
+                IndicatorShape.Area => "area",
+                IndicatorShape.Histogram => "histogram",
+                _ => "line"
+            };
         }
 
         /// <summary>

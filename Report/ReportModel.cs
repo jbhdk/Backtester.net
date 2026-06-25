@@ -21,7 +21,7 @@ namespace Backtester.Report
         /// <summary>Gets or sets the orders the broker declined, surfaced in the trade log marked as rejected.</summary>
         public IReadOnlyList<ReportRejectedOrder> RejectedOrders { get; set; }
 
-        /// <summary>Gets or sets the chart-ready strategy-exposed indicator series, each with its pane placement.</summary>
+        /// <summary>Gets or sets the chart-ready strategy-exposed indicators, each with its pane placement and contained series.</summary>
         public IReadOnlyList<ChartIndicator> Indicators { get; set; }
 
         /// <summary>Gets or sets the portfolio-wide equity curve, indexed by trade count.</summary>

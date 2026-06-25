@@ -19,16 +19,22 @@ namespace BacktesterTests.Report.Tests
             return new Dictionary<string, IReadOnlyList<Candle>>();
         }
 
-        private static IReadOnlyList<IndicatorSeries> NoIndicators()
+        private static IReadOnlyList<Indicator> NoIndicators()
         {
-            return Array.Empty<IndicatorSeries>();
+            return Array.Empty<Indicator>();
+        }
+
+        /// <summary>A single-line indicator wrapping one series of the given shape, mirroring the RecordIndicator helpers.</summary>
+        private static Indicator SingleLine(string name, IndicatorPane pane, IndicatorShape shape, params IndicatorPoint[] points)
+        {
+            return new(name, pane, new[] { new IndicatorSeries(name, shape, points) });
         }
 
         /// <summary>Wraps a run's produced data in a result stamped with default run-config (AAPL, 1d, one year).</summary>
         private static BacktestResult Result(
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
             Portfolio portfolio,
-            IReadOnlyList<IndicatorSeries> indicators,
+            IReadOnlyList<Indicator> indicators,
             IReadOnlyList<RejectedOrder> rejectedOrders = null)
         {
             return new(candleHistory, portfolio, indicators, new[] { "AAPL" }, "1d", T0, T0.AddYears(1),
@@ -289,9 +295,9 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_Indicators_ProjectsExposedSeriesPreservingName()
+        public void Build_Indicators_ProjectsExposedIndicatorPreservingName()
         {
-            IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            Indicator sma = SingleLine("SMA(20)", IndicatorPane.PriceOverlay, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 100m });
             BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
             ReportModel model = new ReportModelBuilder().Build(result);
@@ -303,7 +309,8 @@ namespace BacktesterTests.Report.Tests
         [Fact]
         public void Build_Indicators_CarrySymbolForPerSymbolScoping()
         {
-            IndicatorSeries sma = new("SMA(20)", "AAPL", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            Indicator sma = new("SMA(20)", "AAPL", IndicatorPane.PriceOverlay,
+                new[] { new IndicatorSeries("SMA(20)", IndicatorShape.Line, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } }) });
             BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
             ReportModel model = new ReportModelBuilder().Build(result);
@@ -312,14 +319,41 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
-        public void Build_Indicators_EncodesPointTimesAsUtcSeconds()
+        public void Build_Indicators_ProjectsContainedSeriesWithNameAndShape()
         {
-            IndicatorSeries sma = new("SMA(20)", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 123.5m } });
+            Indicator sma = SingleLine("SMA(20)", IndicatorPane.PriceOverlay, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 100m });
             BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
 
             ReportModel model = new ReportModelBuilder().Build(result);
 
-            ChartLinePoint point = Assert.Single(Assert.Single(model.Indicators).Points);
+            ChartIndicatorSeries series = Assert.Single(Assert.Single(model.Indicators).Series);
+            Assert.Equal("SMA(20)", series.Name);
+            Assert.Equal("line", series.Shape);
+        }
+
+        [Theory]
+        [InlineData(IndicatorShape.Line, "line")]
+        [InlineData(IndicatorShape.Area, "area")]
+        [InlineData(IndicatorShape.Histogram, "histogram")]
+        public void Build_Indicators_MapsSeriesShapeToPageString(IndicatorShape shape, string expected)
+        {
+            Indicator indicator = SingleLine("X", IndicatorPane.SeparatePane, shape, new IndicatorPoint { Timestamp = T0, Value = 1m });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { indicator });
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(expected, Assert.Single(Assert.Single(model.Indicators).Series).Shape);
+        }
+
+        [Fact]
+        public void Build_Indicators_EncodesSeriesPointTimesAsUtcSeconds()
+        {
+            Indicator sma = SingleLine("SMA(20)", IndicatorPane.PriceOverlay, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 123.5m });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma });
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartLinePoint point = Assert.Single(Assert.Single(Assert.Single(model.Indicators).Series).Points);
             Assert.Equal(new DateTimeOffset(T0, TimeSpan.Zero).ToUnixTimeSeconds(), point.Time);
             Assert.Equal(123.5m, point.Value);
         }
@@ -329,8 +363,8 @@ namespace BacktesterTests.Report.Tests
         [InlineData(IndicatorPane.SeparatePane, "separatePane")]
         public void Build_Indicators_MapsPaneDesignationToPageString(IndicatorPane pane, string expected)
         {
-            IndicatorSeries series = new("ATR", pane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
-            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { series });
+            Indicator indicator = SingleLine("ATR", pane, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 2m });
+            BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { indicator });
 
             ReportModel model = new ReportModelBuilder().Build(result);
 
@@ -340,8 +374,8 @@ namespace BacktesterTests.Report.Tests
         [Fact]
         public void Build_Indicators_DrawsExactlyThoseExposedInOrder()
         {
-            IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
-            IndicatorSeries atr = new("ATR", IndicatorPane.SeparatePane, new[] { new IndicatorPoint { Timestamp = T0, Value = 2m } });
+            Indicator sma = SingleLine("SMA", IndicatorPane.PriceOverlay, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 100m });
+            Indicator atr = SingleLine("ATR", IndicatorPane.SeparatePane, IndicatorShape.Area, new IndicatorPoint { Timestamp = T0, Value = 2m });
             BacktestResult result = Result(NoCandles(), new Portfolio(10_000m), new[] { sma, atr });
 
             ReportModel model = new ReportModelBuilder().Build(result);
@@ -409,7 +443,7 @@ namespace BacktesterTests.Report.Tests
         [Fact]
         public void Build_Model_SerializesWithSystemTextJson()
         {
-            IndicatorSeries sma = new("SMA", IndicatorPane.PriceOverlay, new[] { new IndicatorPoint { Timestamp = T0, Value = 100m } });
+            Indicator sma = SingleLine("SMA", IndicatorPane.PriceOverlay, IndicatorShape.Line, new IndicatorPoint { Timestamp = T0, Value = 100m });
             Dictionary<string, IReadOnlyList<Candle>> history = new()
             {
                 ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }

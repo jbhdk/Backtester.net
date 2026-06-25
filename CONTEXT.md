@@ -160,19 +160,23 @@ broker (`Submit`, `SubmitBracket`, `Cancel`, `Modify`).
 _Avoid_: algo, system, model (model means an execution model).
 
 **Indicator**:
-A derived series (EMA, ATR, Keltner, …). The engine is **indicator-agnostic in computation**: it
-ships none and takes no indicator dependency; the consumer brings their own library and computes
-series with it. The engine may, however, be *aware* of series a strategy chooses to expose (see
-Indicator series) — awareness is not a dependency.
+A derived market calculation a strategy exposes for visualization (a moving average, RSI, MACD, …).
+It groups **one or more** Indicator series under a single name and a single placement: overlaid on
+the price scale, or in its own separate pane that all of its series share. A single-line indicator
+(e.g. a moving average) has one series; a MACD is one indicator in a separate pane grouping three
+series — its MACD line, its signal line, and its histogram. The engine stays **indicator-agnostic in
+computation**: it ships none and takes no indicator dependency (ADR 0003); the consumer brings their
+own library and computes the values. The engine may, however, be *aware* of the indicators a strategy
+chooses to expose and surface them for the report (ADR 0007) — awareness is not a dependency.
 _Avoid_: signal, study.
 
 **Indicator series**:
-A named, time-aligned sequence of values a strategy exposes for visualization (e.g. "FastMA"),
-distinct from the private computation it performs to make decisions. A series declares whether it
-shares the price scale (a price overlay) or occupies its own pane. The strategy computes it; the
-engine surfaces it; the consumer renders it. Exposure is opt-in — a strategy that exposes nothing
-is still valid.
-_Avoid_: plot, overlay (an overlay is one kind of series placement, not the series itself).
+One named, time-aligned line within an Indicator (e.g. MACD's "Signal" line), distinct from the
+private computation a strategy performs to make decisions. Placement (price overlay vs separate pane)
+belongs to the parent Indicator, not the series; a series carries only its name, its values, and its
+shape — a line, a filled area, or a histogram. The strategy computes it; the engine surfaces it; the
+consumer renders it. Exposure is opt-in — a strategy that exposes nothing is still valid.
+_Avoid_: plot, overlay (an overlay is a placement of the parent indicator, not the series itself).
 
 ### Performance
 
