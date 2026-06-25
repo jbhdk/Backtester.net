@@ -40,5 +40,8 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets the holding time formatted compactly (e.g. <c>"5d 6h"</c>).</summary>
         public string TimeHeld { get; set; }
+
+        /// <summary>Gets or sets why the round trip closed, as a page-friendly string (<c>"Take-profit"</c>, <c>"Stop-loss"</c>, or <c>"Signal"</c>).</summary>
+        public string ExitReason { get; set; }
     }
 }

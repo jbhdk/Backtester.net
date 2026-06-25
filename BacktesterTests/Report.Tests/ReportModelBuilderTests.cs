@@ -136,6 +136,32 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_RoundTrip_ClosedByStopLeg_LabelsExitReasonStopLoss()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            Trade exit = Trade("AAPL", OrderSide.Sell, 90m, 10, T0.AddDays(1));
+            exit.Leg = BracketLeg.StopLoss;
+            portfolio.ApplyTrade(exit);
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 90m, T0.AddDays(1)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal("Stop-loss", Assert.Single(model.RoundTrips).ExitReason);
+        }
+
+        [Fact]
+        public void Build_RoundTrip_ClosedByPlainOrder_LabelsExitReasonSignal()
+        {
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal("Signal", Assert.Single(model.RoundTrips).ExitReason);
+        }
+
+        [Fact]
         public void Build_RoundTrip_DerivesReturnPercent()
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);

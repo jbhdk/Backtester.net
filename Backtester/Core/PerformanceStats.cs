@@ -23,6 +23,19 @@ namespace Backtester.Core
         /// <summary>Gets or sets the number of completed round trips.</summary>
         public int Trades { get; set; }
 
+        /// <summary>Gets or sets the number of round trips that closed with a positive P&amp;L.</summary>
+        public int Winners { get; set; }
+
+        /// <summary>Gets or sets the number of round trips that closed with a negative P&amp;L.</summary>
+        public int Losers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of round trips that closed at exactly zero P&amp;L. These are neither
+        /// winners nor losers, so <see cref="WinRate"/> and the average win/loss cannot be combined to
+        /// reproduce <see cref="Expectancy"/> whenever this is non-zero.
+        /// </summary>
+        public int BreakEven { get; set; }
+
         /// <summary>Gets or sets the fraction of round trips that were profitable (0–1).</summary>
         public decimal WinRate { get; set; }
 
@@ -35,7 +48,11 @@ namespace Backtester.Core
         /// <summary>Gets or sets the average loss of losing round trips (negative value).</summary>
         public decimal AvgLoss { get; set; }
 
-        /// <summary>Gets or sets the expected value per trade: WinRate * AvgWin + (1 - WinRate) * AvgLoss.</summary>
+        /// <summary>
+        /// Gets or sets the expected value per trade: the mean realized P&amp;L across all round trips
+        /// (NetProfit / Trades). This equals WinRate * AvgWin + (1 - WinRate) * AvgLoss only when there are
+        /// no break-even round trips (see <see cref="BreakEven"/>).
+        /// </summary>
         public decimal Expectancy { get; set; }
 
         /// <summary>Gets or sets the largest peak-to-trough decline in marked equity as a fraction (0–1).</summary>

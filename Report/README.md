@@ -13,7 +13,8 @@ which the `BacktestResult` now carries — is derived from the result alone:
 - **Stats** — net profit (currency and percent), CAGR, max drawdown, Sharpe, trades, win rate,
   profit factor, expectancy, average win/loss, max consecutive losses.
 - **Round trips** — number, symbol, entry/exit time and price, quantity, P&L, plus derived
-  **Return %** `(Exit − Entry) / Entry` and compact **Time Held** (e.g. `5d 6h`).
+  **Return %** `(Exit − Entry) / Entry`, the **Exit reason** (`Take-profit`, `Stop-loss`, or
+  `Signal`), and compact **Time Held** (e.g. `5d 6h`).
 - **Run** — symbols, interval, date range, starting equity, and derived final equity and total return %.
 - **Per-symbol candles**, **indicators** (each grouping one or more series in a shared pane), and the portfolio **equity curve**.
 
@@ -71,9 +72,10 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 ### Trade quality
 
 - **Trades** — number of completed round trips.
+- **Winners / Break-even / Losers** — count of round trips that closed with a positive, exactly-zero, or negative P&L. These sum to **Trades**. A non-zero break-even count is why **Win rate**, **Avg win**, and **Avg loss** alone cannot reproduce **Expectancy** (see below).
 - **Win rate** — fraction of round trips that were profitable.
 - **Profit factor** — gross profit divided by absolute gross loss; zero when there are no losses.
-- **Expectancy** — expected value per trade: `WinRate × AvgWin + (1 − WinRate) × AvgLoss`.
+- **Expectancy** — expected value per trade: the mean realized P&L across all round trips (`NetProfit ÷ Trades`). This equals `WinRate × AvgWin + (1 − WinRate) × AvgLoss` only when there are no break-even trades; otherwise that formula over-weights the average loss, because `1 − WinRate` includes the break-even trips while `AvgLoss` is averaged over losers only.
 - **Avg R** — average R multiple: expectancy expressed in units of the average losing trade (the loss stands in for per-trade risk, as no stop is modelled).
 - **Avg win** — average profit of winning round trips.
 - **Avg loss** — average loss of losing round trips (negative).

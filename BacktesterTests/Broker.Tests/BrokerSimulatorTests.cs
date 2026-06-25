@@ -486,6 +486,58 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(95m, trades[0].Price);
         }
 
+        [Fact]
+        public void SubmitBracket_StopFills_StampsTradeWithStopLossLeg()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: Low=85, stop at 90 triggers
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 95m, 98m, 85m, 88m, T0.AddHours(1))).ToList();
+
+            Assert.Equal(BracketLeg.StopLoss, trades[0].Leg);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetFills_StampsTradeWithTakeProfitLeg()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: High=125, target limit at 120 triggers
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 118m, 125m, 117m, 122m, T0.AddHours(1))).ToList();
+
+            Assert.Equal(BracketLeg.TakeProfit, trades[0].Leg);
+        }
+
+        [Fact]
+        public void ProcessBar_PlainMarketOrderFill_LeavesLegNone()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(BracketLeg.None, trades[0].Leg);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

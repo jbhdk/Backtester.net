@@ -15,6 +15,17 @@ namespace Backtester.Report
         /// <summary>Gets or sets the number of completed round trips.</summary>
         public int Trades { get; set; }
 
+        /// <summary>Gets or sets the number of round trips that closed with a positive P&amp;L.</summary>
+        public int Winners { get; set; }
+
+        /// <summary>Gets or sets the number of round trips that closed with a negative P&amp;L.</summary>
+        public int Losers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of round trips that closed at exactly zero P&amp;L (neither win nor loss).
+        /// </summary>
+        public int BreakEven { get; set; }
+
         /// <summary>Gets or sets the fraction of round trips that were profitable (0–1).</summary>
         public decimal WinRate { get; set; }
 

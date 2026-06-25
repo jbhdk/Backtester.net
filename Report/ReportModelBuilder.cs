@@ -78,7 +78,8 @@ namespace Backtester.Report
                     Quantity = trip.Quantity,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
-                    TimeHeld = FormatTimeHeld(trip.ExitTime - trip.EntryTime)
+                    TimeHeld = FormatTimeHeld(trip.ExitTime - trip.EntryTime),
+                    ExitReason = FormatExitReason(trip.ExitReason)
                 });
             }
 
@@ -107,6 +108,19 @@ namespace Backtester.Report
             }
 
             return mapped;
+        }
+
+        /// <summary>
+        /// Maps a round trip's exit reason to the page-friendly label the Round trips table renders.
+        /// </summary>
+        private static string FormatExitReason(ExitReason reason)
+        {
+            return reason switch
+            {
+                ExitReason.TakeProfit => "Take-profit",
+                ExitReason.StopLoss   => "Stop-loss",
+                _                     => "Signal"
+            };
         }
 
         /// <summary>
@@ -354,6 +368,9 @@ namespace Backtester.Report
                 NetProfit = stats.NetProfit,
                 NetProfitPercent = startingEquity != 0m ? stats.NetProfit / startingEquity : 0m,
                 Trades = stats.Trades,
+                Winners = stats.Winners,
+                Losers = stats.Losers,
+                BreakEven = stats.BreakEven,
                 WinRate = stats.WinRate,
                 ProfitFactor = stats.ProfitFactor,
                 AvgWin = stats.AvgWin,

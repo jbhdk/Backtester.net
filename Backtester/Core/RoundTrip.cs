@@ -33,5 +33,8 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the UTC timestamp of the exit trade that closed this round trip.</summary>
         public DateTime ExitTime { get; set; }
+
+        /// <summary>Gets or sets why this round trip closed, derived from the bracket leg of its exit trade.</summary>
+        public ExitReason ExitReason { get; set; }
     }
 }

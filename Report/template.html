@@ -88,6 +88,7 @@
       <th data-key="exitTime" data-type="date">Exit</th>
       <th data-key="entryPrice" data-type="num">Entry price</th>
       <th data-key="exitPrice" data-type="num">Exit price</th>
+      <th data-key="exitReason" data-type="str">Exit reason</th>
       <th data-key="quantity" data-type="num">Qty</th>
       <th data-key="realizedPnL" data-type="num">P&amp;L</th>
       <th data-key="returnPercent" data-type="num">Return %</th>
@@ -170,6 +171,10 @@
 
     fill("trade-quality-stats", headRow() +
       dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +
+      dualRow("Winners", fmtNum(stats.winners, 0), sel ? fmtNum(sel.winners, 0) : dash, "pos", sel ? "pos" : "") +
+      dualRow("Break-even", fmtNum(stats.breakEven, 0), sel ? fmtNum(sel.breakEven, 0) : dash) +
+      dualRow("Losers", fmtNum(stats.losers, 0), sel ? fmtNum(sel.losers, 0) : dash,
+              stats.losers > 0 ? "neg" : "", sel && sel.losers > 0 ? "neg" : "") +
       dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash) +
       dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash) +
       dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
@@ -255,13 +260,13 @@
         // stay empty and the reason shows where the P&L would be.
         return '<tr data-number="" class="rejected">' +
           cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
-          cell(fmtMoney(t.entryPrice)) + cell("–") + cell(t.quantity) +
+          cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell(t.quantity) +
           cell(rejectedBadge(t.reason)) + cell("–") + cell("–") +
           "</tr>";
       }
       return '<tr data-number="' + t.number + '">' +
         cell(t.number) + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
-        cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.quantity) +
+        cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.exitReason) + cell(t.quantity) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
         cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +
         cell(t.timeHeld) +

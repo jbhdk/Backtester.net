@@ -24,6 +24,9 @@ namespace Backtester.Broker
         private readonly Dictionary<string, (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
         // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
         private readonly Dictionary<string, string> _ocoLinks = new();
+        // key: order ID → its bracket leg role, recorded when a protective leg is armed so the fill it
+        // produces can be stamped (the round trip's exit reason is derived from this).
+        private readonly Dictionary<string, BracketLeg> _legRoles = new();
         // Orders the broker declined, in attempt order, captured for audit (e.g. margin-gate rejections).
         private readonly List<RejectedOrder> _rejectedOrders = new();
         private DateTime _currentBarTimestamp;
@@ -157,12 +160,15 @@ namespace Backtester.Broker
 
                     Order filledOrder = _orderBook[fill.OrderId];
                     _orderBook.Remove(fill.OrderId);
+                    BracketLeg leg = _legRoles.TryGetValue(fill.OrderId, out BracketLeg filledLeg) ? filledLeg : BracketLeg.None;
+                    _legRoles.Remove(fill.OrderId);
 
                     if (_ocoLinks.TryGetValue(fill.OrderId, out string siblingId))
                     {
                         _ocoLinks.Remove(fill.OrderId);
                         _ocoLinks.Remove(siblingId);
                         _orderBook.Remove(siblingId);
+                        _legRoles.Remove(siblingId);
                     }
 
                     decimal rawPrice = fill.Price;
@@ -180,7 +186,8 @@ namespace Backtester.Broker
                         Quantity = fill.Quantity,
                         Slippage = slippageAmount,
                         Commission = commission,
-                        Timestamp = slice.Timestamp
+                        Timestamp = slice.Timestamp,
+                        Leg = leg
                     };
                     _portfolio.ApplyTrade(trade);
                     trades.Add(trade);
@@ -191,8 +198,8 @@ namespace Backtester.Broker
                         // Protective legs close the entry, so they take the side opposite the entry:
                         // a long entry arms Sell legs, a short entry arms Buy legs.
                         OrderSide legSide = filledOrder.Side == OrderSide.Buy ? OrderSide.Sell : OrderSide.Buy;
-                        string stopId = ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice, bracket.quantity);
-                        string targetId = ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice, bracket.quantity);
+                        string stopId = ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice, bracket.quantity, BracketLeg.StopLoss);
+                        string targetId = ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice, bracket.quantity, BracketLeg.TakeProfit);
                         _ocoLinks[stopId] = targetId;
                         _ocoLinks[targetId] = stopId;
                         bracket.handle.StopOrderId = stopId;
@@ -204,7 +211,7 @@ namespace Backtester.Broker
             return trades;
         }
 
-        private string ArmBracketLeg(string symbol, OrderSide side, OrderType type, decimal price, int quantity)
+        private string ArmBracketLeg(string symbol, OrderSide side, OrderType type, decimal price, int quantity, BracketLeg leg)
         {
             Order order = new()
             {
@@ -217,6 +224,7 @@ namespace Backtester.Broker
                 SubmittedAt = _currentBarTimestamp
             };
             _orderBook[order.Id] = order;
+            _legRoles[order.Id] = leg;
 
             return order.Id;
         }
@@ -227,6 +235,7 @@ namespace Backtester.Broker
         public void Cancel(string orderId)
         {
             _orderBook.Remove(orderId);
+            _legRoles.Remove(orderId);
         }
 
 

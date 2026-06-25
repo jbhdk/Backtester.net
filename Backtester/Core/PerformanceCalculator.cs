@@ -55,7 +55,8 @@ namespace Backtester.Core
                     RealizedPnL = (trade.Price - pos.avgEntry) * direction * trade.Quantity,
                     BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx),
                     EntryTime   = pos.entryTime,
-                    ExitTime    = trade.Timestamp
+                    ExitTime    = trade.Timestamp,
+                    ExitReason  = ExitReasonFor(trade.Leg)
                 });
 
                 int remaining = pos.qty + delta;
@@ -73,6 +74,20 @@ namespace Backtester.Core
         }
 
         /// <summary>
+        /// Maps the exit trade's bracket leg to the round trip's exit reason: a stop leg closed it at its
+        /// stop-loss, a target leg at its take-profit, and any non-bracket exit is a strategy signal.
+        /// </summary>
+        private static ExitReason ExitReasonFor(BracketLeg leg)
+        {
+            return leg switch
+            {
+                BracketLeg.StopLoss   => ExitReason.StopLoss,
+                BracketLeg.TakeProfit => ExitReason.TakeProfit,
+                _                     => ExitReason.Signal
+            };
+        }
+
+        /// <summary>
         /// Computes aggregate performance statistics from round trips and the marked equity curve.
         /// </summary>
         public static PerformanceStats Calculate(
@@ -84,6 +99,9 @@ namespace Backtester.Core
 
             List<RoundTrip> wins   = roundTrips.Where(r => r.RealizedPnL > 0m).ToList();
             List<RoundTrip> losses = roundTrips.Where(r => r.RealizedPnL < 0m).ToList();
+            // Round trips that closed at exactly zero P&L are neither winners nor losers; they are reported
+            // separately so winners + break-even + losers reconciles to the total trade count.
+            int breakEven = trades - wins.Count - losses.Count;
 
             decimal grossProfit = wins.Sum(r => r.RealizedPnL);
             decimal grossLoss   = losses.Sum(r => r.RealizedPnL);    // negative
@@ -131,6 +149,9 @@ namespace Backtester.Core
                 GrossProfit         = grossProfit,
                 GrossLoss           = grossLoss,
                 Trades              = trades,
+                Winners             = wins.Count,
+                Losers              = losses.Count,
+                BreakEven           = breakEven,
                 WinRate             = winRate,
                 ProfitFactor        = profitFactor,
                 AvgWin              = avgWin,

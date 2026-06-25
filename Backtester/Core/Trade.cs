@@ -36,5 +36,11 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the UTC timestamp when this trade was executed.</summary>
         public DateTime Timestamp { get; set; }
+
+        /// <summary>
+        /// Gets or sets the bracket role of the order that produced this fill. Entry and plain strategy
+        /// fills are <see cref="BracketLeg.None"/>; the broker stamps a protective leg's role here.
+        /// </summary>
+        public BracketLeg Leg { get; set; }
     }
 }

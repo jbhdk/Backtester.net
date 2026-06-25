@@ -211,6 +211,44 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void BuildRoundTrips_ExitTradeFromStopLeg_TagsRoundTripStopLoss()
+        {
+            Trade exit = Sell("AAPL", 90m, 10, T0.AddDays(1));
+            exit.Leg = BracketLeg.StopLoss;
+            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), exit };
+            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(ExitReason.StopLoss, trips[0].ExitReason);
+        }
+
+        [Fact]
+        public void BuildRoundTrips_ExitTradeFromTargetLeg_TagsRoundTripTakeProfit()
+        {
+            Trade exit = Sell("AAPL", 120m, 10, T0.AddDays(1));
+            exit.Leg = BracketLeg.TakeProfit;
+            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), exit };
+            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(ExitReason.TakeProfit, trips[0].ExitReason);
+        }
+
+        [Fact]
+        public void BuildRoundTrips_ExitTradeFromPlainOrder_TagsRoundTripSignal()
+        {
+            // A non-bracket exit (Leg None) is a deliberate strategy exit, reported as Signal.
+            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), Sell("AAPL", 110m, 10, T0.AddDays(1)) };
+            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+
+            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+
+            Assert.Equal(ExitReason.Signal, trips[0].ExitReason);
+        }
+
+        [Fact]
         public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
         {
             // Buy at T0, sell one day later → EntryTime = T0, ExitTime = T0+1d
@@ -300,6 +338,38 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(1m, stats.ProfitFactor);   // $100 gross profit / $100 gross loss
             Assert.Equal(0m, stats.NetProfit);
             Assert.Equal(0m, stats.Expectancy);     // 0.5*100 + 0.5*(-100) = 0
+        }
+
+        [Fact]
+        public void GetPerformanceStats_WithBreakEvenTrade_ExpectancyIsMeanOverAllTrades()
+        {
+            // Win:        buy 10@$100, sell 10@$110 → PnL = +$100
+            // Loss:       buy 10@$110, sell 10@$105 → PnL = -$50
+            // Break-even: buy 10@$100, sell 10@$100 → PnL =  $0
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 105m, 10, T0.AddDays(3)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 105m, T0.AddDays(3)));
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(4)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(4)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10, T0.AddDays(5)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0.AddDays(5)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(3, stats.Trades);
+            Assert.Equal(1, stats.Winners);
+            Assert.Equal(1, stats.Losers);
+            Assert.Equal(1, stats.BreakEven);          // winners + break-even + losers = trades
+            Assert.Equal(50m, stats.NetProfit);        // +100 - 50 + 0
+            // Expectancy is the mean P&L over ALL trades, not WinRate*AvgWin + (1-WinRate)*AvgLoss
+            // (which would give (1/3)*100 + (2/3)*(-50) = 0 because the break-even trade is mis-counted).
+            Assert.Equal(50m / 3m, stats.Expectancy);
         }
 
         [Fact]

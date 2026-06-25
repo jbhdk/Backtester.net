@@ -100,6 +100,14 @@ of per-trade performance analytics. Either direction: a long round trip pairs a 
 Sell exit; a short round trip pairs a Sell entry with a Buy exit.
 _Avoid_: trade, deal, position close.
 
+**Exit reason**:
+Why a Round trip closed, as one of three values. **Take-profit**: the bracket's target (Limit) leg
+filled. **Stop-loss**: the bracket's stop leg filled, including a trailed stop (a trailed stop is
+still a stop-loss, not a separate reason). **Signal**: the position was closed by a non-bracket order
+the strategy submitted — a deliberate strategy exit or the flattening leg of a reversal.
+_Avoid_: manual, trailing-stop (as a distinct reason), end-of-run (an open position never becomes a
+round trip, so it has no exit reason).
+
 **Realized equity** (cost-basis equity):
 Cash plus the cost basis of open positions (`Cash + Σ AveragePrice·Quantity`, Quantity signed so a
 short contributes negative cost basis); excludes unrealized PnL. Equals cash when flat. The base for
