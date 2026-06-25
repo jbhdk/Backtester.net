@@ -222,6 +222,12 @@ RecordIndicator(new Indicator("MACD", symbol, IndicatorPane.SeparatePane, new[]
 }));
 ```
 
+The report draws a separate-pane study the way a trader reads it: a histogram is coloured four ways by
+sign and momentum (bright green / faded green above zero rising / falling, bright red / faded red below
+zero falling / rising), and a faint zero line is drawn only in panes whose series cross zero (MACD, not
+an always-positive ATR). These are render-time touches derived from the values — no colour or styling
+is stored on the `Indicator` or its series.
+
 Reading indicator values aligned to the current bar is lookahead-free because indicators are causal.
 
 ---

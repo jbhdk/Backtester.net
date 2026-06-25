@@ -378,6 +378,34 @@
     }, paneIndex);
   }
 
+  // The MACD-convention four-colour histogram. Each bar is coloured by sign and momentum versus the
+  // prior bar: a bar is "strengthening" when it moves away from zero (rising above zero, falling below
+  // it) and draws bright; otherwise it fades to the same colour at reduced opacity. Green above zero,
+  // red below. The first bar has no prior, so it is treated as not strengthening (faded). Colour is
+  // computed here at render time and attached per point; nothing about sign or momentum is on the model.
+  var histogramColors = { upBright: "#26a69a", upFaded: "#26a69a80", downBright: "#ef5350", downFaded: "#ef535080" };
+  function colourHistogram(points) {
+    return points.map(function (point, index) {
+      var prev = index > 0 ? points[index - 1].value : point.value;
+      var strengthening = point.value >= 0 ? point.value > prev : point.value < prev;
+      var bright = point.value >= 0 ? histogramColors.upBright : histogramColors.downBright;
+      var faded = point.value >= 0 ? histogramColors.upFaded : histogramColors.downFaded;
+      return { time: point.time, value: point.value, color: strengthening ? bright : faded };
+    });
+  }
+
+  // Whether a pane's series straddle zero, so a faint zero line belongs there (like MACD) and not in a
+  // pane whose values stay one side of zero (like ATR or RSI). Derived from the values at render time.
+  function paneSpansZero(seriesList) {
+    var hasPos = false, hasNeg = false;
+    seriesList.forEach(function (s) {
+      (s.points || []).forEach(function (p) {
+        if (p.value > 0) { hasPos = true; } else if (p.value < 0) { hasNeg = true; }
+      });
+    });
+    return hasPos && hasNeg;
+  }
+
   // (Re)build the price chart for the selected symbol. The price pane (pane 0) holds candles, markers,
   // and price-overlay indicators and is the tallest; each separate-pane indicator gets its own short
   // sub-pane beneath. The equity curve is a separate chart (see buildEquityChart). Rebuilding on a
@@ -435,11 +463,21 @@
           var points = (entry.series.points || []).slice().sort(function (a, b) { return a.time - b.time; });
           if (!points.length) return;
           var drawn = addIndicatorSeries(entry.series.shape, entry.color, paneIndex, entry.series.name);
-          drawn.setData(points);
+          // A histogram is coloured per bar by sign and momentum; other shapes draw plain points.
+          drawn.setData(entry.series.shape === "histogram" ? colourHistogram(points) : points);
           if (separate && !firstInPane) { firstInPane = drawn; }
         });
-        // One representative series per separate pane drives that pane's stretch factor.
-        if (firstInPane) { separateSeries.push(firstInPane); }
+        // One representative series per separate pane drives that pane's stretch factor, and anchors a
+        // faint zero line when this pane's series straddle zero (e.g. MACD, not the always-positive ATR).
+        if (firstInPane) {
+          separateSeries.push(firstInPane);
+          if (paneSpansZero(ind.series || [])) {
+            firstInPane.createPriceLine({
+              price: 0, color: "#787b86", lineWidth: 1,
+              lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false
+            });
+          }
+        }
       });
 
     // Size the panes by relative stretch factor rather than absolute height: setHeight on multiple
