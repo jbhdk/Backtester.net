@@ -347,7 +347,7 @@
     }
     if (seriesType === "bars") {
       var barSeries = chart.addSeries(LightweightCharts.BarSeries, {
-        upColor: "#2ecc71", downColor: "#e74c3c", thinBars: false
+        upColor: "#2ecc71", downColor: "#e74c3c", thinBars: false, priceLineVisible: false
       }, pricePane);
       barSeries.setData(candles);
       return barSeries;
@@ -356,7 +356,7 @@
       upColor: "#1a2027", downColor: "#e74c3c",
       borderUpColor: "#2ecc71", borderDownColor: "#e74c3c",
       wickUpColor: "#2ecc71", wickDownColor: "#e74c3c",
-      borderVisible: true
+      borderVisible: true, priceLineVisible: false
     }, pricePane);
     candleSeries.setData(candles);
     return candleSeries;
