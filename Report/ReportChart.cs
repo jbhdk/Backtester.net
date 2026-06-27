@@ -17,5 +17,11 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets the entry/exit markers, each tagged with the symbol it belongs to.</summary>
         public IReadOnlyList<ChartMarker> Markers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the per-round-trip stop-loss and take-profit lines, each a stepped level series
+        /// confined to its round trip's holding window. Empty when the run used no brackets.
+        /// </summary>
+        public IReadOnlyList<ChartBracketLevel> BracketLevels { get; set; }
     }
 }

@@ -35,10 +35,12 @@ namespace BacktesterTests.Report.Tests
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
             Portfolio portfolio,
             IReadOnlyList<Indicator> indicators,
-            IReadOnlyList<RejectedOrder> rejectedOrders = null)
+            IReadOnlyList<RejectedOrder> rejectedOrders = null,
+            IReadOnlyList<BracketLevelChange> bracketLevelChanges = null)
         {
             return new(candleHistory, portfolio, indicators, new[] { "AAPL" }, "1d", T0, T0.AddYears(1),
-                rejectedOrders ?? Array.Empty<RejectedOrder>());
+                rejectedOrders ?? Array.Empty<RejectedOrder>(),
+                bracketLevelChanges ?? Array.Empty<BracketLevelChange>());
         }
 
         private static Trade Trade(string symbol, OrderSide side, decimal price, int qty, DateTime ts)
@@ -95,6 +97,23 @@ namespace BacktesterTests.Report.Tests
         private static long Unix(DateTime ts)
         {
             return new DateTimeOffset(ts, TimeSpan.Zero).ToUnixTimeSeconds();
+        }
+
+        /// <summary>A bracket level change for AAPL at the given leg, price, and time (default order id).</summary>
+        private static BracketLevelChange Level(BracketLeg leg, decimal price, DateTime ts, string orderId = "o1")
+        {
+            return new() { Symbol = "AAPL", Leg = leg, Price = price, Timestamp = ts, OrderId = orderId };
+        }
+
+        /// <summary>A result with one AAPL long round trip over the given window plus the supplied level changes.</summary>
+        private static BacktestResult BracketedResult(DateTime entry, DateTime exit, params BracketLevelChange[] changes)
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, entry));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, entry));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 110m, 10, exit));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 110m, exit));
+            return Result(NoCandles(), portfolio, NoIndicators(), null, changes);
         }
 
         [Fact]
@@ -318,6 +337,110 @@ namespace BacktesterTests.Report.Tests
             ReportModel model = new ReportModelBuilder().Build(result);
 
             Assert.All(model.Chart.Markers, marker => Assert.Equal(expectedText, marker.Text));
+        }
+
+        [Fact]
+        public void Build_BracketLevels_StopSeriesSpansEntryToExitAtInitialLevel()
+        {
+            DateTime exit = T0.AddDays(2);
+            BacktestResult result = BracketedResult(T0, exit, Level(BracketLeg.StopLoss, 90m, T0));
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartBracketLevel stop = Assert.Single(model.Chart.BracketLevels, level => level.Leg == "stopLoss");
+            Assert.Equal("AAPL", stop.Symbol);
+            Assert.Equal(1, stop.RoundTripNumber);
+            // The single initial level holds from entry to exit: a vertex at entry and a terminal at exit.
+            Assert.Equal(new[] { Unix(T0), Unix(exit) }, stop.Points.Select(point => point.Time));
+            Assert.Equal(new[] { 90m, 90m }, stop.Points.Select(point => point.Value));
+        }
+
+        [Fact]
+        public void Build_BracketLevels_TrailedStop_ProducesSteppedPoints()
+        {
+            DateTime trail = T0.AddDays(1);
+            DateTime exit = T0.AddDays(2);
+            // Stop armed at 90 on entry, trailed up to 95 a bar later, then the position exits.
+            BacktestResult result = BracketedResult(T0, exit,
+                Level(BracketLeg.StopLoss, 90m, T0),
+                Level(BracketLeg.StopLoss, 95m, trail));
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartBracketLevel stop = Assert.Single(model.Chart.BracketLevels, level => level.Leg == "stopLoss");
+            // Initial level, the trailed step, then the trailed level held to exit.
+            Assert.Equal(new[] { Unix(T0), Unix(trail), Unix(exit) }, stop.Points.Select(point => point.Time));
+            Assert.Equal(new[] { 90m, 95m, 95m }, stop.Points.Select(point => point.Value));
+        }
+
+        [Fact]
+        public void Build_BracketLevels_TakeProfitChange_YieldsTakeProfitSeriesAtTargetLevel()
+        {
+            DateTime exit = T0.AddDays(2);
+            BacktestResult result = BracketedResult(T0, exit, Level(BracketLeg.TakeProfit, 120m, T0));
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartBracketLevel target = Assert.Single(model.Chart.BracketLevels, level => level.Leg == "takeProfit");
+            Assert.Equal(1, target.RoundTripNumber);
+            Assert.Equal(new[] { 120m, 120m }, target.Points.Select(point => point.Value));
+        }
+
+        [Fact]
+        public void Build_BracketLevels_ClampsToExitTime_IgnoresChangesAfterExit()
+        {
+            DateTime exit = T0.AddDays(2);
+            // A Signal exit closes the round trip at `exit`, but the orphaned stop leg trails again after.
+            BacktestResult result = BracketedResult(T0, exit,
+                Level(BracketLeg.StopLoss, 90m, T0),
+                Level(BracketLeg.StopLoss, 99m, exit.AddDays(1)));
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartBracketLevel stop = Assert.Single(model.Chart.BracketLevels, level => level.Leg == "stopLoss");
+            // Only the in-window level (90) survives, held to exit; the post-exit 99 is excluded.
+            Assert.Equal(new[] { Unix(T0), Unix(exit) }, stop.Points.Select(point => point.Time));
+            Assert.Equal(new[] { 90m, 90m }, stop.Points.Select(point => point.Value));
+        }
+
+        [Fact]
+        public void Build_BracketLevels_NoBracket_YieldsEmpty()
+        {
+            // A plain round trip with no bracket level changes recorded.
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Empty(model.Chart.BracketLevels);
+        }
+
+        [Fact]
+        public void Build_BracketLevels_TwoSequentialRoundTrips_BucketsEachChangeToItsWindow()
+        {
+            // Two back-to-back AAPL round trips; each has its own stop level inside its own window.
+            DateTime entry1 = T0, exit1 = T0.AddDays(2);
+            DateTime entry2 = T0.AddDays(3), exit2 = T0.AddDays(5);
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, entry1));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 110m, 10, exit1));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Buy, 100m, 10, entry2));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, exit2));
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators(), null, new[]
+            {
+                Level(BracketLeg.StopLoss, 90m, entry1),
+                Level(BracketLeg.StopLoss, 95m, entry2)
+            });
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            ChartBracketLevel first = Assert.Single(model.Chart.BracketLevels, level => level.Points[0].Time == Unix(entry1));
+            ChartBracketLevel second = Assert.Single(model.Chart.BracketLevels, level => level.Points[0].Time == Unix(entry2));
+            // Each change lands only in its own round trip's window: 90 in the first, 95 in the second.
+            Assert.Equal(new[] { 90m, 90m }, first.Points.Select(point => point.Value));
+            Assert.Equal(Unix(exit1), first.Points[first.Points.Count - 1].Time);
+            Assert.Equal(new[] { 95m, 95m }, second.Points.Select(point => point.Value));
+            Assert.Equal(Unix(exit2), second.Points[second.Points.Count - 1].Time);
+            Assert.NotEqual(first.RoundTripNumber, second.RoundTripNumber);
         }
 
         [Fact]
@@ -592,7 +715,7 @@ namespace BacktesterTests.Report.Tests
         public void Build_RunInfo_EchoesRunInputs()
         {
             Portfolio portfolio = WinningPortfolio();
-            BacktestResult result = new(NoCandles(), portfolio, NoIndicators(), new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30), Array.Empty<RejectedOrder>());
+            BacktestResult result = new(NoCandles(), portfolio, NoIndicators(), new[] { "AAPL", "MSFT" }, "1h", T0, T0.AddDays(30), Array.Empty<RejectedOrder>(), Array.Empty<BracketLevelChange>());
 
             ReportModel model = new ReportModelBuilder().Build(result);
 

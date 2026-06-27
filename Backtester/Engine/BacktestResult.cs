@@ -25,7 +25,8 @@ namespace Backtester.Engine
             string interval,
             DateTime fromUtc,
             DateTime toUtc,
-            IReadOnlyList<RejectedOrder> rejectedOrders)
+            IReadOnlyList<RejectedOrder> rejectedOrders,
+            IReadOnlyList<BracketLevelChange> bracketLevelChanges)
         {
             CandleHistory = candleHistory;
             Portfolio = portfolio;
@@ -35,6 +36,7 @@ namespace Backtester.Engine
             FromUtc = fromUtc;
             ToUtc = toUtc;
             RejectedOrders = rejectedOrders;
+            BracketLevelChanges = bracketLevelChanges;
         }
 
         /// <summary>
@@ -69,6 +71,13 @@ namespace Backtester.Engine
         /// attempted and why (e.g. rejected by the Reg-T margin gate for insufficient buying power).
         /// </summary>
         public IReadOnlyList<RejectedOrder> RejectedOrders { get; }
+
+        /// <summary>
+        /// Gets the bracket protective-leg level changes the broker recorded during the run, in record
+        /// order. The report projects each round trip's stepped stop/target line from the changes that
+        /// fall inside its holding window (ADR 0014). Empty when the run used no brackets.
+        /// </summary>
+        public IReadOnlyList<BracketLevelChange> BracketLevelChanges { get; }
 
         /// <summary>
         /// Gets the equity the portfolio started with. Sourced from the run's <see cref="Portfolio"/> so it

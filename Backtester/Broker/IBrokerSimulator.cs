@@ -26,5 +26,11 @@ namespace Backtester.Broker
         /// attempted and why (e.g. rejected by the Reg-T margin gate for insufficient buying power).
         /// </summary>
         IReadOnlyList<RejectedOrder> RejectedOrders { get; }
+
+        /// <summary>
+        /// Gets the bracket protective-leg level changes recorded during the run, in record order: each
+        /// leg's initial level when armed and a new entry per modify that trails or moves it.
+        /// </summary>
+        IReadOnlyList<BracketLevelChange> BracketLevelChanges { get; }
     }
 }

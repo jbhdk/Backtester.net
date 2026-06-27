@@ -74,7 +74,7 @@
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
 </section>
 
-<div class="chart-head"><label for="series-type-select">Chart type</label><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select></div>
+<div class="chart-head"><label for="series-type-select">Chart type</label><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select><label class="show-all" id="bracket-toggle-label"><input type="checkbox" id="show-bracket-levels" checked> Stop / target</label></div>
 <div id="price-chart"></div>
 
 <div class="section-head"><h2>Round trips</h2><label class="show-all" id="show-all-label" hidden><input type="checkbox" id="show-all-trips"> Show all symbols</label></div>
@@ -311,6 +311,7 @@
   var chartData = model.chart || {};
   var allSeries = chartData.series || {};
   var allMarkers = chartData.markers || [];
+  var allBracketLevels = chartData.bracketLevels || [];
   var equityCurve = model.equityCurve || [];
   var indicatorPalette = ["#4ea1ff", "#f5a623", "#bd10e0", "#7ed321", "#50e3c2", "#e94f8a"];
 
@@ -322,6 +323,10 @@
   var selectEl = document.getElementById("symbol-select");
   var symbolToolbar = document.getElementById("symbol-toolbar");
   var typeEl = document.getElementById("series-type-select");
+  var bracketToggleEl = document.getElementById("show-bracket-levels");
+  var showBracketLevels = bracketToggleEl ? bracketToggleEl.checked : true;
+  // The selected symbol's stop/target line series, rebuilt per symbol so the toggle can flip them.
+  var bracketSeriesList = [];
   var chart = null, selected = null, seriesType = "candles", applyPaneHeights = function () {};
 
   function toSec(iso) { return Math.floor(new Date(iso).getTime() / 1000); }
@@ -383,6 +388,31 @@
     }, paneIndex);
   }
 
+  // Build the selected symbol's stop-loss (amber) and take-profit (cyan) protective-level lines and
+  // attach them to the price pane. Each round trip's leg is its own thin dashed stepped series, confined
+  // to that round trip's holding window (a trailed stop steps up; a static level stays flat). A separate
+  // series per round trip means every point sits on a candle time and one position's line never connects
+  // to the next — no whitespace bridging, no phantom time slots. Returns the created series so the toggle
+  // can flip their visibility without a rebuild.
+  var bracketLegColors = { stopLoss: "#f5a623", takeProfit: "#50e3c2" };
+  function addBracketLevelSeries(symbol, pricePane) {
+    var created = [];
+    allBracketLevels
+      .filter(function (b) { return b.symbol === symbol && b.points && b.points.length; })
+      .forEach(function (b) {
+        var series = chart.addSeries(LightweightCharts.LineSeries, {
+          color: bracketLegColors[b.leg] || "#787b86", lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          lineType: LightweightCharts.LineType.WithSteps,
+          priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+          visible: showBracketLevels
+        }, pricePane);
+        series.setData(b.points.map(function (point) { return { time: point.time, value: point.value }; }));
+        created.push(series);
+      });
+    return created;
+  }
+
   // The MACD-convention four-colour histogram. Each bar is coloured by sign and momentum versus the
   // prior bar: a bar is "strengthening" when it moves away from zero (rising above zero, falling below
   // it) and draws bright; otherwise it fades to the same colour at reduced opacity. Green above zero,
@@ -442,6 +472,9 @@
       .map(function (m) { return { time: m.time, position: m.position, shape: m.shape, color: m.color, text: m.text, id: m.roundTripNumber }; })
       .sort(function (a, b) { return a.time - b.time; });
     LightweightCharts.createSeriesMarkers(candleSeries, markers);
+
+    // Stop-loss / take-profit protective-level lines for the selected symbol, on the price pane.
+    bracketSeriesList = addBracketLevelSeries(symbol, pricePane);
 
     // Indicators for this symbol only (an untagged indicator applies to every symbol). A price-overlay
     // indicator draws all its series on the price pane; a separate-pane indicator gets one sub-pane that
@@ -573,6 +606,14 @@
       typeEl.addEventListener("change", function () {
         seriesType = typeEl.value;
         buildChart(selected || symbols[0]);
+      });
+    }
+
+    // Toggle the stop/target lines in place — flip each series' visibility, no chart rebuild.
+    if (bracketToggleEl) {
+      bracketToggleEl.addEventListener("change", function () {
+        showBracketLevels = bracketToggleEl.checked;
+        bracketSeriesList.forEach(function (series) { series.applyOptions({ visible: showBracketLevels }); });
       });
     }
 

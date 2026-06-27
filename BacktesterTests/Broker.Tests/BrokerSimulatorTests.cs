@@ -538,6 +538,96 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(BracketLeg.None, trades[0].Leg);
         }
 
+        // --- Bracket level ledger ---
+
+        [Fact]
+        public void SubmitBracket_EntryFills_RecordsInitialStopAndTargetLevels()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Entry fills at Open=100 on this bar; the protective legs arm here, recording their initial levels.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            BracketLevelChange stop = Assert.Single(broker.BracketLevelChanges, change => change.Leg == BracketLeg.StopLoss);
+            Assert.Equal("AAPL", stop.Symbol);
+            Assert.Equal(90m, stop.Price);
+            Assert.Equal(T0, stop.Timestamp);
+            Assert.Equal(handle.StopOrderId, stop.OrderId);
+
+            BracketLevelChange target = Assert.Single(broker.BracketLevelChanges, change => change.Leg == BracketLeg.TakeProfit);
+            Assert.Equal(120m, target.Price);
+            Assert.Equal(handle.TargetOrderId, target.OrderId);
+        }
+
+        [Fact]
+        public void SubmitBracket_BeforeEntryFills_RecordsNoLevels()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            // A resting limit entry that the bar does not reach, so the entry never fills and no legs arm.
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 10 },
+                StopPrice = 40m,
+                TargetPrice = 70m
+            });
+
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.Empty(broker.BracketLevelChanges);
+        }
+
+        [Fact]
+        public void Modify_TrailedStopLeg_RecordsNewStopLevelChange()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: entry fills, stop (90) and target (120) armed at T0.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+            // Bar 2: a later bar becomes current, then the strategy trails the stop up to 95.
+            broker.ProcessBar(SliceAt("AAPL", 103m, 106m, 101m, 104m, T0.AddHours(1)));
+            broker.Modify(handle.StopOrderId, 95m);
+
+            // Two stop levels: the initial 90 at T0 and the trailed 95 at the second bar.
+            List<BracketLevelChange> stopChanges = broker.BracketLevelChanges
+                .Where(change => change.Leg == BracketLeg.StopLoss).ToList();
+            Assert.Equal(2, stopChanges.Count);
+            BracketLevelChange trailed = stopChanges[1];
+            Assert.Equal(95m, trailed.Price);
+            Assert.Equal(T0.AddHours(1), trailed.Timestamp);
+            Assert.Equal(handle.StopOrderId, trailed.OrderId);
+        }
+
+        [Fact]
+        public void Modify_NonBracketOrder_RecordsNoLevelChange()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            // A plain resting stop order, not part of any bracket — it carries no leg role.
+            string id = broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 110m, Quantity = 1 });
+
+            broker.Modify(id, 120m);
+
+            Assert.Empty(broker.BracketLevelChanges);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

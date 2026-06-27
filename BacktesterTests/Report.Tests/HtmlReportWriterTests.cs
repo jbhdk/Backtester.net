@@ -236,7 +236,7 @@ namespace BacktesterTests.Report.Tests
                 ["AAPL"] = new[] { new Candle { Timestamp = T0, Open = 100m, High = 101m, Low = 99m, Close = 100.5m, Volume = 1000 } }
             };
             return new BacktestResult(history, new Portfolio(10_000m), Array.Empty<Indicator>(),
-                new[] { "AAPL" }, "1d", T0, T0.AddYears(1), Array.Empty<RejectedOrder>());
+                new[] { "AAPL" }, "1d", T0, T0.AddYears(1), Array.Empty<RejectedOrder>(), Array.Empty<BracketLevelChange>());
         }
 
         [Fact]

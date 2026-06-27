@@ -69,6 +69,13 @@ A group of orders in which one filling automatically cancels the siblings. Preve
 stop-loss and take-profit both filling in the same bar.
 _Avoid_: bracket-cancel, linked orders.
 
+**Bracket level**:
+The current trigger price of a bracket's protective leg — its stop-loss or take-profit. It is a value
+that can **move** over the life of a position: a trailed stop's level steps as the strategy modifies
+it, so a leg's level over a round trip is a series, not a single number. Distinct from **Stop
+distance**, which is the fixed per-share risk measured from entry to the stop at sizing time.
+_Avoid_: stop price / target price (unqualified — those name the leg, not its evolving level), line.
+
 **Fill**:
 A single execution of an order at a price, producing a `Trade` record.
 _Avoid_: execution (in prose).

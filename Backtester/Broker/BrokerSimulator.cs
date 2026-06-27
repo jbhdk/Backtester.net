@@ -29,6 +29,9 @@ namespace Backtester.Broker
         private readonly Dictionary<string, BracketLeg> _legRoles = new();
         // Orders the broker declined, in attempt order, captured for audit (e.g. margin-gate rejections).
         private readonly List<RejectedOrder> _rejectedOrders = new();
+        // Bracket protective-leg level changes, in record order: one when each leg is armed and one per
+        // modify that moves it. The report projects a round trip's stepped stop/target line from these.
+        private readonly List<BracketLevelChange> _bracketLevelChanges = new();
         private DateTime _currentBarTimestamp;
 
         /// <summary>
@@ -53,6 +56,12 @@ namespace Backtester.Broker
         /// attempted and why (currently the Reg-T margin gate rejecting for insufficient buying power).
         /// </summary>
         public IReadOnlyList<RejectedOrder> RejectedOrders => _rejectedOrders;
+
+        /// <summary>
+        /// Gets the bracket protective-leg level changes recorded during the run, in record order: each
+        /// leg's initial level when armed and a new entry per modify that trails or moves it.
+        /// </summary>
+        public IReadOnlyList<BracketLevelChange> BracketLevelChanges => _bracketLevelChanges;
 
         /// <summary>
         /// Applies sizing and risk checks, then queues the order for fill processing on the next bar.
@@ -225,8 +234,25 @@ namespace Backtester.Broker
             };
             _orderBook[order.Id] = order;
             _legRoles[order.Id] = leg;
+            RecordLevelChange(symbol, leg, price, order.Id);
 
             return order.Id;
+        }
+
+        /// <summary>
+        /// Appends a protective leg's level at the current bar to the ledger: its initial level when armed
+        /// or a trailed/moved level on a modify.
+        /// </summary>
+        private void RecordLevelChange(string symbol, BracketLeg leg, decimal price, string orderId)
+        {
+            _bracketLevelChanges.Add(new BracketLevelChange
+            {
+                Symbol = symbol,
+                Timestamp = _currentBarTimestamp,
+                Leg = leg,
+                Price = price,
+                OrderId = orderId
+            });
         }
 
         /// <summary>
@@ -247,6 +273,12 @@ namespace Backtester.Broker
             if (_orderBook.TryGetValue(orderId, out Order order))
             {
                 order.Price = newPrice;
+                // Record the moved level only for a known protective leg (a trailed stop or a moved
+                // target); a plain working order carries no leg role and is not part of the ledger.
+                if (_legRoles.TryGetValue(orderId, out BracketLeg leg))
+                {
+                    RecordLevelChange(order.Symbol, leg, newPrice, orderId);
+                }
             }
         }
     }

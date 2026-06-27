@@ -44,7 +44,7 @@ namespace Backtester.Report
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
                 Indicators = MapIndicators(result.Indicators),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
-                Chart = MapChart(result.CandleHistory, stats.RoundTrips),
+                Chart = MapChart(result.CandleHistory, stats.RoundTrips, result.BracketLevelChanges),
                 Run = new ReportRunInfo
                 {
                     Symbols = result.Symbols,
@@ -218,7 +218,8 @@ namespace Backtester.Report
         /// </summary>
         private static ReportChart MapChart(
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> candleHistory,
-            IReadOnlyList<RoundTrip> roundTrips)
+            IReadOnlyList<RoundTrip> roundTrips,
+            IReadOnlyList<BracketLevelChange> bracketLevelChanges)
         {
             // Key: symbol/ticker -> the chart-ready candle series for that symbol.
             Dictionary<string, IReadOnlyList<ChartCandle>> series = new(candleHistory.Count);
@@ -240,7 +241,96 @@ namespace Backtester.Report
                 series[entry.Key] = bars;
             }
 
-            return new ReportChart { Series = series, Markers = MapMarkers(roundTrips) };
+            return new ReportChart
+            {
+                Series = series,
+                Markers = MapMarkers(roundTrips),
+                BracketLevels = MapBracketLevels(roundTrips, bracketLevelChanges)
+            };
+        }
+
+        /// <summary>
+        /// Derives each round trip's stop-loss and take-profit lines from the broker's level changes. A
+        /// change belongs to the round trip whose holding window <c>[EntryTime, ExitTime]</c> on the same
+        /// symbol contains it (a symbol's round trips do not overlap), and the line is clamped to the exit:
+        /// a Signal exit leaves the legs working, so changes after the exit are ignored. Each leg with at
+        /// least one change yields a stepped series — a vertex per change plus a terminal point at the exit
+        /// holding the last level — so the page renders entry→exit without any further derivation. Round
+        /// trips with no bracket contribute nothing. Assumes one active bracket per position (ADR 0014).
+        /// </summary>
+        private static IReadOnlyList<ChartBracketLevel> MapBracketLevels(
+            IReadOnlyList<RoundTrip> roundTrips,
+            IReadOnlyList<BracketLevelChange> bracketLevelChanges)
+        {
+            List<ChartBracketLevel> levels = new();
+            for (int i = 0; i < roundTrips.Count; i++)
+            {
+                RoundTrip trip = roundTrips[i];
+                int number = i + 1;
+                AddLegLine(levels, trip, number, BracketLeg.StopLoss, bracketLevelChanges);
+                AddLegLine(levels, trip, number, BracketLeg.TakeProfit, bracketLevelChanges);
+            }
+
+            return levels;
+        }
+
+        /// <summary>
+        /// Builds one leg's stepped line for a round trip from the changes that fall inside its holding
+        /// window, appending it to <paramref name="levels"/> only when the leg saw at least one change.
+        /// </summary>
+        private static void AddLegLine(
+            List<ChartBracketLevel> levels,
+            RoundTrip trip,
+            int number,
+            BracketLeg leg,
+            IReadOnlyList<BracketLevelChange> bracketLevelChanges)
+        {
+            List<BracketLevelChange> inWindow = new();
+            foreach (BracketLevelChange change in bracketLevelChanges)
+            {
+                if (change.Leg == leg
+                    && change.Symbol == trip.Symbol
+                    && change.Timestamp >= trip.EntryTime
+                    && change.Timestamp <= trip.ExitTime)
+                {
+                    inWindow.Add(change);
+                }
+            }
+
+            if (inWindow.Count == 0)
+            {
+                return;
+            }
+
+            inWindow.Sort((left, right) => left.Timestamp.CompareTo(right.Timestamp));
+
+            List<ChartLinePoint> points = new(inWindow.Count + 1);
+            foreach (BracketLevelChange change in inWindow)
+            {
+                points.Add(new ChartLinePoint { Time = ToUnixSeconds(change.Timestamp), Value = change.Price });
+            }
+
+            // Hold the last level out to the exit so the step spans the whole window; skip when the last
+            // change already lands on the exit bar (no duplicate timestamp).
+            BracketLevelChange last = inWindow[inWindow.Count - 1];
+            if (last.Timestamp < trip.ExitTime)
+            {
+                points.Add(new ChartLinePoint { Time = ToUnixSeconds(trip.ExitTime), Value = last.Price });
+            }
+
+            levels.Add(new ChartBracketLevel
+            {
+                Symbol = trip.Symbol,
+                RoundTripNumber = number,
+                Leg = MapLeg(leg),
+                Points = points
+            });
+        }
+
+        /// <summary>Maps a protective leg to the page-friendly string the chart rendering reads.</summary>
+        private static string MapLeg(BracketLeg leg)
+        {
+            return leg == BracketLeg.StopLoss ? "stopLoss" : "takeProfit";
         }
 
         /// <summary>

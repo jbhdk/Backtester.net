@@ -79,7 +79,7 @@ namespace Backtester.Engine
                 ? source.Indicators
                 : Array.Empty<Indicator>();
 
-            return new BacktestResult(series, _portfolio, indicators, _symbols, _interval, _fromUtc, _toUtc, _broker.RejectedOrders);
+            return new BacktestResult(series, _portfolio, indicators, _symbols, _interval, _fromUtc, _toUtc, _broker.RejectedOrders, _broker.BracketLevelChanges);
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
