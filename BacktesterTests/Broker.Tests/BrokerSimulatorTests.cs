@@ -527,6 +527,57 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_FlattenedBySignalOrder_RestingLegsNeverFill()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: entry fills at Open=100; stop (90) and target (120) arm.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // The strategy flattens with its own market sell — a Signal exit, not a bracket leg.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+
+            // Bar 2: the sell flattens the position (Low=98/High=104 trigger neither leg).
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(1)));
+
+            // Bar 3: spans both former legs (Low=80 < stop 90, High=130 > target 120) — nothing must fill.
+            List<Trade> bar3Trades = broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 80m, 110m, T0.AddHours(2))).ToList();
+
+            Assert.Empty(bar3Trades);
+        }
+
+        [Fact]
+        public void SubmitBracket_FlattenedBySignalOrder_ProducesNoPhantomRoundTrip()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(1)));
+            broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 80m, 110m, T0.AddHours(2)));
+
+            // Only the Signal exit closed the position; the cancelled legs add no second round trip.
+            RoundTrip roundTrip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(ExitReason.Signal, roundTrip.ExitReason);
+        }
+
+        [Fact]
         public void ProcessBar_PlainMarketOrderFill_LeavesLegNone()
         {
             Portfolio portfolio = new(10_000m);

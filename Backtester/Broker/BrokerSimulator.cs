@@ -24,6 +24,10 @@ namespace Backtester.Broker
         private readonly Dictionary<string, (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
         // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
         private readonly Dictionary<string, string> _ocoLinks = new();
+        // key: symbol → the OCO protective legs (stop + target order IDs) currently resting against that
+        // symbol's open bracketed position. Lets the broker cancel them when the position is closed by an
+        // order that is not itself a leg (e.g. a strategy Signal exit), not only when a sibling fills.
+        private readonly Dictionary<string, (string stopOrderId, string targetOrderId)> _bracketLegsBySymbol = new();
         // key: order ID → its bracket leg role, recorded when a protective leg is armed so the fill it
         // produces can be stamped (the round trip's exit reason is derived from this).
         private readonly Dictionary<string, BracketLeg> _legRoles = new();
@@ -178,6 +182,7 @@ namespace Backtester.Broker
                         _ocoLinks.Remove(siblingId);
                         _orderBook.Remove(siblingId);
                         _legRoles.Remove(siblingId);
+                        _bracketLegsBySymbol.Remove(symbol);
                     }
 
                     decimal rawPrice = fill.Price;
@@ -201,6 +206,16 @@ namespace Backtester.Broker
                     _portfolio.ApplyTrade(trade);
                     trades.Add(trade);
 
+                    // A fill that is not itself a protective leg but flattens the position (a strategy
+                    // Signal exit) leaves the bracket's stop and target resting; cancel them so they can
+                    // never fill from flat on a later bar and open a phantom position.
+                    if (leg == BracketLeg.None
+                        && IsFlat(symbol)
+                        && _bracketLegsBySymbol.TryGetValue(symbol, out (string stopOrderId, string targetOrderId) restingLegs))
+                    {
+                        CancelBracketLegs(symbol, restingLegs);
+                    }
+
                     if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) bracket))
                     {
                         _pendingBrackets.Remove(fill.OrderId);
@@ -211,6 +226,7 @@ namespace Backtester.Broker
                         string targetId = ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice, bracket.quantity, BracketLeg.TakeProfit);
                         _ocoLinks[stopId] = targetId;
                         _ocoLinks[targetId] = stopId;
+                        _bracketLegsBySymbol[symbol] = (stopId, targetId);
                         bracket.handle.StopOrderId = stopId;
                         bracket.handle.TargetOrderId = targetId;
                     }
@@ -237,6 +253,28 @@ namespace Backtester.Broker
             RecordLevelChange(symbol, leg, price, order.Id);
 
             return order.Id;
+        }
+
+        /// <summary>
+        /// Returns true when the symbol has no open position or its position has reduced to flat.
+        /// </summary>
+        private bool IsFlat(string symbol)
+        {
+            Position position = _portfolio.Positions.FirstOrDefault(p => p.Symbol == symbol);
+            return position == null || position.Quantity == 0;
+        }
+
+        /// <summary>
+        /// Cancels a bracket's resting stop and target legs and forgets the OCO pairing and per-symbol
+        /// tracking, used when the position they protected was closed by an order that is not a leg.
+        /// </summary>
+        private void CancelBracketLegs(string symbol, (string stopOrderId, string targetOrderId) legs)
+        {
+            Cancel(legs.stopOrderId);
+            Cancel(legs.targetOrderId);
+            _ocoLinks.Remove(legs.stopOrderId);
+            _ocoLinks.Remove(legs.targetOrderId);
+            _bracketLegsBySymbol.Remove(symbol);
         }
 
         /// <summary>
