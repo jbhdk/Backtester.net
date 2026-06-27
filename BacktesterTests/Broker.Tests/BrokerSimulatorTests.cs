@@ -357,6 +357,57 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void ProcessBar_ForwardFilledStaleBar_DoesNotFill()
+        {
+            // A slice timestamped T1 but carrying AAPL's earlier T0 bar — forward-filled because AAPL has
+            // no bar at T1 (another symbol drove the timestamp). A queued order must not fill against it,
+            // which would stamp the trade at T1, a slot with no real AAPL bar (issue #56).
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            MarketSlice stale = new()
+            {
+                Timestamp = T0.AddHours(1),
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    ["AAPL"] = new Candle { Timestamp = T0, Open = 100m, High = 105m, Low = 99m, Close = 103m, Volume = 1000 }
+                }
+            };
+
+            List<Trade> trades = broker.ProcessBar(stale).ToList();
+
+            Assert.Empty(trades);
+        }
+
+        [Fact]
+        public void ProcessBar_OrderRestsThroughStaleBar_FillsAtNextFreshBarTimestamp()
+        {
+            // The order rests across a forward-filled stale slice and fills only at the symbol's next real
+            // bar, taking that bar's open and timestamp (no phantom post-close fill).
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            MarketSlice stale = new()
+            {
+                Timestamp = T0.AddHours(1),
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    ["AAPL"] = new Candle { Timestamp = T0, Open = 100m, High = 105m, Low = 99m, Close = 103m, Volume = 1000 }
+                }
+            };
+            broker.ProcessBar(stale);
+
+            DateTime freshTime = T0.AddHours(2);
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 110m, 112m, 108m, 111m, freshTime)).ToList();
+
+            Trade trade = Assert.Single(trades);
+            Assert.Equal(110m, trade.Price);
+            Assert.Equal(freshTime, trade.Timestamp);
+        }
+
+        [Fact]
         public void Cancel_WorkingOrder_NeverFills()
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));

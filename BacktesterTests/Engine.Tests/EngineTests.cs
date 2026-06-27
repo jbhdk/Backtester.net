@@ -199,6 +199,34 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_EntryOnSessionLastBar_StampedAtNextRealBar_NotForwardFilledSlot()
+        {
+            // AAPL trades a session that ends at T1, resuming only at T4. A 24/7 symbol (BTC) drives extra
+            // timeline slots at T2/T3 where AAPL has no bar of its own. A buy queued on AAPL's last session
+            // bar (T1) must fill at AAPL's next real bar (T4) — its open and timestamp — not against the
+            // forward-filled stale T1 bar at the phantom T2 slot (issue #56).
+            DateTime t0 = new(2024, 1, 5, 19, 0, 0, DateTimeKind.Utc); // Fri
+            DateTime t1 = new(2024, 1, 5, 20, 0, 0, DateTimeKind.Utc); // Fri, AAPL's last session bar
+            DateTime t2 = new(2024, 1, 5, 21, 0, 0, DateTimeKind.Utc); // Fri post-close, BTC only
+            DateTime t3 = new(2024, 1, 6, 0, 0, 0, DateTimeKind.Utc);  // weekend, BTC only
+            DateTime t4 = new(2024, 1, 9, 14, 0, 0, DateTimeKind.Utc); // Tue, AAPL resumes
+
+            Candle[] aaplBars = { Bar(t0, 100m), Bar(t1, 101m), Bar(t4, 110m) };
+            Candle[] btcBars = { Bar(t0, 40_000m), Bar(t1, 40_100m), Bar(t2, 40_200m), Bar(t3, 40_300m), Bar(t4, 40_400m) };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", aaplBars), ("BTC", btcBars));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "BTC" }, t0, t0.AddYears(1), "1h", new BuyAaplOnSpecificBar(t1), broker, portfolio);
+            await engine.StartAsync();
+
+            Position position = Assert.Single(portfolio.Positions);
+            Assert.Equal("AAPL", position.Symbol);
+            Assert.Equal(t4, position.EntryTime);     // a real AAPL bar, not the phantom T2 slot
+            Assert.Equal(110m, position.AveragePrice); // T4's open, not the stale T1 open (101)
+        }
+
+        [Fact]
         public async Task StartAsync_StrategyBuys_CreatesPositionAndReducesCash()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(
@@ -434,6 +462,27 @@ namespace BacktesterTests.Engine.Tests
                 if (!_bought && symbol == "AAPL")
                 {
                     _bought = true;
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+                }
+            }
+        }
+
+        /// <summary>Submits a single AAPL market buy the first time it sees AAPL's bar at the given timestamp.</summary>
+        private class BuyAaplOnSpecificBar : StrategyBase
+        {
+            private readonly DateTime _triggerBar;
+            private bool _submitted;
+
+            public BuyAaplOnSpecificBar(DateTime triggerBar)
+            {
+                _triggerBar = triggerBar;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (!_submitted && symbol == "AAPL" && bar.Timestamp == _triggerBar)
+                {
+                    _submitted = true;
                     broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
                 }
             }

@@ -163,6 +163,16 @@ namespace Backtester.Broker
                 }
 
                 Candle candle = slice.BarsBySymbol[symbol];
+
+                // Only match orders against a bar that actually belongs to this slice. A multi-symbol run
+                // forward-fills a symbol's last real bar into slices where it has no bar of its own (another
+                // symbol drove the timestamp, e.g. a 24/7 symbol producing a post-close slot). Filling
+                // against that stale bar would stamp the trade at a time with no real bar for this symbol
+                // (issue #56); such orders rest until the symbol's next real bar.
+                if (candle.Timestamp != slice.Timestamp)
+                {
+                    continue;
+                }
                 IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
                 foreach (FillResult fill in fills)
                 {
