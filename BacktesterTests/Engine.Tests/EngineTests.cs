@@ -227,6 +227,34 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_ExitOnSessionLastBar_RoundTripExitStampedAtNextRealBar()
+        {
+            // The exit-marker analogue of issue #56 (issue #57): an exit queued on AAPL's last session bar
+            // (T1) must close the round trip at AAPL's next real bar (T4), not against the forward-filled
+            // stale T1 bar at the phantom T2 slot driven by the 24/7 symbol. A round trip whose ExitTime is
+            // a real bar puts the chart's exit marker on an actual candle instead of one bar before it.
+            DateTime t0 = new(2024, 1, 5, 18, 0, 0, DateTimeKind.Utc); // Fri, AAPL entry context
+            DateTime t1 = new(2024, 1, 5, 20, 0, 0, DateTimeKind.Utc); // Fri, AAPL's last session bar
+            DateTime t2 = new(2024, 1, 5, 21, 0, 0, DateTimeKind.Utc); // Fri post-close, BTC only
+            DateTime t3 = new(2024, 1, 6, 0, 0, 0, DateTimeKind.Utc);  // weekend, BTC only
+            DateTime t4 = new(2024, 1, 9, 14, 0, 0, DateTimeKind.Utc); // Tue, AAPL resumes
+
+            Candle[] aaplBars = { Bar(t0, 100m), Bar(t1, 101m), Bar(t4, 110m) };
+            Candle[] btcBars = { Bar(t0, 40_000m), Bar(t1, 40_100m), Bar(t2, 40_200m), Bar(t3, 40_300m), Bar(t4, 40_400m) };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("AAPL", aaplBars), ("BTC", btcBars));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            // Buy on AAPL's entry bar (fills T1), then sell on the last session bar T1 to close the position.
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "BTC" }, t0, t0.AddYears(1), "1h", new BuyThenSellAaplOnBar(t0, t1), broker, portfolio);
+            await engine.StartAsync();
+
+            RoundTrip roundTrip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(t4, roundTrip.ExitTime);     // a real AAPL bar, not the phantom T2 slot
+            Assert.Equal(110m, roundTrip.ExitPrice);  // T4's open, not the stale T1 open (101)
+        }
+
+        [Fact]
         public async Task StartAsync_StrategyBuys_CreatesPositionAndReducesCash()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(
@@ -484,6 +512,40 @@ namespace BacktesterTests.Engine.Tests
                 {
                     _submitted = true;
                     broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+                }
+            }
+        }
+
+        /// <summary>Buys AAPL on its entry bar, then sells it on a later named bar, each submitted once.</summary>
+        private class BuyThenSellAaplOnBar : StrategyBase
+        {
+            private readonly DateTime _entryBar;
+            private readonly DateTime _sellBar;
+            private bool _bought;
+            private bool _sold;
+
+            public BuyThenSellAaplOnBar(DateTime entryBar, DateTime sellBar)
+            {
+                _entryBar = entryBar;
+                _sellBar = sellBar;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (symbol != "AAPL")
+                {
+                    return;
+                }
+
+                if (!_bought && bar.Timestamp == _entryBar)
+                {
+                    _bought = true;
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+                }
+                else if (_bought && !_sold && bar.Timestamp == _sellBar)
+                {
+                    _sold = true;
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 1 });
                 }
             }
         }
