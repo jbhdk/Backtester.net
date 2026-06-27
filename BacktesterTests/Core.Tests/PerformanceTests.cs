@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Backtester.Core;
 using Xunit;
 
@@ -47,11 +48,6 @@ namespace BacktesterTests.Core.Tests
             };
         }
 
-
-        private static EquitySnapshot Snapshot(DateTime ts)
-        {
-            return new() { Timestamp = ts };
-        }
 
         private static MarketSlice Slice2(string symbolA, decimal markA, string symbolB, decimal markB, DateTime ts)
         {
@@ -182,106 +178,127 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
-        public void BuildRoundTrips_SellThenBuy_PairsShortRoundTripWithMirroredPnL()
+        public void ApplyTrade_BuyThenSell_EmitsLongRoundTrip()
+        {
+            // Buy 10 @ 100, sell 10 @ 120 → one Long round trip realizing (120-100)*10 = $200.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(PositionDirection.Long, trip.Direction);
+            Assert.Equal(100m, trip.EntryPrice);
+            Assert.Equal(120m, trip.ExitPrice);
+            Assert.Equal(200m, trip.RealizedPnL);
+        }
+
+        [Fact]
+        public void ApplyTrade_SellThenBuy_EmitsShortRoundTripWithMirroredPnL()
         {
             // Short 10 @ 150, cover 10 @ 140 → realized = (150-140)*10 = 100, Direction = Short
-            DateTime entry = T0;
-            DateTime exit = T0.AddDays(1);
-            List<Trade> trades = new() { Sell("AAPL", 150m, 10, entry), Buy("AAPL", 140m, 10, exit) };
-            List<EquitySnapshot> history = new() { Snapshot(entry), Snapshot(exit) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10, T0));
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10, T0.AddDays(1)));
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Single(trips);
-            Assert.Equal(PositionDirection.Short, trips[0].Direction);
-            Assert.Equal(150m, trips[0].EntryPrice);
-            Assert.Equal(140m, trips[0].ExitPrice);
-            Assert.Equal(100m, trips[0].RealizedPnL);
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(PositionDirection.Short, trip.Direction);
+            Assert.Equal(150m, trip.EntryPrice);
+            Assert.Equal(140m, trip.ExitPrice);
+            Assert.Equal(100m, trip.RealizedPnL);
         }
 
         [Fact]
-        public void BuildRoundTrips_BuyThenSell_TagsRoundTripLong()
-        {
-            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), Sell("AAPL", 120m, 10, T0.AddDays(1)) };
-            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
-
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Equal(PositionDirection.Long, trips[0].Direction);
-        }
-
-        [Fact]
-        public void BuildRoundTrips_ExitTradeFromStopLeg_TagsRoundTripStopLoss()
+        public void ApplyTrade_ExitFromStopLeg_TagsRoundTripStopLoss()
         {
             Trade exit = Sell("AAPL", 90m, 10, T0.AddDays(1));
             exit.Leg = BracketLeg.StopLoss;
-            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), exit };
-            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(exit);
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Equal(ExitReason.StopLoss, trips[0].ExitReason);
+            Assert.Equal(ExitReason.StopLoss, Assert.Single(portfolio.RoundTrips).ExitReason);
         }
 
         [Fact]
-        public void BuildRoundTrips_ExitTradeFromTargetLeg_TagsRoundTripTakeProfit()
+        public void ApplyTrade_ExitFromTargetLeg_TagsRoundTripTakeProfit()
         {
             Trade exit = Sell("AAPL", 120m, 10, T0.AddDays(1));
             exit.Leg = BracketLeg.TakeProfit;
-            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), exit };
-            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(exit);
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Equal(ExitReason.TakeProfit, trips[0].ExitReason);
+            Assert.Equal(ExitReason.TakeProfit, Assert.Single(portfolio.RoundTrips).ExitReason);
         }
 
         [Fact]
-        public void BuildRoundTrips_ExitTradeFromPlainOrder_TagsRoundTripSignal()
+        public void ApplyTrade_ExitFromPlainOrder_TagsRoundTripSignal()
         {
             // A non-bracket exit (Leg None) is a deliberate strategy exit, reported as Signal.
-            List<Trade> trades = new() { Buy("AAPL", 100m, 10, T0), Sell("AAPL", 110m, 10, T0.AddDays(1)) };
-            List<EquitySnapshot> history = new() { Snapshot(T0), Snapshot(T0.AddDays(1)) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Equal(ExitReason.Signal, trips[0].ExitReason);
+            Assert.Equal(ExitReason.Signal, Assert.Single(portfolio.RoundTrips).ExitReason);
         }
 
         [Fact]
-        public void BuildRoundTrips_BuyThenSell_CarriesEntryAndExitTimestamps()
+        public void ApplyTrade_BuyThenSell_CarriesEntryAndExitTimestamps()
         {
             // Buy at T0, sell one day later → EntryTime = T0, ExitTime = T0+1d
             DateTime entry = T0;
             DateTime exit = T0.AddDays(1);
-            List<Trade> trades = new() { Buy("AAPL", 100m, 10, entry), Sell("AAPL", 120m, 10, exit) };
-            List<EquitySnapshot> history = new() { Snapshot(entry), Snapshot(exit) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, entry));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, exit));
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
-
-            Assert.Equal(entry, trips[0].EntryTime);
-            Assert.Equal(exit, trips[0].ExitTime);
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(entry, trip.EntryTime);
+            Assert.Equal(exit, trip.ExitTime);
         }
 
         [Fact]
-        public void BuildRoundTrips_TwoBuysAveragedThenSell_EntryTimeIsFirstBuy()
+        public void ApplyTrade_TwoBuysAveragedThenSell_EntryTimeIsFirstBuyAndPriceAveraged()
         {
-            // Two buys average into one position; the second buy must not overwrite the entry time.
+            // Two buys average into one position; the second buy must not overwrite the entry time,
+            // and the round trip carries the volume-weighted entry (100*10 + 120*10) / 20 = 110.
             DateTime firstBuy = T0;
             DateTime secondBuy = T0.AddDays(1);
             DateTime exit = T0.AddDays(2);
-            List<Trade> trades = new()
-            {
-                Buy("AAPL", 100m, 10, firstBuy),
-                Buy("AAPL", 120m, 10, secondBuy),
-                Sell("AAPL", 130m, 20, exit)
-            };
-            List<EquitySnapshot> history = new() { Snapshot(firstBuy), Snapshot(secondBuy), Snapshot(exit) };
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, firstBuy));
+            portfolio.ApplyTrade(Buy("AAPL", 120m, 10, secondBuy));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 20, exit));
 
-            IReadOnlyList<RoundTrip> trips = PerformanceCalculator.BuildRoundTrips(trades, history);
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(firstBuy, trip.EntryTime);
+            Assert.Equal(exit, trip.ExitTime);
+            Assert.Equal(110m, trip.EntryPrice);
+        }
 
-            Assert.Equal(firstBuy, trips[0].EntryTime);
-            Assert.Equal(exit, trips[0].ExitTime);
+        [Fact]
+        public void ApplyTrade_PartialExit_EmitsRoundTripForClosedPortionWhilePositionLivesOn()
+        {
+            // Buy 20 @ 100, sell 10 @ 120: a round trip closes for the 10 sold while 10 remain open; the
+            // later exit of the remainder emits a second round trip carrying the original entry time.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 20, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            RoundTrip first = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(10, first.Quantity);
+            Assert.Equal(200m, first.RealizedPnL);
+            Assert.Equal(T0, first.EntryTime);
+            Assert.Equal(10, portfolio.Positions.Single(p => p.Symbol == "AAPL").Quantity);
+
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(2)));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            RoundTrip second = portfolio.RoundTrips[1];
+            Assert.Equal(300m, second.RealizedPnL);
+            Assert.Equal(T0, second.EntryTime);
         }
 
         [Fact]

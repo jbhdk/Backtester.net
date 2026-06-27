@@ -11,6 +11,7 @@ namespace Backtester.Core
     {
         private readonly List<EquitySnapshot> _equityHistory = new();
         private readonly List<Trade> _trades = new();
+        private readonly List<RoundTrip> _roundTrips = new();
 
         // Key: symbol/ticker -> cumulative realized P&L from that symbol's closed trades.
         private readonly Dictionary<string, decimal> _realizedPnLBySymbol = new();
@@ -113,6 +114,20 @@ namespace Backtester.Core
             return currentQuantity != 0 && Math.Sign(delta) != Math.Sign(currentQuantity);
         }
 
+        /// <summary>
+        /// Maps the exit fill's bracket leg to the round trip's exit reason: a stop leg closed it at its
+        /// stop-loss, a target leg at its take-profit, and any non-bracket exit is a strategy signal.
+        /// </summary>
+        private static ExitReason ExitReasonFor(BracketLeg leg)
+        {
+            return leg switch
+            {
+                BracketLeg.StopLoss   => ExitReason.StopLoss,
+                BracketLeg.TakeProfit => ExitReason.TakeProfit,
+                _                     => ExitReason.Signal
+            };
+        }
+
         /// <summary>Gets the list of all open positions.</summary>
         public List<Position> Positions { get; } = new();
 
@@ -121,6 +136,12 @@ namespace Backtester.Core
 
         /// <summary>Gets the complete trade history in submission order.</summary>
         public IReadOnlyList<Trade> Trades => _trades;
+
+        /// <summary>
+        /// Gets the round trips realized so far, in the order they closed. Each reducing fill that closes
+        /// or partially closes a position appends one; the Portfolio is their single source of truth.
+        /// </summary>
+        public IReadOnlyList<RoundTrip> RoundTrips => _roundTrips;
 
         /// <summary>Initializes a new portfolio with the given starting cash balance.</summary>
         public Portfolio(decimal startingCash)
@@ -185,11 +206,34 @@ namespace Backtester.Core
                 RealizedPnL += tradeRealized;
                 _realizedPnLBySymbol[effective.Symbol] =
                     (_realizedPnLBySymbol.TryGetValue(effective.Symbol, out decimal prior) ? prior : 0m) + tradeRealized;
+
+                _roundTrips.Add(new RoundTrip
+                {
+                    Symbol      = effective.Symbol,
+                    Direction   = currentQty > 0 ? PositionDirection.Long : PositionDirection.Short,
+                    EntryPrice  = position.AveragePrice,
+                    ExitPrice   = effective.Price,
+                    Quantity    = executedQty,
+                    RealizedPnL = tradeRealized,
+                    BarsHeld    = Math.Max(0, _equityHistory.Count - position.EntryBarIndex),
+                    EntryTime   = position.EntryTime,
+                    ExitTime    = effective.Timestamp,
+                    ExitReason  = ExitReasonFor(effective.Leg)
+                });
             }
             else if (position == null)
             {
                 position = new Position { Id = Guid.NewGuid().ToString(), Symbol = trade.Symbol };
                 Positions.Add(position);
+            }
+
+            // Opening from flat (a new position or a reused one that had reduced to zero): capture the
+            // entry context the round trip will carry. A reduction never reaches here, so a partial exit
+            // leaves the original entry time and bar index intact for the remainder.
+            if (currentQty == 0)
+            {
+                position.EntryTime = effective.Timestamp;
+                position.EntryBarIndex = _equityHistory.Count;
             }
 
             position.AddTrade(effective);
@@ -201,8 +245,7 @@ namespace Backtester.Core
         /// </summary>
         public PerformanceStats GetPerformanceStats()
         {
-            IReadOnlyList<RoundTrip> roundTrips = PerformanceCalculator.BuildRoundTrips(_trades, _equityHistory);
-            return PerformanceCalculator.Calculate(roundTrips, _equityHistory, StartingCash);
+            return PerformanceCalculator.Calculate(_roundTrips, _equityHistory, StartingCash);
         }
 
         /// <summary>
@@ -210,8 +253,7 @@ namespace Backtester.Core
         /// </summary>
         public IReadOnlyDictionary<string, PerformanceStats> GetPerformanceStatsBySymbol()
         {
-            IReadOnlyList<RoundTrip> roundTrips = PerformanceCalculator.BuildRoundTrips(_trades, _equityHistory);
-            return PerformanceCalculator.CalculateBySymbol(roundTrips, _equityHistory, StartingCash);
+            return PerformanceCalculator.CalculateBySymbol(_roundTrips, _equityHistory, StartingCash);
         }
 
         /// <summary>

@@ -5,88 +5,10 @@ using System.Linq;
 namespace Backtester.Core
 {
     /// <summary>
-    /// Builds round trips from the trade ledger and computes aggregate performance metrics.
+    /// Computes aggregate performance metrics from round trips and the equity curve.
     /// </summary>
     public static class PerformanceCalculator
     {
-        /// <summary>
-        /// Pairs trades into round trips for either direction. A fill in the open position's direction
-        /// (or from flat) opens or averages it; an opposing fill closes it, creating one round trip that
-        /// carries the running average entry price, the direction, realized PnL, and bars held. Realized
-        /// PnL is mirrored for shorts: <c>(exit − avgEntry) · sign(quantity) · closedQuantity</c>.
-        /// </summary>
-        public static IReadOnlyList<RoundTrip> BuildRoundTrips(
-            IReadOnlyList<Trade> trades,
-            IReadOnlyList<EquitySnapshot> equityHistory)
-        {
-            // key: symbol → (runningAvgEntry, signedQty, entryBarIndex, entryTime); signedQty is positive
-            // for an open long and negative for an open short.
-            Dictionary<string, (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime)> open = new();
-            List<RoundTrip> trips = new();
-
-            foreach (Trade trade in trades)
-            {
-                int delta = trade.Side == OrderSide.Buy ? trade.Quantity : -trade.Quantity;
-
-                if (!open.TryGetValue(trade.Symbol, out (decimal avgEntry, int qty, int entryBarIdx, DateTime entryTime) pos))
-                {
-                    int entryBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
-                    open[trade.Symbol] = (trade.Price, delta, entryBarIdx, trade.Timestamp);
-                    continue;
-                }
-
-                if (Math.Sign(delta) == Math.Sign(pos.qty))
-                {
-                    decimal totalCost = pos.avgEntry * Math.Abs(pos.qty) + trade.Price * trade.Quantity;
-                    int newQty = pos.qty + delta;
-                    open[trade.Symbol] = (totalCost / Math.Abs(newQty), newQty, pos.entryBarIdx, pos.entryTime);
-                    continue;
-                }
-
-                int direction = Math.Sign(pos.qty);
-                int exitBarIdx = BarIndexAt(equityHistory, trade.Timestamp);
-                trips.Add(new RoundTrip
-                {
-                    Symbol      = trade.Symbol,
-                    Direction   = direction > 0 ? PositionDirection.Long : PositionDirection.Short,
-                    EntryPrice  = pos.avgEntry,
-                    ExitPrice   = trade.Price,
-                    Quantity    = trade.Quantity,
-                    RealizedPnL = (trade.Price - pos.avgEntry) * direction * trade.Quantity,
-                    BarsHeld    = Math.Max(0, exitBarIdx - pos.entryBarIdx),
-                    EntryTime   = pos.entryTime,
-                    ExitTime    = trade.Timestamp,
-                    ExitReason  = ExitReasonFor(trade.Leg)
-                });
-
-                int remaining = pos.qty + delta;
-                if (remaining == 0)
-                {
-                    open.Remove(trade.Symbol);
-                }
-                else
-                {
-                    open[trade.Symbol] = (pos.avgEntry, remaining, pos.entryBarIdx, pos.entryTime);
-                }
-            }
-
-            return trips;
-        }
-
-        /// <summary>
-        /// Maps the exit trade's bracket leg to the round trip's exit reason: a stop leg closed it at its
-        /// stop-loss, a target leg at its take-profit, and any non-bracket exit is a strategy signal.
-        /// </summary>
-        private static ExitReason ExitReasonFor(BracketLeg leg)
-        {
-            return leg switch
-            {
-                BracketLeg.StopLoss   => ExitReason.StopLoss,
-                BracketLeg.TakeProfit => ExitReason.TakeProfit,
-                _                     => ExitReason.Signal
-            };
-        }
-
         /// <summary>
         /// Computes aggregate performance statistics from round trips and the marked equity curve.
         /// </summary>
@@ -240,19 +162,6 @@ namespace Backtester.Core
             }
 
             return isolated;
-        }
-
-        private static int BarIndexAt(IReadOnlyList<EquitySnapshot> history, DateTime ts)
-        {
-            for (int i = 0; i < history.Count; i++)
-            {
-                if (history[i].Timestamp >= ts)
-                {
-                    return i;
-                }
-            }
-
-            return history.Count;
         }
 
         private static decimal ComputeMaxDrawdown(IReadOnlyList<EquitySnapshot> history)

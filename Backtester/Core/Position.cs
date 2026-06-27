@@ -20,6 +20,18 @@ namespace Backtester.Core
         /// <summary>Gets or sets the volume-weighted average entry price.</summary>
         public decimal AveragePrice { get; set; }
 
+        /// <summary>
+        /// Gets or sets the timestamp of the fill that opened the current lot from flat. Preserved across
+        /// same-direction adds and partial reductions, so a round trip carries the entry that opened it.
+        /// </summary>
+        public DateTime EntryTime { get; set; }
+
+        /// <summary>
+        /// Gets or sets the equity-history length at the moment the current lot opened from flat, i.e. the
+        /// bar index of the entry. Subtracting it from the exit bar index yields the round trip's bars held.
+        /// </summary>
+        public int EntryBarIndex { get; set; }
+
         /// <summary>Gets the list of all trades that have affected this position.</summary>
         public List<Trade> Trades { get; } = new();
 

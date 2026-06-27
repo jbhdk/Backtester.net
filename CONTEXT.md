@@ -104,7 +104,12 @@ _Avoid_: using "trade" for an entry-to-exit cycle — that is a Round trip.
 **Round trip**:
 A complete entry-to-exit cycle for a position, carrying realized PnL and bars held. The unit
 of per-trade performance analytics. Either direction: a long round trip pairs a Buy entry with a
-Sell exit; a short round trip pairs a Sell entry with a Buy exit.
+Sell exit; a short round trip pairs a Sell entry with a Buy exit. A round trip is **realized the
+moment a fill reduces or closes the position** — a partial exit realizes a round trip for the closed
+portion and the position lives on. The Portfolio is its source: it emits each round trip as it
+closes, and a strategy may **observe** them live to react to its own results (e.g. pause after a run
+of losses). What a strategy does with that result is its own decision; the engine carries on either
+way.
 _Avoid_: trade, deal, position close.
 
 **Exit reason**:
