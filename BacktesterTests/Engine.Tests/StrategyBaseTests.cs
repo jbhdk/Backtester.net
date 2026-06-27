@@ -119,6 +119,48 @@ namespace BacktesterTests.Engine.Tests
             Assert.Equal(IndicatorShape.Histogram, exposed.Series[2].Shape);
         }
 
+        [Fact]
+        public void OnRoundTripClosed_DefaultImplementation_IsAnOverridableNoOp()
+        {
+            // A StrategyBase that does not override the seam is still an IRoundTripObserver, and its default
+            // OnRoundTripClosed accepts a closed round trip without acting or throwing.
+            IRoundTripObserver observer = new BareStrategy();
+
+            observer.OnRoundTripClosed(new RoundTrip { Symbol = "AAPL", RealizedPnL = 100m });
+
+            Assert.IsAssignableFrom<IRoundTripObserver>(observer);
+        }
+
+        [Fact]
+        public void OnRoundTripClosed_Overridden_ReceivesTheRoundTrip()
+        {
+            ObservingStrategy strategy = new();
+            RoundTrip trip = new() { Symbol = "AAPL", RealizedPnL = 100m };
+
+            ((IRoundTripObserver)strategy).OnRoundTripClosed(trip);
+
+            Assert.Same(trip, strategy.Last);
+        }
+
+        /// <summary>A StrategyBase that overrides nothing, leaving the seam defaults in place.</summary>
+        private class BareStrategy : StrategyBase
+        {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+        }
+
+        /// <summary>A StrategyBase that overrides OnRoundTripClosed to capture the round trip it observes.</summary>
+        private class ObservingStrategy : StrategyBase
+        {
+            public RoundTrip Last { get; private set; }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
+
+            public override void OnRoundTripClosed(RoundTrip roundTrip)
+            {
+                Last = roundTrip;
+            }
+        }
+
         /// <summary>Records the supplied series during OnStart via the protected helper.</summary>
         private class RecordingStrategy : StrategyBase
         {

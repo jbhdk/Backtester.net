@@ -6,9 +6,10 @@ namespace Backtester.Strategies
 {
     /// <summary>
     /// Base class for all strategies, providing a default <see cref="IStrategy"/> implementation scaffold
-    /// and an opt-in seam for exposing computed indicator series (<see cref="IIndicatorSource"/>).
+    /// and opt-in seams for exposing computed indicator series (<see cref="IIndicatorSource"/>) and for
+    /// observing round trips as they close (<see cref="IRoundTripObserver"/>).
     /// </summary>
-    public abstract class StrategyBase : IStrategy, IIndicatorSource
+    public abstract class StrategyBase : IStrategy, IIndicatorSource, IRoundTripObserver
     {
         private readonly List<Indicator> _indicators = new();
 
@@ -25,6 +26,12 @@ namespace Backtester.Strategies
         /// Called on each bar for the given symbol. Strategies submit orders directly via <paramref name="broker"/>.
         /// </summary>
         public abstract void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker);
+
+        /// <summary>
+        /// Called as each round trip closes during a run, before that bar's <c>OnBar</c>. Override to react
+        /// to a round trip's result (e.g. count losses); the default implementation is a no-op.
+        /// </summary>
+        public virtual void OnRoundTripClosed(RoundTrip roundTrip) { }
 
         /// <summary>
         /// Exposes a pre-built composite indicator for reporting, intact. The overload for a multi-series

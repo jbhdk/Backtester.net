@@ -27,6 +27,10 @@ namespace Backtester.Engine
         private readonly Portfolio _portfolio;
         private bool _stopRequested;
 
+        // The number of round trips already delivered to a round-trip observer: a high-water mark over
+        // Portfolio.RoundTrips, so each bar delivers only the trips that closed on it.
+        private int _deliveredRoundTrips;
+
         /// <summary>
         /// Initializes a new engine. Market data for <paramref name="symbols"/> over the given range and interval
         /// is fetched (through the cache) when <see cref="StartAsync"/> is called.
@@ -58,6 +62,7 @@ namespace Backtester.Engine
         public async Task<BacktestResult> StartAsync(CancellationToken ct = default)
         {
             _stopRequested = false;
+            _deliveredRoundTrips = 0;
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> series = await FetchSeriesAsync(ct).ConfigureAwait(false);
 
             _strategy.OnStart(series);
@@ -110,13 +115,15 @@ namespace Backtester.Engine
         }
 
         /// <summary>
-        /// Processes a single slice: fills orders queued on the previous bar, records equity, then invokes the
-        /// strategy and queues any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
+        /// Processes a single slice: fills orders queued on the previous bar, records equity, delivers any
+        /// round trips that closed on this bar to a round-trip observer, then invokes the strategy and queues
+        /// any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
         /// </summary>
         private void RunOnce(MarketSlice slice)
         {
             _broker.ProcessBar(slice);
             _portfolio.RecordEquitySnapshot(slice);
+            DeliverClosedRoundTrips();
 
             PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
@@ -126,6 +133,28 @@ namespace Backtester.Engine
                     _strategy.OnBar(symbol, bar, snapshot, _broker);
                 }
             }
+        }
+
+        /// <summary>
+        /// Delivers each round trip that closed since the previous bar to the strategy when it observes
+        /// round trips (<see cref="IRoundTripObserver"/>), in close order, before this bar's <c>OnBar</c>.
+        /// A strategy that does not implement the seam receives nothing. The engine takes no action of its
+        /// own on the result.
+        /// </summary>
+        private void DeliverClosedRoundTrips()
+        {
+            if (_strategy is not IRoundTripObserver observer)
+            {
+                return;
+            }
+
+            IReadOnlyList<RoundTrip> roundTrips = _portfolio.RoundTrips;
+            for (int index = _deliveredRoundTrips; index < roundTrips.Count; index++)
+            {
+                observer.OnRoundTripClosed(roundTrips[index]);
+            }
+
+            _deliveredRoundTrips = roundTrips.Count;
         }
     }
 }

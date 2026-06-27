@@ -281,6 +281,98 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_RoundTripClosesDuringRun_ObserverReceivesItWithRealizedPnL()
+        {
+            // Buy fills at bar 1's open (110), sell fills at bar 2's open (120) → +$100 round trip,
+            // delivered to the observing strategy as it closes.
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 110m), Bar(T0.AddDays(2), 120m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            RoundTripRecordingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            RoundTrip closed = Assert.Single(strategy.Closed);
+            Assert.Equal(100m, closed.RealizedPnL);
+        }
+
+        [Fact]
+        public async Task StartAsync_RoundTripClosedOnBar_DeliveredBeforeThatBarsOnBar()
+        {
+            // The round trip closes when the sell fills at bar 2's open. Its delivery must precede bar 2's
+            // OnBar, so the event stream is: bar(0), bar(1), closed, bar(2).
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 110m), Bar(T0.AddDays(2), 120m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            RoundTripRecordingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Equal(new[] { "bar", "bar", "closed", "bar" }, strategy.Events);
+        }
+
+        [Fact]
+        public async Task StartAsync_TwoSymbolsCloseOnSameBar_BothDeliveredInCloseOrder()
+        {
+            // AAPL and MSFT both buy on bar 0 and sell on bar 1; both sells fill on bar 2, closing two
+            // round trips on one bar. Each is delivered as its own call, in the order they closed.
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 110m), Bar(T0.AddDays(2), 120m) }),
+                ("MSFT", new[] { Bar(T0, 200m), Bar(T0.AddDays(1), 210m), Bar(T0.AddDays(2), 220m) }));
+            Portfolio portfolio = new(50_000m);
+            BrokerSimulator broker = new(portfolio);
+            BuyThenSellEachSymbolStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Equal(2, strategy.Closed.Count);
+            Assert.Equal(portfolio.RoundTrips, strategy.Closed);
+            Assert.Contains(strategy.Closed, trip => trip.Symbol == "AAPL");
+            Assert.Contains(strategy.Closed, trip => trip.Symbol == "MSFT");
+        }
+
+        [Fact]
+        public async Task StartAsync_PartialExitsOnOneBar_EachClosedPortionDelivered()
+        {
+            // Buy 20, then scale out with two sells of 10 on the same bar; both fill on the next bar,
+            // closing two round trips of 10 each — each delivered as its own call.
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 110m), Bar(T0.AddDays(2), 120m) }));
+            Portfolio portfolio = new(50_000m);
+            BrokerSimulator broker = new(portfolio);
+            PartialScaleOutStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Equal(2, strategy.Closed.Count);
+            Assert.All(strategy.Closed, trip => Assert.Equal(10, trip.Quantity));
+            Assert.Equal(portfolio.RoundTrips, strategy.Closed);
+        }
+
+        [Fact]
+        public async Task StartAsync_NonObserverStrategy_ClosesRoundTripButReceivesNothing()
+        {
+            // A raw IStrategy that does not implement IRoundTripObserver still closes its round trip and the
+            // run is unaffected; the engine simply delivers nothing.
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m), Bar(T0.AddDays(1), 110m), Bar(T0.AddDays(2), 120m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new RawBuySellStrategy(), broker, portfolio);
+            await engine.StartAsync();
+
+            RoundTrip closed = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(100m, closed.RealizedPnL);
+        }
+
+        [Fact]
         public async Task StartAsync_FetchesEverySymbol()
         {
             IHistoricalDataFetcher fetcher = FetcherReturning(
@@ -377,6 +469,117 @@ namespace BacktesterTests.Engine.Tests
             public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
             {
                 broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
+            }
+        }
+
+        /// <summary>
+        /// Buys on its first bar, sells on its next, and records each round trip it observes. Also logs an
+        /// event stream interleaving "bar" (each OnBar) and "closed" (each OnRoundTripClosed) so a test can
+        /// assert the relative ordering of delivery and OnBar.
+        /// </summary>
+        private class RoundTripRecordingStrategy : StrategyBase, IRoundTripObserver
+        {
+            public List<RoundTrip> Closed { get; } = new();
+            public List<string> Events { get; } = new();
+            private bool _bought;
+            private bool _sold;
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                Events.Add("bar");
+                if (!_bought)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 });
+                    _bought = true;
+                }
+                else if (!_sold)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+                    _sold = true;
+                }
+            }
+
+            public override void OnRoundTripClosed(RoundTrip roundTrip)
+            {
+                Events.Add("closed");
+                Closed.Add(roundTrip);
+            }
+        }
+
+        /// <summary>Buys each symbol on its first bar and sells it on its next, recording observed round trips.</summary>
+        private class BuyThenSellEachSymbolStrategy : StrategyBase, IRoundTripObserver
+        {
+            public List<RoundTrip> Closed { get; } = new();
+            // Symbols already bought / already sold, so each is entered once and exited once.
+            private readonly HashSet<string> _bought = new();
+            private readonly HashSet<string> _sold = new();
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (_bought.Add(symbol))
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 });
+                }
+                else if (_sold.Add(symbol))
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+                }
+            }
+
+            public override void OnRoundTripClosed(RoundTrip roundTrip)
+            {
+                Closed.Add(roundTrip);
+            }
+        }
+
+        /// <summary>Buys 20 on its first bar, then scales out with two sells of 10 on the next bar.</summary>
+        private class PartialScaleOutStrategy : StrategyBase, IRoundTripObserver
+        {
+            public List<RoundTrip> Closed { get; } = new();
+            private bool _bought;
+            private bool _sold;
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (!_bought)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 20 });
+                    _bought = true;
+                }
+                else if (!_sold)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+                    _sold = true;
+                }
+            }
+
+            public override void OnRoundTripClosed(RoundTrip roundTrip)
+            {
+                Closed.Add(roundTrip);
+            }
+        }
+
+        /// <summary>A raw IStrategy (no IRoundTripObserver seam) that buys on its first bar and sells on its next.</summary>
+        private class RawBuySellStrategy : IStrategy
+        {
+            private bool _bought;
+            private bool _sold;
+
+            public void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history) { }
+
+            public void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (!_bought)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 });
+                    _bought = true;
+                }
+                else if (!_sold)
+                {
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+                    _sold = true;
+                }
             }
         }
 
