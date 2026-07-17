@@ -32,5 +32,11 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets the run-context section: inputs plus derived final equity and total return.</summary>
         public ReportRunInfo Run { get; set; }
+
+        /// <summary>
+        /// Gets or sets the caller-supplied configuration cards rendered at the top of the report. Null on
+        /// the pure projection path — <see cref="ReportModelBuilder"/> never populates it (ADR 0016).
+        /// </summary>
+        public IReadOnlyList<ReportCard> Configuration { get; set; }
     }
 }

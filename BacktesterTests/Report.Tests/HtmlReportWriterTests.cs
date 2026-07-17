@@ -109,6 +109,15 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_ContainsConfigurationSectionContainer()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // The configuration section is a static container the page's script fills from the model.
+            Assert.Contains("id=\"configuration\"", html);
+        }
+
+        [Fact]
         public void BuildHtml_ContainsRoundTripsTable()
         {
             string html = new HtmlReportWriter().BuildHtml(SampleModel());
@@ -272,6 +281,90 @@ namespace BacktesterTests.Report.Tests
             writer.Write(result, path);
 
             Assert.Equal(writer.BuildHtml(result), File.ReadAllText(path));
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_EmbedsConfigurationCardTitle()
+        {
+            IReadOnlyList<ReportCard> configuration = new[]
+            {
+                new ReportCard { Title = "Strategy settings" }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(SampleResult(), configuration);
+
+            // The caller-supplied card's title reaches the serialized model inlined in the page.
+            Assert.Contains("\"title\":\"Strategy settings\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_EmbedsConfigurationCardRowCells()
+        {
+            IReadOnlyList<ReportCard> configuration = new[]
+            {
+                new ReportCard
+                {
+                    Title = "Strategy settings",
+                    Rows = new[] { new[] { "Fast period", "10" } }
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(SampleResult(), configuration);
+
+            // Each row's cells reach the serialized model as plain strings for the page to lay out.
+            Assert.Contains("\"Fast period\"", html);
+            Assert.Contains("\"10\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_EmbedsConfigurationCardHeaders()
+        {
+            IReadOnlyList<ReportCard> configuration = new[]
+            {
+                new ReportCard
+                {
+                    Title = "Execution models",
+                    Headers = new[] { "Setting", "Value" },
+                    Rows = new[] { new[] { "Commission", "0.5%" } }
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(SampleResult(), configuration);
+
+            // A card's column headers reach the serialized model for the page to render as a header row.
+            Assert.Contains("\"Setting\"", html);
+            Assert.Contains("\"Value\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_FromResult_NullConfigurationMatchesZeroCardOverload()
+        {
+            HtmlReportWriter writer = new();
+            BacktestResult result = SampleResult();
+
+            string withNull = writer.BuildHtml(result, null);
+            string zeroCard = writer.BuildHtml(result);
+
+            // Supplying no configuration leaves the report byte-for-byte identical to the existing path.
+            Assert.Equal(zeroCard, withNull);
+        }
+
+        [Fact]
+        public void Write_FromResult_WithConfiguration_MatchesBuildHtml()
+        {
+            HtmlReportWriter writer = new();
+            BacktestResult result = SampleResult();
+            IReadOnlyList<ReportCard> configuration = new[]
+            {
+                new ReportCard { Title = "Strategy settings", Rows = new[] { new[] { "Fast period", "10" } } }
+            };
+            string path = Path.Combine(Path.GetTempPath(), "bt_report_test", Guid.NewGuid() + ".html");
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+            writer.Write(result, path, configuration);
+
+            // Writing with configuration produces exactly the HTML the build overload returns.
+            Assert.Equal(writer.BuildHtml(result, configuration), File.ReadAllText(path));
         }
 
         [Fact]

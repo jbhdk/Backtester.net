@@ -17,7 +17,7 @@
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 24px; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
-  #stats-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  #stats-panel, #configuration { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
   .stat-group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
   .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
   .stat:last-child { border-bottom: none; }
@@ -33,6 +33,15 @@
   .badge-short { color: #e0a33e; background: rgba(224, 163, 62, .14); }
   .badge-rejected { color: var(--red); background: rgba(231, 76, 60, .14); text-transform: none; letter-spacing: 0; }
   tbody tr.rejected td { color: var(--muted); }
+  /* Configuration-card tables sit inside a .stat-group panel, so strip the panel chrome the broad
+     table rule adds below, left-align the text, and drop the sort affordances. */
+  .stat-group table.card-table { border: none; border-radius: 0; background: none; }
+  .stat-group table.card-table th, .stat-group table.card-table td {
+    text-align: left; white-space: normal; font-variant-numeric: normal; padding: 4px 0; border-bottom: 1px solid var(--line);
+  }
+  .stat-group table.card-table thead th { cursor: default; color: var(--muted); font-weight: 600; }
+  .stat-group table.card-table tbody tr:last-child td { border-bottom: none; }
+  .stat-group table.card-table td:first-child { color: var(--muted); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
@@ -58,6 +67,9 @@
 <body>
 <h1>Backtest Report</h1>
 <p class="sub" id="run-subtitle"></p>
+
+<!-- Caller-supplied configuration cards; the script fills this and unhides it when the model carries any. -->
+<section id="configuration" hidden></section>
 
 <h2>Equity by trade</h2>
 <div id="equity-chart"></div>
@@ -221,6 +233,49 @@
 
   document.getElementById("run-subtitle").textContent =
     symbols + " · " + (run.interval || "") + " · " + fmtDate(run.fromUtc) + " – " + fmtDate(run.toUtc);
+
+  // --- Configuration cards ---
+  // Escape arbitrary caller text so a cell like "risk < 2% & ..." can never corrupt the table markup.
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // Render the caller-supplied configuration cards into the top section. Each card is a .stat-group
+  // (matching the stat panel's chrome) holding an optional heading and a table. Degenerate input is
+  // absorbed here: a card with no rows is skipped, an absent title drops the heading, absent headers
+  // drop the header row, ragged rows render exactly as supplied, and the section stays hidden when empty.
+  function renderConfiguration() {
+    var cards = model.configuration || [];
+    var host = document.getElementById("configuration");
+    var html = "";
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i] || {};
+      var rows = card.rows || [];
+      if (!rows.length) continue;
+      var inner = card.title ? "<h2>" + esc(card.title) + "</h2>" : "";
+      inner += '<table class="card-table">';
+      var headers = card.headers || [];
+      if (headers.length) {
+        inner += "<thead><tr>";
+        for (var h = 0; h < headers.length; h++) inner += "<th>" + esc(headers[h]) + "</th>";
+        inner += "</tr></thead>";
+      }
+      inner += "<tbody>";
+      for (var r = 0; r < rows.length; r++) {
+        var cells = rows[r] || [];
+        inner += "<tr>";
+        for (var c = 0; c < cells.length; c++) inner += "<td>" + esc(cells[c]) + "</td>";
+        inner += "</tr>";
+      }
+      inner += "</tbody></table>";
+      html += '<div class="stat-group">' + inner + "</div>";
+    }
+    host.innerHTML = html;
+    host.hidden = html === "";
+  }
+
+  renderConfiguration();
 
   // --- Round-trips table ---
   var trips = (model.roundTrips || []).slice();

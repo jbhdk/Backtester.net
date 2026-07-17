@@ -43,6 +43,15 @@ namespace BacktesterTests.Report.Tests
                 bracketLevelChanges ?? Array.Empty<BracketLevelChange>());
         }
 
+        [Fact]
+        public void Build_LeavesConfigurationNull()
+        {
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), new Portfolio(10_000m), NoIndicators()));
+
+            // Configuration cards are caller-supplied (ADR 0016); the pure projection never populates them.
+            Assert.Null(model.Configuration);
+        }
+
         private static Trade Trade(string symbol, OrderSide side, decimal price, int qty, DateTime ts)
         {
             return new() { Id = Guid.NewGuid().ToString(), Symbol = symbol, Side = side, Price = price, Quantity = qty, Timestamp = ts };

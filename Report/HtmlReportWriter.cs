@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -50,6 +51,27 @@ namespace Backtester.Report
         public void Write(BacktestResult result, string path)
         {
             Write(new ReportModelBuilder().Build(result), path);
+        }
+
+        /// <summary>
+        /// Builds the complete HTML document from a backtest run, attaching the caller-supplied
+        /// configuration cards to the projected model before rendering. The builder itself never sees the
+        /// cards — they are layered on after the pure projection (ADR 0016).
+        /// </summary>
+        public string BuildHtml(BacktestResult result, IReadOnlyList<ReportCard> configuration)
+        {
+            ReportModel model = new ReportModelBuilder().Build(result);
+            model.Configuration = configuration;
+            return BuildHtml(model);
+        }
+
+        /// <summary>
+        /// Writes the HTML report for a backtest run to the file at <paramref name="path"/>, attaching the
+        /// caller-supplied configuration cards to the projected model before rendering (ADR 0016).
+        /// </summary>
+        public void Write(BacktestResult result, string path, IReadOnlyList<ReportCard> configuration)
+        {
+            File.WriteAllText(path, BuildHtml(result, configuration));
         }
 
         /// <summary>

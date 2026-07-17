@@ -17,3 +17,11 @@ context, and the chart renders the exact bars the backtest ran on.
 
 A returned result avoids the temporal coupling and keeps the run's outputs in one place, at the
 cost of changing the `IEngine` contract.
+
+## Amendment (ADR 0016)
+
+"A report is built from the result alone" holds for everything the report *derives*. ADR 0016 adds
+one deliberate exception: caller-declared **configuration cards** (`ReportModel.Configuration`) are
+supplied by the caller and layered on top of the projection, because a strategy's settings do not
+exist in a `BacktestResult` and cannot be derived. `ReportModelBuilder` still projects the result
+alone and never populates that property.
