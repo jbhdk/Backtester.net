@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using Backtester.Report;
 using Backtester.Report.Toolkit;
@@ -64,6 +65,64 @@ namespace BacktesterTests.Report.Toolkit.Tests
             Assert.Equal(
                 new[] { "Slow period", "Fast period" },
                 new[] { macd.Rows[0][0], macd.Rows[1][0] });
+        }
+
+        [Fact]
+        public void Build_UnattributedProperty_AppearsInOtherGroupLabelledByPropertyName()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            CatchAllSettings settings = new CatchAllSettings { UntidyValue = 7 };
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            ReportCard other = cards.Single(card => card.Title == "Other");
+            Assert.Equal(new[] { "UntidyValue", "7" }, Assert.Single(other.Rows));
+        }
+
+        [Fact]
+        public void Build_OtherGroup_RendersLastEvenWhenItsMemberIsDeclaredFirst()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            CatchAllSettings settings = new CatchAllSettings();
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            Assert.Equal(new[] { "MACD", "Other" }, cards.Select(card => card.Title).ToArray());
+        }
+
+        [Fact]
+        public void Build_IgnoredProperty_ExcludedFromItsGroupEvenWithDisplayAttribute()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            IgnoreSettings settings = new IgnoreSettings { FastPeriod = 12, SecretPeriod = 99 };
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            ReportCard macd = cards.Single(card => card.Title == "MACD");
+            Assert.Equal(new[] { "Fast period", "12" }, Assert.Single(macd.Rows));
+        }
+
+        [Fact]
+        public void Build_IgnoredUnattributedProperty_DoesNotSurfaceInOtherGroup()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            IgnoreSettings settings = new IgnoreSettings();
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            Assert.DoesNotContain(cards, card => card.Title == "Other");
         }
 
         [Fact]
