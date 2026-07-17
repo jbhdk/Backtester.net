@@ -14,7 +14,7 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds four NuGet packages. Use the engine on its own, and add a data source or
+The repository builds five NuGet packages. Use the engine on its own, and add a data source or
 reporting when you want them. The core makes no outbound network call on its own — every live data
 provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
@@ -24,6 +24,7 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | [`backtester.net.yahoo`](Backtester.Data.Yahoo/README.md) | Opt-in Yahoo Finance data provider. BCL-only. | `backtester.net` |
 | [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
 | [`backtester.net.report`](Report/README.md) | Opt-in HTML reporting built from a run's `BacktestResult`. Kept separate so the engine takes on no web-asset dependencies. | `backtester.net` |
+| [`backtester.net.report.toolkit`](Report.Toolkit/README.md) | Opt-in report-side helper that reflects an attributed settings object into configuration cards, so a strategy's parameters render at the top of the report. | `backtester.net.report` |
 
 ---
 <!-- 
@@ -320,6 +321,24 @@ ReportModel model = new ReportModelBuilder().Build(result);
 string json = System.Text.Json.JsonSerializer.Serialize(model);
 ```
 
+### Surfacing your settings
+
+Want the report to show *how the run was configured*? The opt-in
+[`backtester.net.report.toolkit`](Report.Toolkit/README.md) package turns any settings object into
+configuration cards without hand-writing settings tables. Decorate your parameter properties with
+`ReportSettingAttribute` (a display label, a group, and an optional `Order`), and
+`ConfigurationCardBuilder` reflects the object into one grouped card per group, which you pass to the
+report writer's configuration overload:
+
+```csharp
+IReadOnlyList<ReportCard> cards = new ConfigurationCardBuilder().Build(parameters);
+new HtmlReportWriter().Write(result, "report.html", cards);
+```
+
+A property you forget to attribute still shows up — in a catch-all `"Other"` card labelled by its
+property name — so a changed parameter is never silently omitted. See the
+[package README](Report.Toolkit/README.md) for grouping, ordering, opt-out, and formatting details.
+
 ---
 
 ## Project layout
@@ -335,6 +354,7 @@ Backtester/            The engine (backtester.net)
 Backtester.Data.Yahoo/   Yahoo Finance provider (backtester.net.yahoo)
 Backtester.Data.Alpaca/  Alpaca provider (backtester.net.alpaca)
 Report/                HTML reporting (backtester.net.report)
+Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
 BacktesterTests/       Test suite
 samples/data/          Example OHLCV CSV
 CONTEXT.md             The engine's ubiquitous language (glossary)
@@ -342,8 +362,9 @@ CONTEXT.md             The engine's ubiquitous language (glossary)
 
 Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md),
 [`Backtester.Data.Yahoo/README.md`](Backtester.Data.Yahoo/README.md),
-[`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md), and
-[`Report/README.md`](Report/README.md).
+[`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md),
+[`Report/README.md`](Report/README.md), and
+[`Report.Toolkit/README.md`](Report.Toolkit/README.md).
 
 ---
 
