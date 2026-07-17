@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 
 namespace Backtester.Report.Toolkit
@@ -18,16 +19,18 @@ namespace Backtester.Report.Toolkit
         /// property without one falls into the catch-all "Other" group, labelled by its property name; a
         /// property carrying <see cref="ReportSettingIgnoreAttribute"/> is excluded from every card. Curated
         /// groups render in the declaration order of their first member, but the "Other" card always renders
-        /// last. Rows within a group render in declaration order, each a two-cell <c>[label, value]</c> list
-        /// with values formatted using the invariant culture.
+        /// last. Rows within a group render in ascending <see cref="ReportSettingAttribute.Order"/>, ties
+        /// broken by declaration order, each a two-cell <c>[label, value]</c> list with values formatted
+        /// using the invariant culture.
         /// </summary>
         /// <param name="settings">The settings object whose properties describe the run's configuration.</param>
         /// <returns>The configuration cards: curated groups in declaration order, then the "Other" catch-all last.</returns>
         public IReadOnlyList<ReportCard> Build(object settings)
         {
-            // Key: group name. Value: the mutable row list backing that group's card, so later members of
-            // the same group append to the card opened by the group's first member.
-            Dictionary<string, List<IReadOnlyList<string>>> rowsByGroup = new();
+            // Key: group name. Value: the group's accumulated (order, row) pairs in declaration order, so a
+            // later stable sort by order can tie-break on declaration order. Later members of the same group
+            // append to the list opened by the group's first member.
+            Dictionary<string, List<(int Order, IReadOnlyList<string> Row)>> rowsByGroup = new();
 
             // Cards in first-appearance (declaration) order, tracked separately from the lookup above because
             // properties are reflected in declaration order.
@@ -49,14 +52,28 @@ namespace Backtester.Report.Toolkit
                 string group = setting != null ? setting.Group : OtherGroup;
                 string label = setting != null ? setting.Label : property.Name;
 
-                if (!rowsByGroup.TryGetValue(group, out List<IReadOnlyList<string>> rows))
+                // Un-attributed catch-all rows have no author-supplied order; the default 0 leaves them in
+                // declaration order, matching a curated row that leaves Order at its default.
+                int order = setting != null ? setting.Order : 0;
+
+                if (!rowsByGroup.TryGetValue(group, out List<(int Order, IReadOnlyList<string> Row)> rows))
                 {
-                    rows = new List<IReadOnlyList<string>>();
+                    rows = new List<(int, IReadOnlyList<string>)>();
                     rowsByGroup.Add(group, rows);
-                    cards.Add(new ReportCard { Title = group, Headers = null, Rows = rows });
+                    cards.Add(new ReportCard { Title = group, Headers = null, Rows = null });
                 }
 
-                rows.Add(new List<string> { label, Format(property.GetValue(settings)) });
+                rows.Add((order, new List<string> { label, Format(property.GetValue(settings)) }));
+            }
+
+            // Within each group, rows render in ascending author-supplied order. OrderBy is a stable sort, so
+            // rows sharing an order keep the declaration order they were accumulated in.
+            foreach (ReportCard card in cards)
+            {
+                card.Rows = rowsByGroup[card.Title]
+                    .OrderBy(entry => entry.Order)
+                    .Select(entry => entry.Row)
+                    .ToList();
             }
 
             // The catch-all card always renders last, regardless of where its first member appears in

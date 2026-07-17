@@ -68,6 +68,40 @@ namespace BacktesterTests.Report.Toolkit.Tests
         }
 
         [Fact]
+        public void Build_RowsWithinGroup_RenderInAscendingOrder()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            OrderedSettings settings = new OrderedSettings { FastPeriod = 12, SlowPeriod = 26 };
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            ReportCard macd = Assert.Single(cards);
+            Assert.Equal(
+                new[] { "Slow period", "Fast period" },
+                new[] { macd.Rows[0][0], macd.Rows[1][0] });
+        }
+
+        [Fact]
+        public void Build_RowsSharingOrder_PreserveDeclarationOrderAfterSorting()
+        {
+            // Arrange
+            ConfigurationCardBuilder builder = new ConfigurationCardBuilder();
+            TiedOrderSettings settings = new TiedOrderSettings();
+
+            // Act
+            IReadOnlyList<ReportCard> cards = builder.Build(settings);
+
+            // Assert
+            ReportCard risk = Assert.Single(cards);
+            Assert.Equal(
+                new[] { "Alpha", "Beta", "Gamma" },
+                risk.Rows.Select(row => row[0]).ToArray());
+        }
+
+        [Fact]
         public void Build_UnattributedProperty_AppearsInOtherGroupLabelledByPropertyName()
         {
             // Arrange
