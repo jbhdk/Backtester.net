@@ -220,3 +220,50 @@ capital: `starting capital + the symbol's own realized + unrealized PnL` at each
 symbol's per-symbol max drawdown, CAGR, and Sharpe. For a single-symbol run it equals the portfolio's
 marked equity exactly. Per-symbol isolated curves do **not** sum to the portfolio curve.
 _Avoid_: symbol equity (unqualified), allocated equity.
+
+### Analysis
+
+**Analysis**:
+A machine-generated critique of one run: a short summary plus a list of Findings, rendered as its own
+report section. It is **commentary, not measurement** — it interprets the Performance stats and round
+trips, it never produces a number the report could not already show. Like configuration, it is
+caller-supplied: the report never generates it.
+_Avoid_: performance stats, results, review, insight.
+
+**Finding**:
+One observation about a run paired with the change it recommends. Carries a **category** (what area of
+the run it concerns), a **severity**, the **observation** (what the numbers show), and the
+**recommendation** (what to change). Observation and recommendation are separate on purpose: evidence
+must be stated before a prescription is made. A finding may also be a **strength** — something the run
+does well — which is not a low-severity problem.
+_Avoid_: issue, suggestion, insight, signal.
+
+**Analysis digest**:
+The deliberately reduced view of a run handed to an Analyzer. It carries the run context, the
+Performance stats, the per-symbol stats, the round trips, the rejected orders, and the caller's
+configuration — and deliberately omits candles and indicator series, which are for the reader's eye,
+not for interpretation. Its size is bounded by round-trip count: a run with more round trips than the
+digest admits is **rejected**, not silently sampled, unless the caller asks for sampling — and a
+sampled digest says so within itself, so the Analysis is never mistaken for a whole-run conclusion.
+_Avoid_: prompt, payload, context, summary.
+
+**Analyzer**:
+The orchestrator that turns a run into an Analysis: it builds the Analysis digest, asks an Analysis
+client, and validates what comes back. It owns the whole contract — the digest, the instructions, and
+the required output shape — so that an Analysis reads the same whichever AI produced it. It is
+**AI-agnostic** and makes no outbound call itself.
+_Avoid_: reviewer, critic, agent.
+
+**Analysis client**:
+The adapter for one AI service (Ollama, OpenAI, Gemini, OpenRouter). It carries the Analyzer's request
+to that service and returns the raw answer; it decides nothing about what is asked or what is
+acceptable. Deliberately **not** called a Provider — a Provider fetches bars.
+_Avoid_: provider, model (model means an execution model), backend, vendor.
+
+**Analysis contract**:
+The fixed output shape every Analysis client's answer must satisfy. Enforced by the Analyzer, not
+trusted from the AI: an answer that names an unknown severity, omits a recommendation, or is not
+well-formed is a **violation** and is rejected, never repaired or coerced. A run gets a valid Analysis
+or none at all — a partially-understood Analysis would leave the reader unable to tell which parts the
+AI actually produced.
+_Avoid_: schema (unqualified), format, response.
