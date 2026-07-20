@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Backtester.Data.Alpaca\Backtester.Data.Alpaca.csproj" />
     <ProjectReference Include="..\Backtester.Data.Yahoo\Backtester.Data.Yahoo.csproj" />
     <ProjectReference Include="..\Analysis\Analysis.csproj" />
+    <ProjectReference Include="..\Analysis.Claude\Analysis.Claude.csproj" />
   </ItemGroup>
 
 </Project>
