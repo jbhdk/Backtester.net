@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Backtester.Engine;
 
 namespace Backtester.Report
@@ -31,7 +32,11 @@ namespace Backtester.Report
         {
             // camelCase so the template's JavaScript reads the model idiomatically. The default
             // HTML-safe encoder still escapes < > & so the JSON is safe to inline in a <script>.
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+
+            // Enums reach the page as their names, matching how Direction and ExitReason are already
+            // page-friendly strings: the page groups and styles Findings by severity name, never by ordinal.
+            Converters = { new JsonStringEnumConverter() }
         };
 
         /// <summary>

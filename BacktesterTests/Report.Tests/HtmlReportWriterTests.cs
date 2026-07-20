@@ -368,6 +368,130 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_EmbedsAnalysisSummary()
+        {
+            ReportModel model = SampleModel();
+            model.Analysis = new ReportAnalysis { Summary = "The run is profitable but thinly traded." };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // The attached Analysis's summary reaches the serialized model inlined in the page.
+            Assert.Contains("\"summary\":\"The run is profitable but thinly traded.\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_EmbedsFindingObservationAndRecommendationSeparately()
+        {
+            ReportModel model = SampleModel();
+            model.Analysis = new ReportAnalysis
+            {
+                Findings = new[]
+                {
+                    new ReportFinding
+                    {
+                        Title = "Single trade",
+                        Observation = "The run closed one round trip.",
+                        Recommendation = "Widen the date range before drawing conclusions."
+                    }
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // Evidence and prescription reach the page as separate members, never merged into one field.
+            Assert.Contains("\"title\":\"Single trade\"", html);
+            Assert.Contains("\"observation\":\"The run closed one round trip.\"", html);
+            Assert.Contains("\"recommendation\":\"Widen the date range before drawing conclusions.\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_SerializesFindingSeverityAsStringNotOrdinal()
+        {
+            ReportModel model = SampleModel();
+            model.Analysis = new ReportAnalysis
+            {
+                Findings = new[] { new ReportFinding { Title = "Thin sample", Severity = FindingSeverity.High } }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // The page styles Findings by severity name, so the enum must reach it as its name.
+            Assert.Contains("\"severity\":\"High\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_SerializesFindingCategoryAsStringNotOrdinal()
+        {
+            ReportModel model = SampleModel();
+            model.Analysis = new ReportAnalysis
+            {
+                Findings = new[] { new ReportFinding { Title = "Stale bars", Category = FindingCategory.DataQuality } }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // The page labels a Finding with the area of the run it concerns, so the category reaches it by name.
+            Assert.Contains("\"category\":\"DataQuality\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_EmbedsAnalysisProvenance()
+        {
+            ReportModel model = SampleModel();
+            model.Analysis = new ReportAnalysis
+            {
+                Summary = "Thinly traded.",
+                Provenance = new AnalysisProvenance
+                {
+                    Service = "Ollama",
+                    Model = "qwen2.5:7b",
+                    GeneratedAtUtc = T0,
+                    PackageVersion = "1.0.42"
+                }
+            };
+
+            string html = new HtmlReportWriter().BuildHtml(model);
+
+            // A reader six months on must be able to tell what produced the Analysis, so every part of
+            // the provenance reaches the page for the section's subtitle.
+            Assert.Contains("\"service\":\"Ollama\"", html);
+            Assert.Contains("\"model\":\"qwen2.5:7b\"", html);
+            Assert.Contains("\"generatedAtUtc\":\"2024-01-02T00:00:00Z\"", html);
+            Assert.Contains("\"packageVersion\":\"1.0.42\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_ContainsAnalysisSectionContainer()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // The Analysis section is a static container the page's script fills from the model.
+            Assert.Contains("id=\"analysis\"", html);
+        }
+
+        [Fact]
+        public void BuildHtml_PlacesAnalysisSectionBetweenStatsPanelAndPriceChart()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // The critique is read after the numbers it interprets and before the chart.
+            Assert.InRange(html.IndexOf("id=\"analysis\"", StringComparison.Ordinal),
+                html.IndexOf("id=\"stats-panel\"", StringComparison.Ordinal),
+                html.IndexOf("id=\"price-chart\"", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void BuildHtml_NullAnalysis_LeavesSectionHiddenAndInlinesNoAnalysis()
+        {
+            string html = new HtmlReportWriter().BuildHtml(SampleModel());
+
+            // No Analysis reaches the page and the section ships hidden, so the report renders exactly
+            // as it did before — the same pattern an absent configuration follows.
+            Assert.Contains("\"analysis\":null", html);
+            Assert.Contains("<section id=\"analysis\" hidden>", html);
+        }
+
+        [Fact]
         public void BuildHtml_SerializesModelAsCamelCase()
         {
             string html = new HtmlReportWriter().BuildHtml(SampleModel());

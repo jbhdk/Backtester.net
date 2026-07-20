@@ -59,6 +59,28 @@
   .toolbar label, .chart-head label { font-size: 13px; color: #9aa4b2; }
   .show-all { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9aa4b2; cursor: pointer; user-select: none; }
   #symbol-select, #series-type-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; }
+  /* Analysis section: a machine-generated critique, so it names what produced it in its subtitle and
+     colours each Finding by severity. A strength is not the mildest complaint — it gets its own
+     colour and its own tinted panel so it never reads as a low-severity problem. */
+  #analysis { margin-bottom: 28px; }
+  .analysis-sub { color: var(--muted); font-size: 12px; margin: -6px 0 12px; }
+  .analysis-summary { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin: 0 0 16px; font-size: 13px; }
+  #analysis-findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .finding { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 8px; padding: 14px 16px; }
+  .finding-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .finding-title { font-weight: 600; font-size: 13px; }
+  .finding-category { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .finding p { margin: 0 0 10px; font-size: 12px; }
+  .finding p:last-child { margin-bottom: 0; }
+  .finding .lead { display: block; color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+  .finding.sev-high { border-left-color: var(--red); }
+  .finding.sev-medium { border-left-color: #e0a33e; }
+  .finding.sev-low { border-left-color: var(--accent); }
+  .finding.sev-strength { border-left-color: var(--green); background: rgba(46, 204, 113, .06); }
+  .badge-high { color: var(--red); background: rgba(231, 76, 60, .14); }
+  .badge-medium { color: #e0a33e; background: rgba(224, 163, 62, .14); }
+  .badge-low { color: var(--accent); background: rgba(78, 161, 255, .14); }
+  .badge-strength { color: var(--green); background: rgba(46, 204, 113, .14); }
   [hidden] { display: none !important; }
   tbody tr { cursor: pointer; }
   tbody tr.active { background: rgba(78,161,255,.15); }
@@ -84,6 +106,14 @@
   <div class="stat-group dual" id="duration-stats"><h2>Trade duration</h2><div class="stat-body"></div></div>
   <div class="stat-group dual" id="exposure-stats"><h2>Exposure &amp; capital</h2><div class="stat-body"></div></div>
   <div class="stat-group" id="run-context"><h2>Run context</h2><div class="stat-body"></div></div>
+</section>
+
+<!-- Caller-supplied Analysis; the script fills this and unhides it when the model carries one. -->
+<section id="analysis" hidden>
+  <h2>Analysis</h2>
+  <p class="analysis-sub" id="analysis-provenance"></p>
+  <p class="analysis-summary" id="analysis-summary"></p>
+  <div id="analysis-findings"></div>
 </section>
 
 <div class="chart-head"><label for="series-type-select">Chart type</label><select id="series-type-select"><option value="candles">Candles</option><option value="bars">Bars</option><option value="line">Line</option></select><label class="show-all" id="bracket-toggle-label"><input type="checkbox" id="show-bracket-levels" checked> Stop / target</label></div>
@@ -276,6 +306,75 @@
   }
 
   renderConfiguration();
+
+  // --- Analysis ---
+  // The order Findings are grouped in. A strength sorts last and carries its own colour: it is
+  // something the run does well, not the mildest problem on the list.
+  var severityOrder = ["High", "Medium", "Low", "Strength"];
+
+  function severityRank(severity) {
+    var index = severityOrder.indexOf(String(severity));
+    return index < 0 ? severityOrder.length : index;
+  }
+
+  // The contract's enum names reach the page verbatim ("DataQuality"); split them for the reader.
+  function categoryLabel(category) {
+    var words = String(category || "").replace(/([a-z])([A-Z])/g, "$1 $2");
+    return words.charAt(0) + words.slice(1).toLowerCase();
+  }
+
+  // "Ollama · qwen2.5:14b · 2026-07-20 09:14 UTC · analysis 1.0.87" — the section says what wrote it.
+  function provenanceLine(provenance) {
+    var parts = [];
+    if (provenance.service) parts.push(provenance.service);
+    if (provenance.model) parts.push(provenance.model);
+    if (provenance.generatedAtUtc) {
+      parts.push(new Date(provenance.generatedAtUtc).toISOString().replace("T", " ").slice(0, 16) + " UTC");
+    }
+    if (provenance.packageVersion) parts.push("analysis " + provenance.packageVersion);
+    return "Machine-generated · " + parts.join(" · ");
+  }
+
+  // Render the caller-supplied Analysis: a summary, a provenance subtitle, and the Findings grouped by
+  // severity. A null Analysis leaves the section hidden, exactly as an absent configuration does.
+  function renderAnalysis() {
+    var analysis = model.analysis;
+    var host = document.getElementById("analysis");
+    if (!analysis) {
+      host.hidden = true;
+      return;
+    }
+
+    var provenanceEl = document.getElementById("analysis-provenance");
+    provenanceEl.textContent = analysis.provenance ? provenanceLine(analysis.provenance) : "Machine-generated";
+
+    var summaryEl = document.getElementById("analysis-summary");
+    summaryEl.textContent = analysis.summary || "";
+    summaryEl.hidden = !analysis.summary;
+
+    var findings = (analysis.findings || []).slice().sort(function (a, b) {
+      return severityRank(a.severity) - severityRank(b.severity);
+    });
+    var html = "";
+    for (var i = 0; i < findings.length; i++) {
+      var finding = findings[i] || {};
+      var severity = String(finding.severity || "");
+      var key = severity.toLowerCase();
+      html += '<div class="finding sev-' + esc(key) + '">' +
+        '<div class="finding-head">' +
+          '<span class="finding-title">' + esc(finding.title) + "</span>" +
+          '<span class="badge badge-' + esc(key) + '">' + esc(severity) + "</span>" +
+        "</div>" +
+        '<p class="finding-category">' + esc(categoryLabel(finding.category)) + "</p>" +
+        (finding.observation ? "<p><span class=\"lead\">Observation</span>" + esc(finding.observation) + "</p>" : "") +
+        (finding.recommendation ? "<p><span class=\"lead\">Recommendation</span>" + esc(finding.recommendation) + "</p>" : "") +
+        "</div>";
+    }
+    document.getElementById("analysis-findings").innerHTML = html;
+    host.hidden = false;
+  }
+
+  renderAnalysis();
 
   // --- Round-trips table ---
   var trips = (model.roundTrips || []).slice();

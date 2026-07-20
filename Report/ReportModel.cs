@@ -38,5 +38,12 @@ namespace Backtester.Report
         /// the pure projection path — <see cref="ReportModelBuilder"/> never populates it (ADR 0016).
         /// </summary>
         public IReadOnlyList<ReportCard> Configuration { get; set; }
+
+        /// <summary>
+        /// Gets or sets the caller-supplied Analysis rendered as its own section. Null on the pure
+        /// projection path — <see cref="ReportModelBuilder"/> never populates it, exactly as it never
+        /// populates <see cref="Configuration"/> (ADR 0016). A null Analysis renders no section.
+        /// </summary>
+        public ReportAnalysis Analysis { get; set; }
     }
 }

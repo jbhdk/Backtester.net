@@ -52,6 +52,16 @@ namespace BacktesterTests.Report.Tests
             Assert.Null(model.Configuration);
         }
 
+        [Fact]
+        public void Build_LeavesAnalysisNull()
+        {
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), new Portfolio(10_000m), NoIndicators()));
+
+            // An Analysis is caller-supplied like the configuration cards; the pure projection never
+            // populates it, and a null Analysis renders no section.
+            Assert.Null(model.Analysis);
+        }
+
         private static Trade Trade(string symbol, OrderSide side, decimal price, int qty, DateTime ts)
         {
             return new() { Id = Guid.NewGuid().ToString(), Symbol = symbol, Side = side, Price = price, Quantity = qty, Timestamp = ts };
