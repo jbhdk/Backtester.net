@@ -17,8 +17,5 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets when the Analysis was produced, in UTC.</summary>
         public DateTime GeneratedAtUtc { get; set; }
-
-        /// <summary>Gets or sets the version of the analysis package that produced the Analysis.</summary>
-        public string PackageVersion { get; set; }
     }
 }

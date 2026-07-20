@@ -323,7 +323,7 @@
     return words.charAt(0) + words.slice(1).toLowerCase();
   }
 
-  // "Ollama · qwen2.5:14b · 2026-07-20 09:14 UTC · analysis 1.0.87" — the section says what wrote it.
+  // "Ollama · qwen2.5:14b · 2026-07-20 09:14 UTC" — the section says what wrote it.
   function provenanceLine(provenance) {
     var parts = [];
     if (provenance.service) parts.push(provenance.service);
@@ -331,7 +331,6 @@
     if (provenance.generatedAtUtc) {
       parts.push(new Date(provenance.generatedAtUtc).toISOString().replace("T", " ").slice(0, 16) + " UTC");
     }
-    if (provenance.packageVersion) parts.push("analysis " + provenance.packageVersion);
     return "Machine-generated · " + parts.join(" · ");
   }
 

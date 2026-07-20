@@ -45,7 +45,7 @@ vocabulary and category set and is therefore the other half of the contract.
 - `Category` and `Severity` are enums on the public types and serialize to strings for the page,
   matching how `ExitReason` and `Direction` are already page-friendly strings in the report model.
   Adding a category or severity later is a contract change affecting every client.
-- The Analysis section renders its **Provenance** — service, model, timestamp, package version — as its
+- The Analysis section renders its **Provenance** — service, model, timestamp — as its
   subtitle. A reader six months on must be able to tell whether a claim came from a 7B local model or a
   frontier one, and the section must be unmistakably machine-generated.
 - The Analyzer is tested against a faked `IAnalysisClient`, following the existing precedent of faking

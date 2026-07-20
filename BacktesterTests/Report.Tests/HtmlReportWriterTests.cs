@@ -445,8 +445,7 @@ namespace BacktesterTests.Report.Tests
                 {
                     Service = "Ollama",
                     Model = "qwen2.5:7b",
-                    GeneratedAtUtc = T0,
-                    PackageVersion = "1.0.42"
+                    GeneratedAtUtc = T0
                 }
             };
 
@@ -457,7 +456,6 @@ namespace BacktesterTests.Report.Tests
             Assert.Contains("\"service\":\"Ollama\"", html);
             Assert.Contains("\"model\":\"qwen2.5:7b\"", html);
             Assert.Contains("\"generatedAtUtc\":\"2024-01-02T00:00:00Z\"", html);
-            Assert.Contains("\"packageVersion\":\"1.0.42\"", html);
         }
 
         [Fact]
