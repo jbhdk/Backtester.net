@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -366,6 +367,195 @@ namespace BacktesterTests.Analysis.Tests
             Assert.DoesNotContain("evenly spaced across the run", request.UserPrompt);
         }
 
+        [Fact]
+        public async Task AnalyzeAsync_UnknownSeverity_IsRejectedNotCoerced()
+        {
+            string answer = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"risk\",\"severity\":\"critical\",\"title\":\"t\"," +
+                "\"observation\":\"o\",\"recommendation\":\"r\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("critical", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_UnknownCategory_IsRejectedNotCoerced()
+        {
+            string answer = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"psychology\",\"severity\":\"high\",\"title\":\"t\"," +
+                "\"observation\":\"o\",\"recommendation\":\"r\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("psychology", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_FindingMissingItsRecommendation_IsRejectedNotDropped()
+        {
+            string answer = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"risk\",\"severity\":\"high\",\"title\":\"t\"," +
+                "\"observation\":\"o\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("recommendation", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_FindingMissingItsObservation_IsRejected()
+        {
+            string answer = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"risk\",\"severity\":\"high\",\"title\":\"t\"," +
+                "\"recommendation\":\"r\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("observation", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_FindingMissingItsTitle_IsRejected()
+        {
+            string answer = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"risk\",\"severity\":\"high\"," +
+                "\"observation\":\"o\",\"recommendation\":\"r\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("title", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_ResponseMissingItsSummary_IsRejected()
+        {
+            string answer = "{\"findings\":[]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(answer));
+
+            Assert.Contains("summary", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_AnswerThatIsNotWellFormed_IsRejected()
+        {
+            await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync("The strategy looks solid, but the stop is too wide."));
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_AnswerWrappedInAMarkdownFence_IsRejectedNotUnwrapped()
+        {
+            string answer = "```json" + Environment.NewLine +
+                "{\"summary\":\"s\",\"findings\":[]}" + Environment.NewLine +
+                "```";
+
+            await Assert.ThrowsAsync<AnalysisFormatException>(() => AnalyzeAsync(answer));
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_ValidOnTheRetry_ProducesTheAnalysis()
+        {
+            string violating = "{\"summary\":\"s\",\"findings\":[" + Finding("critical", "A high") + "]}";
+            string valid = "{\"summary\":\"Corrected.\",\"findings\":[" + Finding("high", "A high") + "]}";
+
+            ReportAnalysis analysis = await AnalyzeAsync(violating, valid);
+
+            Assert.Equal("Corrected.", analysis.Summary);
+            Assert.Equal(FindingSeverity.High, Assert.Single(analysis.Findings).Severity);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_AViolation_AsksTheClientExactlyTwice()
+        {
+            IAnalysisClient client = FakeClient("{\"summary\":\"s\",\"findings\":[" + Finding("critical", "t") + "]}");
+            ReportAnalyzer analyzer = new ReportAnalyzer(client, new AnalysisOptions());
+
+            await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => analyzer.AnalyzeAsync(SampleReportModel.Build(), CancellationToken.None));
+
+            A.CallTo(() => client.AskAsync(A<AnalysisRequest>._, A<CancellationToken>._))
+                .MustHaveHappenedTwiceExactly();
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_TheRetryCarriesTheValidationError()
+        {
+            string violating = "{\"summary\":\"s\",\"findings\":[" + Finding("critical", "t") + "]}";
+            string valid = "{\"summary\":\"s\",\"findings\":[]}";
+
+            AnalysisRequest retry = await CaptureRetryRequestAsync(violating, valid);
+
+            Assert.Contains("## Correction", retry.UserPrompt);
+            Assert.Contains("findings[0].severity", retry.UserPrompt);
+            Assert.Contains("critical", retry.UserPrompt);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_TheFirstRequestCarriesNoCorrection()
+        {
+            AnalysisRequest request = await CaptureRequestAsync(SampleReportModel.Build(), new AnalysisOptions());
+
+            Assert.DoesNotContain("## Correction", request.UserPrompt);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_ASecondViolation_ThrowsNamingTheSecondViolation()
+        {
+            string severity = "{\"summary\":\"s\",\"findings\":[" + Finding("critical", "t") + "]}";
+            string category = "{\"summary\":\"s\",\"findings\":[{" +
+                "\"category\":\"psychology\",\"severity\":\"high\",\"title\":\"t\"," +
+                "\"observation\":\"o\",\"recommendation\":\"r\"}]}";
+
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync(severity, category));
+
+            Assert.Contains("psychology", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_UnknownExtraFields_DoNotCauseRejection()
+        {
+            string answer = "{\"summary\":\"s\",\"confidence\":0.8,\"findings\":[{" +
+                "\"category\":\"risk\",\"severity\":\"high\",\"title\":\"A high\"," +
+                "\"observation\":\"o\",\"recommendation\":\"r\",\"metric\":\"max drawdown\"}]}";
+
+            ReportAnalysis analysis = await AnalyzeAsync(answer);
+
+            Assert.Equal("A high", Assert.Single(analysis.Findings).Title);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_ResponseMissingItsFindings_IsRejected()
+        {
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync("{\"summary\":\"s\"}"));
+
+            Assert.Contains("findings", exception.Message);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_AnswerThatIsJsonNull_IsRejected()
+        {
+            await Assert.ThrowsAsync<AnalysisFormatException>(() => AnalyzeAsync("null"));
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_NullFindingInTheArray_IsRejected()
+        {
+            AnalysisFormatException exception = await Assert.ThrowsAsync<AnalysisFormatException>(
+                () => AnalyzeAsync("{\"summary\":\"s\",\"findings\":[null]}"));
+
+            Assert.Contains("findings[0]", exception.Message);
+        }
+
         /// <summary>Renders one contract-valid Finding of the supplied severity and title as JSON.</summary>
         private static string Finding(string severity, string title)
         {
@@ -374,17 +564,57 @@ namespace BacktesterTests.Analysis.Tests
         }
 
         /// <summary>
-        /// Runs the analyzer against a faked client answering with the supplied response, and returns the
-        /// Analysis it produced.
+        /// Runs the analyzer against a faked client answering with the supplied responses in turn — the
+        /// second, when supplied, being what the retry receives — and returns the Analysis it produced.
         /// </summary>
-        private static Task<ReportAnalysis> AnalyzeAsync(string answer)
+        private static Task<ReportAnalysis> AnalyzeAsync(params string[] answers)
+        {
+            ReportAnalyzer analyzer = new ReportAnalyzer(
+                FakeClient(answers),
+                new AnalysisOptions { ModelName = "claude-sonnet-5" });
+
+            return analyzer.AnalyzeAsync(SampleReportModel.Build(), CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Runs the analyzer against a client answering with the supplied responses in turn, and returns
+        /// the second request it was handed — the retry the first answer's violation earned.
+        /// </summary>
+        private static async Task<AnalysisRequest> CaptureRetryRequestAsync(params string[] answers)
+        {
+            List<AnalysisRequest> captured = new();
+            IAnalysisClient client = FakeClient(captured, answers);
+
+            ReportAnalyzer analyzer = new ReportAnalyzer(client, new AnalysisOptions());
+            await analyzer.AnalyzeAsync(SampleReportModel.Build(), CancellationToken.None);
+
+            return captured[1];
+        }
+
+        /// <summary>
+        /// Fakes a client answering with the supplied responses in turn, repeating the last one for every
+        /// further ask, so a test that only cares about a violation need not spell it out twice.
+        /// </summary>
+        private static IAnalysisClient FakeClient(params string[] answers)
+        {
+            return FakeClient(new List<AnalysisRequest>(), answers);
+        }
+
+        /// <summary>
+        /// Fakes a client answering with the supplied responses in turn, recording every request it is
+        /// handed into the supplied list.
+        /// </summary>
+        private static IAnalysisClient FakeClient(List<AnalysisRequest> captured, params string[] answers)
         {
             IAnalysisClient client = A.Fake<IAnalysisClient>();
             A.CallTo(() => client.AskAsync(A<AnalysisRequest>._, A<CancellationToken>._))
-                .Returns(Task.FromResult(answer));
+                .ReturnsLazily((AnalysisRequest request, CancellationToken _) =>
+                {
+                    captured.Add(request);
+                    return Task.FromResult(answers[Math.Min(captured.Count - 1, answers.Length - 1)]);
+                });
 
-            ReportAnalyzer analyzer = new ReportAnalyzer(client, new AnalysisOptions { ModelName = "claude-sonnet-5" });
-            return analyzer.AnalyzeAsync(SampleReportModel.Build(), CancellationToken.None);
+            return client;
         }
 
         /// <summary>

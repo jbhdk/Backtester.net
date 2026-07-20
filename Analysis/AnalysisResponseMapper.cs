@@ -11,26 +11,10 @@ namespace Backtester.Analysis
     /// </summary>
     internal class AnalysisResponseMapper
     {
-        // Key: the contract's category string as the schema spells it -> the report's category enum.
-        private static readonly IReadOnlyDictionary<string, FindingCategory> Categories = new Dictionary<string, FindingCategory>
-        {
-            { "risk", FindingCategory.Risk },
-            { "sizing", FindingCategory.Sizing },
-            { "execution", FindingCategory.Execution },
-            { "robustness", FindingCategory.Robustness },
-            { "data quality", FindingCategory.DataQuality }
-        };
-
-        // Key: the contract's severity string as the schema spells it -> the report's severity enum.
-        private static readonly IReadOnlyDictionary<string, FindingSeverity> Severities = new Dictionary<string, FindingSeverity>
-        {
-            { "high", FindingSeverity.High },
-            { "medium", FindingSeverity.Medium },
-            { "low", FindingSeverity.Low },
-            { "strength", FindingSeverity.Strength }
-        };
-
-        /// <summary>Maps the supplied answer onto an Analysis carrying the supplied Provenance.</summary>
+        /// <summary>
+        /// Maps the supplied answer onto an Analysis carrying the supplied Provenance. The answer has
+        /// already been validated, so every category and severity is one the vocabulary knows.
+        /// </summary>
         public ReportAnalysis Map(AnalysisResponse response, AnalysisProvenance provenance)
         {
             return new ReportAnalysis
@@ -58,8 +42,8 @@ namespace Backtester.Analysis
             {
                 mapped.Add(new ReportFinding
                 {
-                    Category = Categories[finding.Category],
-                    Severity = Severities[finding.Severity],
+                    Category = AnalysisVocabulary.Categories[finding.Category],
+                    Severity = AnalysisVocabulary.Severities[finding.Severity],
                     Title = finding.Title,
                     Observation = finding.Observation,
                     Recommendation = finding.Recommendation

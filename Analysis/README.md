@@ -59,6 +59,33 @@ With `Sample`, the digest keeps evenly spaced round trips spanning the whole run
 **declares its own sampling inside the payload** — included count, total count, and
 selection basis — so the AI is told explicitly that it is reasoning over part of a run.
 
+### The contract is enforced, not trusted
+
+The AI is an untrusted source, so its answer is validated strictly and **never repaired**. An
+unknown severity, an unknown category, a missing required field, an answer that is not
+well-formed, and an answer wrapped in a markdown fence are all violations. Values are never
+coerced to a nearest match, and a malformed Finding is never silently dropped — a reader
+looking at a rendered section has no way to tell which parts the AI produced and which the
+code invented on its behalf.
+
+A violation costs **exactly one retry**, carrying the validation error back to the model as a
+`## Correction` section appended to the user prompt. A second violation throws an
+`AnalysisFormatException` naming it. A run gets a valid Analysis or no Analysis; the report
+renders no section when `Analysis` is null, so the caller decides what a failure means:
+
+```csharp
+try
+{
+    model.Analysis = await analyzer.AnalyzeAsync(model, cancellationToken);
+}
+catch (AnalysisFormatException exception)
+{
+    // Write the report without an Analysis section.
+}
+```
+
+Unknown extra fields in an otherwise valid answer are ignored rather than rejected.
+
 ### Writing your own Analysis client
 
 `IAnalysisClient` is deliberately cut low: it takes a request carrying the instructions,
