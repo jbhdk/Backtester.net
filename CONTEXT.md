@@ -255,7 +255,7 @@ the required output shape — so that an Analysis reads the same whichever AI pr
 _Avoid_: reviewer, critic, agent.
 
 **Analysis client**:
-The adapter for one AI service (Ollama, OpenAI, Gemini, OpenRouter). It carries the Analyzer's request
+The adapter for one AI service (Claude, for instance). It carries the Analyzer's request
 to that service and returns the raw answer; it decides nothing about what is asked or what is
 acceptable. Deliberately **not** called a Provider — a Provider fetches bars.
 _Avoid_: provider, model (model means an execution model), backend, vendor.

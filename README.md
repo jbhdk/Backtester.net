@@ -14,8 +14,8 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds five NuGet packages. Use the engine on its own, and add a data source or
-reporting when you want them. The core makes no outbound network call on its own — every live data
+The repository builds seven NuGet packages. Use the engine on its own, and add a data source,
+reporting, or analysis when you want them. The core makes no outbound network call on its own — every live data
 provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
 | Package | What it is | Depends on |
@@ -25,6 +25,8 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
 | [`backtester.net.report`](Report/README.md) | Opt-in HTML reporting built from a run's `BacktestResult`. Kept separate so the engine takes on no web-asset dependencies. | `backtester.net` |
 | [`backtester.net.report.toolkit`](Report.Toolkit/README.md) | Opt-in report-side helper that reflects an attributed settings object into configuration cards, so a strategy's parameters render at the top of the report. | `backtester.net.report` |
+| [`backtester.net.analysis`](Analysis/README.md) | Opt-in, AI-agnostic Analysis: reduces a report model to an Analysis digest, asks an Analysis client, and enforces the Analysis contract. Makes no outbound call. | `backtester.net.report` |
+| [`backtester.net.analysis.claude`](Analysis.Claude/README.md) | Opt-in Claude Analysis client. All the network code for the analysis feature lives here. | `backtester.net.analysis`, `Anthropic` |
 
 ---
 <!-- 
@@ -288,8 +290,10 @@ IHistoricalDataFetcher offline = new CsvHistoricalDataFetcher(dataFolder: "sampl
 ```
 
 CSV files use the canonical name `SYMBOL_INTERVAL.csv` (e.g. `AAPL_1d.csv`) with a
-`Timestamp,Open,High,Low,Close,Volume` header. A small example lives in
-[`samples/data`](samples/data). The offline fetcher makes backtests reproducible — the same input
+`Timestamp,Open,High,Low,Close,Volume` header. Examples live in
+[`samples/data`](samples/data) — the daily ETF files the
+[analysis sample](samples/AnalysisSample/README.md) runs on. The offline fetcher makes backtests
+reproducible — the same input
 produces the same result every time, which is ideal for tests and CI.
 
 ---
@@ -341,6 +345,69 @@ property name — so a changed parameter is never silently omitted. See the
 
 ---
 
+## Analysis
+
+An **Analysis** is a machine-generated critique of one run — a short summary plus a list of
+**Findings**, each pairing an observation with the change it recommends — rendered as its own report
+section. It is commentary, not measurement: it interprets the numbers the report already shows and
+never produces one of its own.
+
+Two opt-in packages, split along the network boundary:
+
+- [`backtester.net.analysis`](Analysis/README.md) — the **Analyzer**, the **Analysis digest**, and the
+  `IAnalysisClient` seam. It is AI-agnostic and **makes no outbound call, ever**.
+- [`backtester.net.analysis.claude`](Analysis.Claude/README.md) — the **Analysis client** for Claude.
+  All the network code lives here, so referencing the analysis package alone never pulls in a call.
+
+Set `ANTHROPIC_API_KEY` — the feature's only credential — and the call site is this:
+
+```csharp
+// 1. Build the report model.
+ReportModel model = new ReportModelBuilder().Build(result);
+
+// 2. Attach the configuration cards BEFORE analysing.
+model.Configuration = new ConfigurationCardBuilder().Build(settings);
+
+// 3. Ask. The client carries the request; the Analyzer owns the contract.
+IAnalysisClient client = new ClaudeAnalysisClient("claude-sonnet-5");
+ReportAnalyzer analyzer = new ReportAnalyzer(client, new AnalysisOptions { ModelName = "claude-sonnet-5" });
+model.Analysis = await analyzer.AnalyzeAsync(model, CancellationToken.None);
+
+// 4. Write the report from the model.
+new HtmlReportWriter().Write(model, "report.html");
+```
+
+The ordering is load-bearing, and the path is deliberately **model-first and explicit**:
+
+- **Configuration must be attached before analysis.** The digest includes it, so a card attached
+  afterwards reaches the reader but not the AI — and the Analyzer cannot comment on a setting it was
+  never shown.
+- **The one-call `Write(result, path, configuration)` convenience has no analysing counterpart, on
+  purpose.** It builds the report model internally, where the caller cannot reach it, so there is
+  nothing to hand the Analyzer — and extending it would turn writing a file into a network operation.
+- **An Analysis can be regenerated from a saved report model.** The Analyzer consumes a `ReportModel`,
+  which is serializable, so a stored model can be re-analysed — with different guidance or a different
+  model — without re-running the backtest.
+
+Other things worth knowing before you wire it up:
+
+- **The minimum viable model is Sonnet-class.** Six models were evaluated by hand against a real run's
+  digest first; below that floor they misattribute real digest figures to the wrong symbol or concept.
+  There is no locally hosted option.
+- **The digest is bounded by round-trip count, not tokens.** A run with more round trips than
+  `RoundTripCap` (500 by default) is rejected with an `AnalysisDigestOverflowException`; sampling is
+  opt-in via `OverflowPolicy`, and a sampled digest declares its own sampling inside the payload.
+- **A malformed Analysis is rejected, never repaired.** A contract violation costs exactly one retry
+  carrying the validation error back; a second throws `AnalysisFormatException`. Catch it and write the
+  report anyway — `model.Analysis` stays null, no Analysis section renders, and a report written
+  without one is **exactly the report you get today**.
+
+A complete, runnable example lives in [`samples/AnalysisSample`](samples/AnalysisSample/README.md). It
+reads committed CSV bars, so the Claude call is its only outbound call. It is not part of the test
+suite: no test depends on an API key or on network access.
+
+---
+
 ## Project layout
 
 ```
@@ -355,16 +422,21 @@ Backtester.Data.Yahoo/   Yahoo Finance provider (backtester.net.yahoo)
 Backtester.Data.Alpaca/  Alpaca provider (backtester.net.alpaca)
 Report/                HTML reporting (backtester.net.report)
 Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
+Analysis/              AI-agnostic Analysis (backtester.net.analysis)
+Analysis.Claude/       Claude Analysis client (backtester.net.analysis.claude)
 BacktesterTests/       Test suite
-samples/data/          Example OHLCV CSV
+samples/data/          Example OHLCV CSVs
+samples/AnalysisSample/  End-to-end run ending in a report with an Analysis
 CONTEXT.md             The engine's ubiquitous language (glossary)
 ```
 
 Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md),
 [`Backtester.Data.Yahoo/README.md`](Backtester.Data.Yahoo/README.md),
 [`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md),
-[`Report/README.md`](Report/README.md), and
-[`Report.Toolkit/README.md`](Report.Toolkit/README.md).
+[`Report/README.md`](Report/README.md),
+[`Report.Toolkit/README.md`](Report.Toolkit/README.md),
+[`Analysis/README.md`](Analysis/README.md), and
+[`Analysis.Claude/README.md`](Analysis.Claude/README.md).
 
 ---
 

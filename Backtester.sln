@@ -17,6 +17,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Analysis", "Analysis\Analys
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Analysis.Claude", "Analysis.Claude\Analysis.Claude.csproj", "{1ACF2754-4D1F-4445-8133-AAD7545E39D4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{5D20AA90-6969-D8BD-9DCD-8634F4692FDA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AnalysisSample", "samples\AnalysisSample\AnalysisSample.csproj", "{66613599-F97F-495A-A806-B9D09CB19639}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,8 +115,23 @@ Global
 		{1ACF2754-4D1F-4445-8133-AAD7545E39D4}.Release|x64.Build.0 = Release|Any CPU
 		{1ACF2754-4D1F-4445-8133-AAD7545E39D4}.Release|x86.ActiveCfg = Release|Any CPU
 		{1ACF2754-4D1F-4445-8133-AAD7545E39D4}.Release|x86.Build.0 = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|x64.Build.0 = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Debug|x86.Build.0 = Debug|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|x64.ActiveCfg = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|x64.Build.0 = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|x86.ActiveCfg = Release|Any CPU
+		{66613599-F97F-495A-A806-B9D09CB19639}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{66613599-F97F-495A-A806-B9D09CB19639} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 	EndGlobalSection
 EndGlobal

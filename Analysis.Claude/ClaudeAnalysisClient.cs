@@ -54,11 +54,7 @@ namespace Backtester.Analysis.Claude
         /// <summary>Asks Claude for an answer to the supplied request and returns its raw response text.</summary>
         public async Task<string> AskAsync(AnalysisRequest request, CancellationToken cancellationToken)
         {
-            AnthropicClient client = new()
-            {
-                ApiKey = ReadApiKey(),
-                HttpClient = _httpClient
-            };
+            AnthropicClient client = CreateClient();
 
             MessageCreateParams parameters = new()
             {
@@ -72,6 +68,22 @@ namespace Backtester.Analysis.Claude
 
             Message message = await SendAsync(client, parameters, cancellationToken);
             return ReadText(message);
+        }
+
+        /// <summary>
+        /// Creates the SDK client for one call. The transport is only handed over when the caller
+        /// supplied one: assigning a null <see cref="HttpClient"/> is not the same as leaving the SDK to
+        /// its own transport, and the SDK faults on the first send when it is given one.
+        /// </summary>
+        private AnthropicClient CreateClient()
+        {
+            string apiKey = ReadApiKey();
+            if (_httpClient == null)
+            {
+                return new AnthropicClient { ApiKey = apiKey };
+            }
+
+            return new AnthropicClient { ApiKey = apiKey, HttpClient = _httpClient };
         }
 
         /// <summary>

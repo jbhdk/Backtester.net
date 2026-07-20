@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>AnalysisSample</RootNamespace>
+    <AssemblyName>AnalysisSample</AssemblyName>
+
+    <!-- A sample, never a package: it is run by hand and is not part of the test suite. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The committed OHLCV files the run reads, so the sample's only prerequisite is the API key. -->
+    <Content Include="..\data\*_1d.csv" Link="data\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Backtester\Backtester.csproj" />
+    <ProjectReference Include="..\..\Report\Report.csproj" />
+    <ProjectReference Include="..\..\Report.Toolkit\Report.Toolkit.csproj" />
+    <ProjectReference Include="..\..\Analysis\Analysis.csproj" />
+    <ProjectReference Include="..\..\Analysis.Claude\Analysis.Claude.csproj" />
+  </ItemGroup>
+
+</Project>

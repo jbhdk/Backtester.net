@@ -10,21 +10,52 @@ and hands that digest to an **Analysis client** for critique.
 This package **makes no outbound call, ever**. It references `backtester.net.report` and
 nothing else. The network lives in a separate client package, one per AI service.
 
+You supply the Analysis client. The one in the box is
+[`backtester.net.analysis.claude`](https://www.nuget.org/packages/backtester.net.analysis.claude);
+anything implementing `IAnalysisClient` works. The documented minimum model is **Sonnet-class** —
+smaller models were evaluated against a real run's digest and misread it.
+
 ## Usage
 
-The analysis path is model-first: build the model, attach configuration, then analyse.
-Configuration must be attached *before* analysing, or the digest cannot show the settings
-the run actually used.
+The analysis path is **model-first and explicit**: build the model, attach the configuration,
+await the Analyzer, attach the Analysis, write the report. The ordering is load-bearing.
 
 ```csharp
-ReportModelBuilder modelBuilder = new ReportModelBuilder();
-ReportModel model = modelBuilder.Build(result);
-model.Configuration = cards;
+ReportModel model = new ReportModelBuilder().Build(result);
+model.Configuration = new ConfigurationCardBuilder().Build(settings);   // before analysing
 
-AnalysisOptions options = new AnalysisOptions { ModelName = "qwen2.5:14b" };
+AnalysisOptions options = new AnalysisOptions { ModelName = "claude-sonnet-5" };
 ReportAnalyzer analyzer = new ReportAnalyzer(client, options);
-string answer = await analyzer.AnalyzeAsync(model);
+model.Analysis = await analyzer.AnalyzeAsync(model, CancellationToken.None);
+
+new HtmlReportWriter().Write(model, "report.html");
 ```
+
+**Configuration must be attached before analysing.** The digest includes it, and the Analyzer
+cannot comment on a setting it was never shown — a card attached afterwards reaches the reader
+but not the AI.
+
+### Why the one-call convenience does not extend to analysis
+
+`HtmlReportWriter.Write(result, path, configuration)` stays a one-call convenience for callers
+who want no Analysis. It deliberately has no analysing counterpart: it builds the report model
+internally, where the caller cannot reach it, so there is nothing to hand the Analyzer — and
+extending it would turn *writing a file* into a network operation. Analysis is opt-in and
+visible in the call site or it is not there at all.
+
+### Regenerating an Analysis without re-running the backtest
+
+The Analyzer consumes a `ReportModel`, and a `ReportModel` is serializable. A saved model can
+therefore be analysed again — with different guidance, or a different model — without touching
+the engine or the data provider:
+
+```csharp
+ReportModel model = JsonSerializer.Deserialize<ReportModel>(File.ReadAllText("model.json"));
+model.Analysis = await analyzer.AnalyzeAsync(model, CancellationToken.None);
+```
+
+This falls out of the design rather than being supported by it: the Analyzer never sees a
+`BacktestResult`.
 
 ### Guidance
 
@@ -35,7 +66,7 @@ digest itself cannot express:
 ```csharp
 AnalysisOptions options = new AnalysisOptions
 {
-    ModelName = "qwen2.5:14b",
+    ModelName = "claude-sonnet-5",
     Guidance = "This is a mean-reversion strategy. I care most about whether the stop is too tight."
 };
 ```
@@ -49,7 +80,7 @@ round trips than `RoundTripCap` (500 by default) is **rejected** with an
 ```csharp
 AnalysisOptions options = new AnalysisOptions
 {
-    ModelName = "qwen2.5:14b",
+    ModelName = "claude-sonnet-5",
     RoundTripCap = 200,
     OverflowPolicy = AnalysisOverflowPolicy.Sample
 };
@@ -95,6 +126,9 @@ nothing about what is asked or what is acceptable.
 ```csharp
 public class MyAnalysisClient : IAnalysisClient
 {
+    // Recorded in the Analysis's Provenance, so a reader can tell what produced a claim.
+    public string ServiceName => "My service";
+
     public Task<string> AskAsync(AnalysisRequest request, CancellationToken cancellationToken)
     {
         // Carry request.UserPrompt to your service and return its raw response text.

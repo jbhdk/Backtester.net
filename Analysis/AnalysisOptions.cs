@@ -5,7 +5,7 @@ namespace Backtester.Analysis
     /// </summary>
     public class AnalysisOptions
     {
-        /// <summary>Gets or sets the name of the model to ask, as that service names it (e.g. <c>"qwen2.5:14b"</c>).</summary>
+        /// <summary>Gets or sets the name of the model to ask, as that service names it (e.g. <c>"claude-sonnet-5"</c>).</summary>
         public string ModelName { get; set; }
 
         /// <summary>

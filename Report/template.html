@@ -323,7 +323,7 @@
     return words.charAt(0) + words.slice(1).toLowerCase();
   }
 
-  // "Ollama · qwen2.5:14b · 2026-07-20 09:14 UTC" — the section says what wrote it.
+  // "Claude · claude-sonnet-5 · 2026-07-20 09:14 UTC" — the section says what wrote it.
   function provenanceLine(provenance) {
     var parts = [];
     if (provenance.service) parts.push(provenance.service);
