@@ -41,6 +41,48 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void BuildHtml_EmbedsHeatmapSurfaceWhenPresent()
+        {
+            OptimizationReportModel model = SampleModel();
+            model.Heatmap = new OptimizationScoreHeatmap
+            {
+                XParameterName = "fast",
+                YParameterName = "slow",
+                XValues = new[] { "10", "12" },
+                YValues = new[] { "30", "50" },
+                Cells = new[] { new OptimizationHeatmapCell { XIndex = 1, YIndex = 0, Score = 3.14m } }
+            };
+
+            string html = new OptimizationHtmlReportWriter().BuildHtml(model);
+
+            // The heatmap reaches the page as inlined data (camelCase), so the chart draws offline.
+            Assert.Contains("\"heatmap\":", html);
+            Assert.Contains("\"xIndex\":1", html);
+            Assert.Contains("\"score\":3.14", html);
+        }
+
+        [Fact]
+        public void BuildHtml_EmbedsMarginalsSurfaceWhenPresent()
+        {
+            OptimizationReportModel model = SampleModel();
+            model.Marginals = new[]
+            {
+                new OptimizationParameterMarginal
+                {
+                    ParameterName = "fast",
+                    Points = new[] { new OptimizationMarginalPoint { Value = "10", MaxScore = 2.4m, MeanScore = 1.5m } }
+                }
+            };
+
+            string html = new OptimizationHtmlReportWriter().BuildHtml(model);
+
+            // The marginals reach the page as inlined data (camelCase), so the line panes draw offline.
+            Assert.Contains("\"marginals\":", html);
+            Assert.Contains("\"maxScore\":2.4", html);
+            Assert.Contains("\"meanScore\":1.5", html);
+        }
+
+        [Fact]
         public void BuildHtml_EmbedsSerializedModel()
         {
             string html = new OptimizationHtmlReportWriter().BuildHtml(SampleModel());

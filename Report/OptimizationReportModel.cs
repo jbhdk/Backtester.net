@@ -19,5 +19,18 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets the leaderboard rows, one per Trial, in the sweep's ranked order (best first).</summary>
         public IReadOnlyList<OptimizationTrialRow> Trials { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Score heatmap across the two varying axes, or null unless exactly two Parameters
+        /// vary. Lets a reader see whether the best Trial sits on a plateau or a lucky spike.
+        /// </summary>
+        public OptimizationScoreHeatmap Heatmap { get; set; }
+
+        /// <summary>
+        /// Gets or sets the per-Parameter marginal views — one per varying Parameter — used instead of the
+        /// heatmap when more than two Parameters vary. Empty when two or fewer vary (the heatmap, or nothing,
+        /// covers those cases).
+        /// </summary>
+        public IReadOnlyList<OptimizationParameterMarginal> Marginals { get; set; }
     }
 }

@@ -149,6 +149,137 @@ namespace BacktesterTests.Optimization.Tests
         }
 
         [Fact]
+        public void Build_TwoVaryingParameters_BuildsAScoreHeatmapWithACellPerTrial()
+        {
+            // A full 2x2 grid over fast x slow: each (fast, slow) point is one Trial carrying its Score, so
+            // the heatmap has one cell per Trial.
+            Trial t1 = Trial(score: 1.0m, parameters: Params(("fast", 10), ("slow", 30)));
+            Trial t2 = Trial(score: 2.0m, parameters: Params(("fast", 10), ("slow", 50)));
+            Trial t3 = Trial(score: 3.0m, parameters: Params(("fast", 12), ("slow", 30)));
+            Trial t4 = Trial(score: 4.0m, parameters: Params(("fast", 12), ("slow", 50)));
+            OptimizationResult result = new(new[] { t4, t3, t2, t1 }, t4);
+
+            OptimizationReportModel model = new OptimizationReportModelBuilder().Build(result);
+
+            Assert.NotNull(model.Heatmap);
+            Assert.Equal(4, model.Heatmap.Cells.Count);
+        }
+
+        [Fact]
+        public void Build_Heatmap_ExposesAscendingDistinctAxesAndCellsIndexIntoThem()
+        {
+            // Trials arrive best-first, not in grid order; the heatmap axes are still the distinct values in
+            // ascending order, and each cell addresses its grid point by index into those axes.
+            Trial topLeft = Trial(score: 4.0m, parameters: Params(("fast", 12), ("slow", 30)));
+            Trial rest1 = Trial(score: 3.0m, parameters: Params(("fast", 5), ("slow", 50)));
+            Trial rest2 = Trial(score: 2.0m, parameters: Params(("fast", 5), ("slow", 30)));
+            Trial rest3 = Trial(score: 1.0m, parameters: Params(("fast", 12), ("slow", 50)));
+            OptimizationResult result = new(new[] { topLeft, rest1, rest2, rest3 }, topLeft);
+
+            OptimizationScoreHeatmap heatmap = new OptimizationReportModelBuilder().Build(result).Heatmap;
+
+            Assert.Equal("fast", heatmap.XParameterName);
+            Assert.Equal("slow", heatmap.YParameterName);
+            Assert.Equal(new[] { "5", "12" }, heatmap.XValues);
+            Assert.Equal(new[] { "30", "50" }, heatmap.YValues);
+            // The (fast=12, slow=30) Trial scored 4.0: column index 1 (12 is the second X value), row index 0.
+            OptimizationHeatmapCell cell = Assert.Single(heatmap.Cells, candidate => candidate.Score == 4.0m);
+            Assert.Equal(1, cell.XIndex);
+            Assert.Equal(0, cell.YIndex);
+        }
+
+        [Fact]
+        public void Build_MoreThanTwoVaryingParameters_BuildsPerParameterMarginalsAndNoHeatmap()
+        {
+            // Three varying axes cannot be a single heatmap, so the report profiles each Parameter on its
+            // own: one marginal per varying axis, in axis order, and no heatmap.
+            List<Trial> trials = new();
+            foreach (int fast in new[] { 10, 12 })
+            {
+                foreach (int slow in new[] { 30, 50 })
+                {
+                    foreach (int stop in new[] { 1, 2 })
+                    {
+                        trials.Add(Trial(score: fast + slow + stop, parameters: Params(("fast", fast), ("slow", slow), ("stop", stop))));
+                    }
+                }
+            }
+            OptimizationResult result = new(trials, trials[0]);
+
+            OptimizationReportModel model = new OptimizationReportModelBuilder().Build(result);
+
+            Assert.Null(model.Heatmap);
+            Assert.Equal(new[] { "fast", "slow", "stop" }, model.Marginals.Select(marginal => marginal.ParameterName));
+        }
+
+        [Fact]
+        public void Build_Marginal_SummarisesEachValueWithBestAndMeanScoreOverSharingTrials()
+        {
+            // Three varying axes trigger marginals. The four Trials at fast=10 score 1..4; at fast=12 they
+            // score 5..8. The fast marginal must summarise each value with the best and mean over its Trials.
+            decimal[,,] scores =
+            {
+                { { 1m, 2m }, { 3m, 4m } }, // fast=10: slow=30 -> {stop1,stop2}, slow=50 -> {stop1,stop2}
+                { { 5m, 6m }, { 7m, 8m } }  // fast=12
+            };
+            List<Trial> trials = new();
+            int[] fasts = { 10, 12 };
+            int[] slows = { 30, 50 };
+            int[] stops = { 1, 2 };
+            for (int fastIndex = 0; fastIndex < fasts.Length; fastIndex++)
+            {
+                for (int slowIndex = 0; slowIndex < slows.Length; slowIndex++)
+                {
+                    for (int stopIndex = 0; stopIndex < stops.Length; stopIndex++)
+                    {
+                        trials.Add(Trial(
+                            score: scores[fastIndex, slowIndex, stopIndex],
+                            parameters: Params(("fast", fasts[fastIndex]), ("slow", slows[slowIndex]), ("stop", stops[stopIndex]))));
+                    }
+                }
+            }
+            OptimizationResult result = new(trials, trials[0]);
+
+            OptimizationParameterMarginal fast = new OptimizationReportModelBuilder().Build(result)
+                .Marginals.Single(marginal => marginal.ParameterName == "fast");
+
+            Assert.Equal(new[] { "10", "12" }, fast.Points.Select(point => point.Value));
+            Assert.Equal(4m, fast.Points[0].MaxScore);
+            Assert.Equal(2.5m, fast.Points[0].MeanScore);
+            Assert.Equal(8m, fast.Points[1].MaxScore);
+            Assert.Equal(6.5m, fast.Points[1].MeanScore);
+        }
+
+        [Fact]
+        public void Build_OneVaryingParameter_YieldsNeitherHeatmapNorMarginals()
+        {
+            // A single axis is just the leaderboard's own ordering; there is no Score surface to chart.
+            Trial low = Trial(score: 1m, parameters: Params(("fast", 10)));
+            Trial high = Trial(score: 2m, parameters: Params(("fast", 12)));
+            OptimizationResult result = new(new[] { high, low }, high);
+
+            OptimizationReportModel model = new OptimizationReportModelBuilder().Build(result);
+
+            Assert.Null(model.Heatmap);
+            Assert.Empty(model.Marginals);
+        }
+
+        [Fact]
+        public void Build_PinnedAxisDoesNotCountAsVarying_TwoSweptButOneFixedYieldsNoHeatmap()
+        {
+            // Two Parameters are swept, but "slow" took a single value across every Trial, so only one axis
+            // truly varies — not a heatmap. This guards the "varies = more than one distinct value" rule.
+            Trial a = Trial(score: 1m, parameters: Params(("fast", 10), ("slow", 30)));
+            Trial b = Trial(score: 2m, parameters: Params(("fast", 12), ("slow", 30)));
+            OptimizationResult result = new(new[] { b, a }, b);
+
+            OptimizationReportModel model = new OptimizationReportModelBuilder().Build(result);
+
+            Assert.Null(model.Heatmap);
+            Assert.Empty(model.Marginals);
+        }
+
+        [Fact]
         public void Build_Model_SerializesWithSystemTextJson()
         {
             Trial trial = Trial(score: 1.5m, parameters: Params(("fast", 10)));

@@ -57,6 +57,54 @@
   .badge-ineligible { color: var(--gold); background: rgba(224, 163, 62, .14); }
   .legend { color: var(--muted); font-size: 12px; margin-top: 12px; }
   .legend .badge { margin-right: 6px; }
+
+  /* A framed panel for a score-surface section, matching the leaderboard's table-wrap chrome. */
+  .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 18px; }
+
+  /* ---- Heatmap: a CSS grid of colour-scaled cells (Lightweight-Charts has no heatmap primitive). Each
+     axis reads name -> values -> cells from the outside in. Columns: 1 = Y name, 2 = Y values, 3.. = cells;
+     rows: 1 = X name, 2 = X values, 3.. = cell rows. ---- */
+  .heatmap-wrap { overflow-x: auto; }
+  .heatmap { display: inline-grid; gap: 3px; align-items: stretch; }
+  .heatmap .xlabel, .heatmap .ylabel { color: var(--muted); font-size: 11px; }
+  .heatmap .xlabel { text-align: center; padding: 0 0 2px; font-variant-numeric: tabular-nums; }
+  .heatmap .ylabel { text-align: right; padding: 0 8px 0 0; align-self: center; font-variant-numeric: tabular-nums; }
+  .heatmap .cell {
+    min-width: 62px; height: 44px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-variant-numeric: tabular-nums; color: #0b0e12; font-weight: 600;
+  }
+  .heatmap .cell.empty { background: rgba(255, 255, 255, .03); color: var(--muted); font-weight: 400; }
+  /* The winning Trial's cell, ringed so a reader sees whether it sits on a plateau or a lucky spike. */
+  .heatmap .cell.best { box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--gold); z-index: 1; }
+  .axis-name { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; line-height: 1; }
+  .axis-name.x { text-align: center; padding-bottom: 4px; }
+  /* Rotated 180deg so the label reads bottom-to-top; margin-right (a layout box, unaffected by the visual
+     rotation) opens the gap toward the values, whereas padding would flip to the wrong side. */
+  .axis-name.y {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    display: flex; align-items: center; justify-content: center; margin-right: 6px;
+  }
+  .heat-legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; margin-top: 14px; }
+  .heat-legend .bar { width: 160px; height: 10px; border-radius: 5px;
+    background: linear-gradient(90deg, #b13b34, #b9902f, #2f9e57); }
+  .heat-legend .best-swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #2f9e57;
+    box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--gold);
+  }
+
+  /* ---- Marginals: one small-multiple Lightweight-Charts line pane per varying Parameter (best + mean). ---- */
+  .marginals { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .marginal { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 12px; overflow: hidden; }
+  .marginal h3 { margin: 0 0 4px; font-size: 13px; }
+  .marginal .cap { margin: 0 0 8px; color: var(--muted); font-size: 11px; }
+  .marginal .chart { height: 200px; }
+  .chart-legend { display: flex; gap: 16px; color: var(--muted); font-size: 11px; margin-top: 8px; }
+  .chart-legend span::before {
+    content: ""; display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 6px;
+    vertical-align: middle;
+  }
+  .chart-legend .best::before { background: var(--green); }
+  .chart-legend .mean::before { background: var(--accent); }
 </style>
 </head>
 <body>
@@ -77,8 +125,26 @@
     </p>
   </section>
 
-  <!-- The chart library is inlined for parity with the single-run report (offline, no CDN); the first
-       leaderboard is a sortable table and draws no chart yet. -->
+  <!-- The Score surface: a heatmap when exactly two Parameters vary, per-Parameter marginals when more
+       than two do. Each section stays hidden until its data is present, so a report shows only one. -->
+  <section id="heatmap-section" hidden>
+    <h2>Score heatmap</h2>
+    <div class="panel">
+      <div class="heatmap-wrap"><div class="heatmap" id="heatmap"></div></div>
+      <p class="heat-legend">
+        <span>low</span><span class="bar"></span><span>high Score</span>
+        &nbsp;·&nbsp; <span class="best-swatch"></span> best Trial
+      </p>
+    </div>
+  </section>
+
+  <section id="marginals-section" hidden>
+    <h2>Per-Parameter marginals</h2>
+    <div class="marginals" id="marginals"></div>
+  </section>
+
+  <!-- The chart library is inlined for parity with the single-run report (offline, no CDN): the marginals
+       draw with it; the heatmap is a self-contained CSS grid. -->
   <script>__CHART_LIB__</script>
   <script id="optimization-data" type="application/json">__OPTIMIZATION_DATA__</script>
   <script>
@@ -115,6 +181,7 @@
 
       renderHead();
       renderBody();
+      renderSurface();
 
       function renderHead() {
         var tr = document.getElementById("leaderboard-head");
@@ -196,9 +263,143 @@
         return "";
       }
       function escapeHtml(s) {
-        return s.replace(/[&<>"']/g, function (c) {
+        return String(s).replace(/[&<>"']/g, function (c) {
           return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
         });
+      }
+
+      // Show the Score surface that fits the sweep: a heatmap when exactly two Parameters vary (carried on
+      // model.heatmap), per-Parameter marginals when more than two do (model.marginals). Neither is present
+      // for a one-axis or zero-axis sweep, so both sections stay hidden.
+      function renderSurface() {
+        if (model.heatmap) {
+          document.getElementById("heatmap-section").hidden = false;
+          renderHeatmap(document.getElementById("heatmap"), model);
+        }
+        if (model.marginals && model.marginals.length) {
+          document.getElementById("marginals-section").hidden = false;
+          renderMarginals(document.getElementById("marginals"), model);
+        }
+      }
+
+      // A Score in [0,1] as a colour from red (low) through amber to green (high).
+      function heatColor(t) {
+        var lo = [177, 59, 52], mid = [185, 144, 47], hi = [47, 158, 87];
+        var a = t < 0.5 ? lo : mid, b = t < 0.5 ? mid : hi, u = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+        var c = [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * u); });
+        return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
+      }
+
+      function renderHeatmap(host, m) {
+        var h = m.heatmap;
+        var nx = h.xValues.length, ny = h.yValues.length;
+
+        // The winning Trial's cell, matched from the best Trial's values on the two heatmap axes.
+        var best = (m.trials || []).filter(function (row) { return row.isBest; })[0];
+        var bx = -1, by = -1;
+        if (best) {
+          var wxi = m.parameterNames.indexOf(h.xParameterName), wyi = m.parameterNames.indexOf(h.yParameterName);
+          bx = h.xValues.indexOf(String(best.parameterValues[wxi]));
+          by = h.yValues.indexOf(String(best.parameterValues[wyi]));
+        }
+
+        var scores = h.cells.map(function (c) { return c.score; });
+        var min = Math.min.apply(null, scores), max = Math.max.apply(null, scores), span = (max - min) || 1;
+        // Key: "xIndex,yIndex" -> the cell at that grid point, for O(1) lookup while laying the grid out.
+        var byXy = {};
+        h.cells.forEach(function (c) { byXy[c.xIndex + "," + c.yIndex] = c; });
+
+        host.style.gridTemplateColumns = "auto auto repeat(" + nx + ", 1fr)";
+        var parts = [];
+
+        // X-axis name on the top row, then the X value labels beneath it, both above the cells (from column 3).
+        parts.push('<div class="axis-name x" style="grid-column:3 / -1;grid-row:1;">' + escapeHtml(h.xParameterName) + ' →</div>');
+        for (var xi = 0; xi < nx; xi++) {
+          parts.push('<div class="xlabel" style="grid-row:2;grid-column:' + (3 + xi) + ';">' + escapeHtml(h.xValues[xi]) + '</div>');
+        }
+
+        // Y-axis name spanning the cell rows in the first column, mirroring the X name's outermost position.
+        parts.push('<div class="axis-name y" style="grid-column:1;grid-row:3 / span ' + ny + ';">' + escapeHtml(h.yParameterName) + ' →</div>');
+
+        var gridRow = 3;
+        for (var row = ny - 1; row >= 0; row--) {        // top row = highest Y value
+          parts.push('<div class="ylabel" style="grid-column:2;grid-row:' + gridRow + ';">' + escapeHtml(h.yValues[row]) + '</div>');
+          for (var col = 0; col < nx; col++) {
+            var cell = byXy[col + "," + row];
+            var place = 'grid-column:' + (3 + col) + ';grid-row:' + gridRow + ';';
+            if (!cell) { parts.push('<div class="cell empty" style="' + place + '">·</div>'); continue; }
+            var t = (cell.score - min) / span;
+            var isBest = (col === bx && row === by);
+            parts.push('<div class="cell' + (isBest ? ' best' : '') + '" style="' + place + 'background:' + heatColor(t) +
+              '" title="' + escapeHtml(h.xParameterName) + '=' + escapeHtml(h.xValues[col]) + ', ' +
+              escapeHtml(h.yParameterName) + '=' + escapeHtml(h.yValues[row]) + ' · score ' + cell.score.toFixed(3) + '">' +
+              cell.score.toFixed(2) + '</div>');
+          }
+          gridRow++;
+        }
+
+        host.innerHTML = parts.join("");
+      }
+
+      // The marginal x-axis is categorical (Parameter values, not dates). As the single-run report's equity
+      // chart does, each point sits one synthetic "day" apart and the axis/crosshair format the index back
+      // to the Parameter value's label.
+      var ONE_DAY = 86400;
+      function labelAt(points, time) {
+        var i = Math.round(Number(time) / ONE_DAY) - 1;
+        return (i >= 0 && i < points.length) ? String(points[i].value) : "";
+      }
+
+      function renderMarginals(host, m) {
+        // Two passes: append every card first, then create the charts. The .marginals grid is auto-fit, so
+        // its column width only settles once all cards exist; measuring a chart's element before then would
+        // read a wider, transient width (one card = full row) and the chart would be clipped when the grid
+        // reflows narrower. The single-run report's lone equity chart never hits this.
+        var pending = [];                                // { el: chart host, marginal: its data }
+        (m.marginals || []).forEach(function (marginal) {
+          var card = document.createElement("div");
+          card.className = "marginal";
+          card.innerHTML = '<h3>' + escapeHtml(marginal.parameterName) + '</h3>' +
+            '<p class="cap">Score across ' + marginal.points.length + ' values (others varied)</p>' +
+            '<div class="chart"></div>' +
+            '<div class="chart-legend"><span class="best">best</span><span class="mean">mean</span></div>';
+          host.appendChild(card);
+          pending.push({ el: card.querySelector(".chart"), marginal: marginal });
+        });
+
+        // Create the charts on the next frame, once the browser has laid out the now-unhidden section. Sizing
+        // and fitContent before that lays out reads a transient width, and the resulting bar spacing sticks —
+        // collapsing every pane's points onto one column.
+        requestAnimationFrame(function () { pending.forEach(createPane); });
+      }
+
+      function createPane(item) {
+          var marginal = item.marginal;
+          var el = item.el;
+          var chart = LightweightCharts.createChart(el, {
+            width: el.clientWidth, height: el.clientHeight,
+            layout: { background: { color: "transparent" }, textColor: "#8b95a3", fontSize: 11, attributionLogo: false },
+            grid: { vertLines: { color: "#2a313a" }, horzLines: { color: "#2a313a" } },
+            rightPriceScale: { borderColor: "#2a313a" },
+            timeScale: {
+              borderColor: "#2a313a", fixLeftEdge: true, fixRightEdge: true,
+              tickMarkFormatter: function (time) { return labelAt(marginal.points, time); }
+            },
+            localization: { timeFormatter: function (time) { return labelAt(marginal.points, time); } },
+            handleScroll: false, handleScale: false, crosshair: { horzLine: { visible: false } }
+          });
+
+          var maxLine = chart.addSeries(LightweightCharts.LineSeries, { color: "#2ecc71", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+          var meanLine = chart.addSeries(LightweightCharts.LineSeries, { color: "#4ea1ff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+          maxLine.setData(marginal.points.map(function (p, i) { return { time: (i + 1) * ONE_DAY, value: p.maxScore }; }));
+          meanLine.setData(marginal.points.map(function (p, i) { return { time: (i + 1) * ONE_DAY, value: p.meanScore }; }));
+          chart.timeScale().fitContent();
+
+          // Keep the pane fitted to its card as the responsive grid reflows.
+          window.addEventListener("resize", function () {
+            chart.resize(el.clientWidth, el.clientHeight);
+            chart.timeScale().fitContent();
+          });
       }
     })();
   </script>
