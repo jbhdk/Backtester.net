@@ -68,6 +68,37 @@ namespace Backtester.Optimization
         }
 
         /// <summary>
+        /// Initializes a new Optimizer from an <see cref="OptimizationSetup"/> — the Parameter space and
+        /// Trial factory an authoring path (e.g. <see cref="Optimize.For{TParameters}"/>) already built
+        /// together — over the same shared run inputs as the primary constructor.
+        /// </summary>
+        public Optimizer(
+            IHistoricalDataFetcher fetcher,
+            string[] symbols,
+            DateTime fromUtc,
+            DateTime toUtc,
+            string interval,
+            Func<Portfolio> portfolioFactory,
+            OptimizationSetup setup,
+            bool retainAllBacktestResults = false,
+            Objective objective = null,
+            int minimumTrades = 30)
+            : this(
+                fetcher,
+                symbols,
+                fromUtc,
+                toUtc,
+                interval,
+                portfolioFactory,
+                (setup ?? throw new ArgumentNullException(nameof(setup))).Space,
+                setup.TrialFactory,
+                retainAllBacktestResults,
+                objective,
+                minimumTrades)
+        {
+        }
+
+        /// <summary>
         /// Fetches the bars once, evaluates every Parameter set as a Trial, and returns the Trials ranked by
         /// Score (best first) together with the best one.
         /// </summary>
