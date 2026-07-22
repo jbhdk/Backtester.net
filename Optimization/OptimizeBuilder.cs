@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -11,15 +12,21 @@ using Backtester.Strategies;
 namespace Backtester.Optimization
 {
     /// <summary>
-    /// The fluent builder returned by <see cref="Optimize.For{TParameters}"/>. It reflects the
-    /// <c>[Optimize]</c>-decorated Parameters on the bound instance into a <see cref="ParameterSpace"/> and
-    /// an adapting Trial factory, bundled as an <see cref="OptimizationSetup"/>.
+    /// The fluent builder returned by <see cref="Optimize.For{TParameters}"/>. It offers two authoring
+    /// paths into the same primitives — a <see cref="ParameterSpace"/> and an adapting Trial factory,
+    /// bundled as an <see cref="OptimizationSetup"/>: <see cref="FromAttributes"/> reflects the
+    /// <c>[Optimize]</c>-decorated Parameters into axes, while <see cref="Vary{TValue}"/> names a Parameter
+    /// by expression selector and adds its axis explicitly, terminating with <see cref="Build"/>.
     /// </summary>
-    /// <typeparam name="TParameters">The attributed parameters type whose properties define the axes.</typeparam>
+    /// <typeparam name="TParameters">The parameters type whose properties define the axes.</typeparam>
     public class OptimizeBuilder<TParameters>
     {
         private readonly TParameters _instance;
         private readonly Func<TParameters, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> _factory;
+
+        // The axes accumulated by fluent .Vary() calls, in call order. Each pairs the selected property with
+        // the action that adds its range to a ParameterSpace; Build() bundles them into the setup.
+        private readonly List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> _variedAxes = new();
 
         /// <summary>Initializes a new builder over the bound parameters instance and Trial factory.</summary>
         public OptimizeBuilder(
@@ -39,18 +46,60 @@ namespace Backtester.Optimization
         /// </summary>
         public OptimizationSetup FromAttributes()
         {
-            PropertyInfo[] optimized = OptimizedProperties();
-
-            ParameterSpace space = new();
-            foreach (PropertyInfo property in optimized)
+            List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> axes = new();
+            foreach (PropertyInfo property in OptimizedProperties())
             {
-                AddAxis(space, property);
+                axes.Add((property, space => AddAttributeAxis(space, property)));
             }
 
-            RejectUnconsumedParameters(optimized);
+            return BuildSetup(axes);
+        }
+
+        /// <summary>
+        /// Adds an axis for the Parameter named by <paramref name="selector"/>, taking values from
+        /// <paramref name="from"/> to <paramref name="to"/> inclusive in increments of
+        /// <paramref name="step"/>. Multiple calls compose into the cartesian product of their axes. The
+        /// selected property type must be <see cref="int"/> or <see cref="decimal"/>. Terminate with
+        /// <see cref="Build"/>.
+        /// </summary>
+        /// <typeparam name="TValue">The selected property's type, inferred from the selector.</typeparam>
+        /// <param name="selector">Names the Parameter to vary, e.g. <c>parameters => parameters.StopAtrMultiple</c>.</param>
+        public OptimizeBuilder<TParameters> Vary<TValue>(
+            Expression<Func<TParameters, TValue>> selector, TValue from, TValue to, TValue step)
+        {
+            PropertyInfo property = PropertyOf(selector);
+            _variedAxes.Add((property, space => AddRangeAxis(space, property, from, to, step)));
+            return this;
+        }
+
+        /// <summary>
+        /// Builds the <see cref="OptimizationSetup"/> from the axes accumulated by <see cref="Vary{TValue}"/>.
+        /// The adapting Trial factory behaves exactly as the attributes path: it clones the bound instance for
+        /// each Parameter set, sets the varied properties (including <c>init</c>-only ones), and calls the
+        /// strongly-typed factory with the clone.
+        /// </summary>
+        public OptimizationSetup Build()
+        {
+            return BuildSetup(_variedAxes);
+        }
+
+        /// <summary>
+        /// Bundles a set of axes into an <see cref="OptimizationSetup"/>: adds each axis to the Parameter
+        /// space, rejects any axis the factory never consumes, and wires the adapting Trial factory that
+        /// realizes each Parameter set onto a typed clone. Shared by both authoring paths.
+        /// </summary>
+        private OptimizationSetup BuildSetup(List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> axes)
+        {
+            ParameterSpace space = new();
+            foreach ((PropertyInfo Property, Action<ParameterSpace> AddTo) axis in axes)
+            {
+                axis.AddTo(space);
+            }
+
+            RejectUnconsumedParameters(axes);
 
             Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory =
-                (parameters, portfolio) => _factory(Realize(optimized, parameters), portfolio);
+                (parameters, portfolio) => _factory(Realize(axes, parameters), portfolio);
 
             return new OptimizationSetup(space, trialFactory);
         }
@@ -71,7 +120,7 @@ namespace Backtester.Optimization
         }
 
         /// <summary>Adds the axis for one <c>[Optimize]</c> property, keyed by the property name and typed by the property type.</summary>
-        private static void AddAxis(ParameterSpace space, PropertyInfo property)
+        private static void AddAttributeAxis(ParameterSpace space, PropertyInfo property)
         {
             OptimizeAttribute attribute = property.GetCustomAttribute<OptimizeAttribute>();
 
@@ -94,13 +143,57 @@ namespace Backtester.Optimization
             }
         }
 
+        /// <summary>Adds a numeric axis over an explicit <c>(from, to, step)</c> range for a varied property.</summary>
+        private static void AddRangeAxis(ParameterSpace space, PropertyInfo property, object from, object to, object step)
+        {
+            if (property.PropertyType == typeof(int))
+            {
+                space.AddInt(
+                    property.Name,
+                    Convert.ToInt32(from, CultureInfo.InvariantCulture),
+                    Convert.ToInt32(to, CultureInfo.InvariantCulture),
+                    Convert.ToInt32(step, CultureInfo.InvariantCulture));
+            }
+            else if (property.PropertyType == typeof(decimal))
+            {
+                space.AddDecimal(
+                    property.Name,
+                    Convert.ToDecimal(from, CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(to, CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(step, CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                throw new NotSupportedException(
+                    $".Vary() Parameter '{property.Name}' has unsupported type {property.PropertyType.Name}; only int and decimal are supported.");
+            }
+        }
+
+        /// <summary>Extracts the property a <c>.Vary()</c> selector names, unwrapping the boxing conversion the compiler inserts for value types.</summary>
+        private static PropertyInfo PropertyOf<TValue>(Expression<Func<TParameters, TValue>> selector)
+        {
+            Expression body = selector.Body;
+            if (body is UnaryExpression conversion && conversion.NodeType == ExpressionType.Convert)
+            {
+                body = conversion.Operand;
+            }
+
+            if (body is MemberExpression member && member.Member is PropertyInfo property)
+            {
+                return property;
+            }
+
+            throw new ArgumentException(
+                "The .Vary() selector must name a property, e.g. parameters => parameters.StopAtrMultiple.", nameof(selector));
+        }
+
         /// <summary>Clones the bound instance and sets the swept properties from the Parameter set, yielding the typed clone the factory reads.</summary>
-        private TParameters Realize(PropertyInfo[] optimized, ParameterSet parameters)
+        private TParameters Realize(List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> axes, ParameterSet parameters)
         {
             TParameters clone = Clone(_instance);
-            foreach (PropertyInfo property in optimized)
+            foreach ((PropertyInfo Property, Action<ParameterSpace> AddTo) axis in axes)
             {
-                property.SetValue(clone, SweptValue(parameters, property));
+                axis.Property.SetValue(clone, SweptValue(parameters, axis.Property));
             }
 
             return clone;
@@ -123,14 +216,14 @@ namespace Backtester.Optimization
         }
 
         /// <summary>
-        /// Rejects any <c>[Optimize]</c> Parameter the factory never consumes — an axis that would silently
-        /// produce identical Trials. For each axis it builds the strategy and broker twice, holding every
-        /// other axis at its first value and setting this one to its two extremes, then fingerprints the
-        /// produced objects: if varying the axis changes nothing, the Parameter is inert and is rejected.
+        /// Rejects any axis the factory never consumes — an axis that would silently produce identical
+        /// Trials. For each axis it builds the strategy and broker twice, holding every other axis at its
+        /// first value and setting this one to its two extremes, then fingerprints the produced objects: if
+        /// varying the axis changes nothing, the Parameter is inert and is rejected.
         /// </summary>
-        private void RejectUnconsumedParameters(PropertyInfo[] optimized)
+        private void RejectUnconsumedParameters(List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> axes)
         {
-            foreach (PropertyInfo axis in optimized)
+            foreach ((PropertyInfo Property, Action<ParameterSpace> AddTo) axis in axes)
             {
                 (object first, object last) = AxisEndpoints(axis);
                 if (Equals(first, last))
@@ -141,33 +234,33 @@ namespace Backtester.Optimization
 
                 // One shared Portfolio so the two builds differ only by the axis under test, not by their broker's portfolio.
                 Portfolio portfolio = new(100_000m);
-                (IStrategy Strategy, IBrokerSimulator Broker) low = _factory(ProbeClone(optimized, axis, first), portfolio);
-                (IStrategy Strategy, IBrokerSimulator Broker) high = _factory(ProbeClone(optimized, axis, last), portfolio);
+                (IStrategy Strategy, IBrokerSimulator Broker) low = _factory(ProbeClone(axes, axis.Property, first), portfolio);
+                (IStrategy Strategy, IBrokerSimulator Broker) high = _factory(ProbeClone(axes, axis.Property, last), portfolio);
 
                 if (Fingerprint(low.Strategy, low.Broker) == Fingerprint(high.Strategy, high.Broker))
                 {
                     throw new InvalidOperationException(
-                        $"[Optimize] Parameter '{axis.Name}' is declared but never consumed by the factory; varying it would produce identical Trials. Read it in the factory or remove the annotation.");
+                        $"Parameter '{axis.Property.Name}' is declared but never consumed by the factory; varying it would produce identical Trials. Read it in the factory or stop varying it.");
                 }
             }
         }
 
         /// <summary>The first and last values of an axis, reusing <see cref="ParameterSpace"/> so the stepping matches exactly.</summary>
-        private static (object First, object Last) AxisEndpoints(PropertyInfo property)
+        private static (object First, object Last) AxisEndpoints((PropertyInfo Property, Action<ParameterSpace> AddTo) axis)
         {
             ParameterSpace single = new();
-            AddAxis(single, property);
+            axis.AddTo(single);
             IReadOnlyList<ParameterSet> values = single.Expand();
-            return (SweptValue(values[0], property), SweptValue(values[values.Count - 1], property));
+            return (SweptValue(values[0], axis.Property), SweptValue(values[values.Count - 1], axis.Property));
         }
 
         /// <summary>A probe clone with every axis held at its first value except <paramref name="varying"/>, set to <paramref name="value"/>.</summary>
-        private TParameters ProbeClone(PropertyInfo[] optimized, PropertyInfo varying, object value)
+        private TParameters ProbeClone(List<(PropertyInfo Property, Action<ParameterSpace> AddTo)> axes, PropertyInfo varying, object value)
         {
             TParameters clone = Clone(_instance);
-            foreach (PropertyInfo property in optimized)
+            foreach ((PropertyInfo Property, Action<ParameterSpace> AddTo) axis in axes)
             {
-                property.SetValue(clone, property == varying ? value : AxisEndpoints(property).First);
+                axis.Property.SetValue(clone, axis.Property == varying ? value : AxisEndpoints(axis).First);
             }
 
             return clone;
