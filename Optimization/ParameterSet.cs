@@ -18,6 +18,14 @@ namespace Backtester.Optimization
             _values = values;
         }
 
+        /// <summary>
+        /// Gets every Parameter assignment in this set as name→value pairs, for enumeration and display
+        /// (e.g. a leaderboard's Parameter columns). The values are boxed exactly as supplied; read a
+        /// single one back typed with <see cref="Int"/>, <see cref="Decimal"/>, or <see cref="Bool"/>.
+        /// </summary>
+        // Key: Parameter name -> the value chosen for this point in the space (boxed int, decimal, or bool).
+        public IReadOnlyDictionary<string, object> Values => _values;
+
         /// <summary>Returns the value of the named integer Parameter.</summary>
         public int Int(string name)
         {

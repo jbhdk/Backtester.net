@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimization Report</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2027; --line: #2a313a; --text: #e6e9ef;
+    --muted: #8b95a3; --accent: #4ea1ff; --green: #2ecc71; --red: #e74c3c; --gold: #e0a33e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  thead th {
+    position: sticky; top: 0; background: var(--panel); text-align: right; white-space: nowrap;
+    padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted);
+    font-weight: 600; cursor: pointer; user-select: none;
+  }
+  thead th.text { text-align: left; }
+  thead th.static { cursor: default; }
+  /* The arrow uses display (not visibility) so an unsorted column reserves no width for it — otherwise
+     the reserved space shifts every right-aligned header off the right edge the numeric cells sit on. */
+  thead th .arrow { color: var(--accent); font-size: 10px; margin-left: 4px; display: none; }
+  thead th.sorted .arrow { display: inline; }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody td.text { text-align: left; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* The Parameters column collapses every swept axis into one cell so the table stays a fixed width no
+     matter how many Parameters the sweep varied. Each axis renders as a name/value chip; the cell wraps. */
+  th.params, td.params { min-width: 240px; }
+  td.params { white-space: normal; text-align: left; }
+  .param {
+    display: inline-flex; align-items: baseline; gap: 5px; margin: 2px 5px 2px 0; padding: 1px 8px;
+    background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 6px; font-size: 11px;
+  }
+  .param .pk { color: var(--muted); }
+  .param .pv { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+  tbody tr:hover td { background: rgba(255, 255, 255, .02); }
+  tbody tr.best td { background: rgba(46, 204, 113, .10); }
+  tbody tr.best td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+  tbody tr.ineligible td { color: var(--muted); }
+
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-best { color: var(--green); background: rgba(46, 204, 113, .14); text-transform: uppercase; letter-spacing: .04em; }
+  .badge-ineligible { color: var(--gold); background: rgba(224, 163, 62, .14); }
+  .legend { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .legend .badge { margin-right: 6px; }
+</style>
+</head>
+<body>
+  <h1>Optimization Report</h1>
+  <p class="sub" id="summary"></p>
+
+  <section>
+    <h2>Leaderboard</h2>
+    <div class="table-wrap">
+      <table id="leaderboard">
+        <thead><tr id="leaderboard-head"></tr></thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+    <p class="legend">
+      <span class="badge badge-best">Best</span> highest-scoring eligible Trial &nbsp;·&nbsp;
+      <span class="badge badge-ineligible">Ineligible</span> too few Round trips to win
+    </p>
+  </section>
+
+  <!-- The chart library is inlined for parity with the single-run report (offline, no CDN); the first
+       leaderboard is a sortable table and draws no chart yet. -->
+  <script>__CHART_LIB__</script>
+  <script id="optimization-data" type="application/json">__OPTIMIZATION_DATA__</script>
+  <script>
+    (function () {
+      var model = JSON.parse(document.getElementById("optimization-data").textContent);
+      var trials = model.trials || [];
+      var paramNames = model.parameterNames || [];
+
+      document.getElementById("summary").textContent =
+        trials.length + " Trials · " + paramNames.length + " Parameters swept";
+
+      // Each column: its header label, whether it is textual (left-aligned, string sort), whether it can be
+      // sorted, and how to read and render its cell from a row. Every swept axis is collapsed into a single
+      // non-sortable Parameters column so the table keeps a fixed width regardless of how many axes varied.
+      var columns = [
+        { label: "Rank", text: false, get: function (r) { return r.rank; }, cell: rankCell },
+        { label: "Parameters", text: true, sortable: false, cls: "params", cell: paramsCell }
+      ];
+      columns.push(
+        { label: "Score", text: false, get: function (r) { return r.score; }, cell: function (r) { return numCell(r.score, 4); } },
+        { label: "Trades", text: false, get: function (r) { return r.trades; }, cell: function (r) { return numCell(r.trades, 0); } },
+        { label: "Net Profit", text: false, get: function (r) { return r.netProfit; }, cell: moneyCell },
+        { label: "Max DD", text: false, get: function (r) { return r.maxDrawdown; }, cell: function (r) { return pctCell(r.maxDrawdown); } },
+        { label: "Sharpe", text: false, get: function (r) { return r.sharpe; }, cell: function (r) { return numCell(r.sharpe, 2); } },
+        { label: "Sortino", text: false, get: function (r) { return r.sortino; }, cell: function (r) { return numCell(r.sortino, 2); } },
+        { label: "Calmar", text: false, get: function (r) { return r.calmar; }, cell: function (r) { return numCell(r.calmar, 2); } },
+        { label: "Profit Factor", text: false, get: function (r) { return r.profitFactor; }, cell: function (r) { return numCell(r.profitFactor, 2); } },
+        { label: "Win Rate", text: false, get: function (r) { return r.winRate; }, cell: function (r) { return pctCell(r.winRate); } },
+        { label: "Status", text: true, get: function (r) { return statusRank(r); }, cell: statusCell }
+      );
+
+      var sortIndex = 0;     // default: by Rank ascending (the sweep's own ranking)
+      var sortAsc = true;
+
+      renderHead();
+      renderBody();
+
+      function renderHead() {
+        var tr = document.getElementById("leaderboard-head");
+        tr.innerHTML = "";
+        columns.forEach(function (col, i) {
+          var th = document.createElement("th");
+          var classes = [];
+          if (col.text) { classes.push("text"); }
+          if (col.cls) { classes.push(col.cls); }
+
+          // A non-sortable column (the collapsed Parameters cell) carries no arrow and no click handler.
+          if (col.sortable === false) {
+            classes.push("static");
+            th.className = classes.join(" ");
+            th.textContent = col.label;
+            tr.appendChild(th);
+            return;
+          }
+
+          if (i === sortIndex) { classes.push("sorted"); }
+          th.className = classes.join(" ");
+          th.innerHTML = col.label + '<span class="arrow">' + (sortAsc ? "▲" : "▼") + "</span>";
+          th.addEventListener("click", function () {
+            if (i === sortIndex) { sortAsc = !sortAsc; } else { sortIndex = i; sortAsc = true; }
+            renderHead(); renderBody();
+          });
+          tr.appendChild(th);
+        });
+      }
+
+      function renderBody() {
+        var col = columns[sortIndex];
+        var rows = trials.slice().sort(function (a, b) {
+          var x = col.get(a), y = col.get(b);
+          var cmp = col.text ? String(x).localeCompare(String(y)) : (x - y);
+          return sortAsc ? cmp : -cmp;
+        });
+
+        var body = document.getElementById("leaderboard-body");
+        body.innerHTML = "";
+        rows.forEach(function (r) {
+          var tr = document.createElement("tr");
+          tr.className = (r.isBest ? "best " : "") + (r.eligible ? "" : "ineligible");
+          columns.forEach(function (c) {
+            var td = document.createElement("td");
+            var classes = [];
+            if (c.text) { classes.push("text"); }
+            if (c.cls) { classes.push(c.cls); }
+            td.className = classes.join(" ");
+            td.innerHTML = c.cell(r);
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+      }
+
+      function rankCell(r) { return String(r.rank); }
+      function paramsCell(r) {
+        // Collapse every swept axis into one cell as name/value chips, aligned to the shared column order.
+        var chips = [];
+        for (var i = 0; i < paramNames.length; i++) {
+          chips.push(
+            '<span class="param"><span class="pk">' + escapeHtml(paramNames[i]) +
+            '</span><span class="pv">' + escapeHtml(String(r.parameterValues[i])) + "</span></span>");
+        }
+        return chips.join("");
+      }
+      function numCell(v, dp) { return Number(v).toFixed(dp); }
+      function moneyCell(r) {
+        var v = Number(r.netProfit);
+        var s = (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return '<span class="' + (v >= 0 ? "pos" : "neg") + '">' + s + "</span>";
+      }
+      function pctCell(v) { return (Number(v) * 100).toFixed(1) + "%"; }
+      function statusRank(r) { return r.isBest ? "0" : (r.eligible ? "1" : "2"); }
+      function statusCell(r) {
+        if (r.isBest) { return '<span class="badge badge-best">Best</span>'; }
+        if (!r.eligible) { return '<span class="badge badge-ineligible">Ineligible</span>'; }
+        return "";
+      }
+      function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

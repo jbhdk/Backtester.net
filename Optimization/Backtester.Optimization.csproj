@@ -29,6 +29,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Backtester\Backtester.csproj" />
+    <!-- The optimization report model builder projects an OptimizationResult into the Report project's
+         serializable model types (mirrors how Analysis references Report to build a ReportAnalysis). -->
+    <ProjectReference Include="..\Report\Report.csproj" />
   </ItemGroup>
 
   <!--
