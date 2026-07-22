@@ -15,8 +15,9 @@ namespace Backtester.Optimization
     /// <summary>
     /// Runs an Optimization: expands a <see cref="ParameterSpace"/> into a grid, runs one backtest per
     /// Parameter set (a Trial) through the existing engine over data fetched once and shared across Trials,
-    /// scores each Trial, and ranks them. This walking skeleton scores by the Sharpe ratio and runs the
-    /// grid exhaustively and sequentially.
+    /// scores each Trial, and ranks them. The grid is run exhaustively and in parallel, reporting progress
+    /// per completed Trial and honouring a <see cref="CancellationToken"/>; results are collected in
+    /// Parameter-space order so a parallel sweep ranks identically to a sequential one.
     /// </summary>
     public class Optimizer
     {
@@ -99,26 +100,44 @@ namespace Backtester.Optimization
         }
 
         /// <summary>
-        /// Fetches the bars once, evaluates every Parameter set as a Trial, and returns the Trials ranked by
-        /// Score (best first) together with the best one.
+        /// Fetches the bars once, evaluates every Parameter set as a Trial in parallel, and returns the Trials
+        /// ranked by Score (best first) together with the best one. Progress is reported once per completed
+        /// Trial through <paramref name="progress"/>; <paramref name="ct"/> stops the sweep and propagates
+        /// cancellation.
         /// </summary>
-        public async Task<OptimizationResult> RunAsync(CancellationToken ct = default)
+        public async Task<OptimizationResult> RunAsync(IProgress<OptimizationProgress> progress = null, CancellationToken ct = default)
         {
             IHistoricalDataFetcher sharedFetcher = await FetchOnceAsync(ct).ConfigureAwait(false);
 
-            // Each evaluated Parameter set with the stats, score, and full result its backtest produced.
-            List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)> evaluated = new();
-            foreach (ParameterSet parameters in _space.Expand())
+            IReadOnlyList<ParameterSet> parameterSets = _space.Expand();
+            int total = parameterSets.Count;
+
+            // Each evaluated Parameter set with the stats, score, and full result its backtest produced, held
+            // at its Parameter-space (Expand) index so the collected order is independent of which Trial
+            // finishes first — parallel results then rank identically to a sequential sweep, ties included.
+            (ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)[] evaluated =
+                new (ParameterSet, PerformanceStats, decimal, BacktestResult)[total];
+            int completed = 0;
+
+            ParallelOptions options = new() { CancellationToken = ct };
+            await Parallel.ForEachAsync(Enumerable.Range(0, total), options, async (index, token) =>
             {
+                ParameterSet parameters = parameterSets[index];
+
+                // A fresh Portfolio, strategy, and broker per Trial keep Trials independent; the shared fetcher
+                // is read-only, so parallel Trials over it are safe and see identical bars.
                 Portfolio portfolio = _portfolioFactory();
                 (IStrategy strategy, IBrokerSimulator broker) = _trialFactory(parameters, portfolio);
 
                 BacktestEngine engine = new(sharedFetcher, _symbols, _fromUtc, _toUtc, _interval, strategy, broker, portfolio);
-                BacktestResult result = await engine.StartAsync(ct).ConfigureAwait(false);
+                BacktestResult result = await engine.StartAsync(token).ConfigureAwait(false);
 
                 PerformanceStats stats = portfolio.GetPerformanceStats();
-                evaluated.Add((parameters, stats, _objective.Score(stats), result));
-            }
+                evaluated[index] = (parameters, stats, _objective.Score(stats), result);
+
+                int done = Interlocked.Increment(ref completed);
+                progress?.Report(new OptimizationProgress(done, total));
+            }).ConfigureAwait(false);
 
             List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)> ranked =
                 (_objective.Direction == OptimizationDirection.Maximize

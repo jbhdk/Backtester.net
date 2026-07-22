@@ -334,6 +334,78 @@ namespace BacktesterTests.Optimization.Tests
             Assert.False(result.Trials.Single().Eligible);
         }
 
+        [Fact]
+        public async Task RunAsync_ReportsProgressForEveryTrialEndingAtTheTotal()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 5, step: 1);
+            RecordingProgress progress = new();
+
+            await QtyOptimizer(RisingAaplFetcher(), space).RunAsync(progress);
+
+            // One report per completed Trial, every report carries the full total, and the last Trial to
+            // complete drives Completed up to that total.
+            Assert.Equal(5, progress.Reports.Count);
+            Assert.All(progress.Reports, report => Assert.Equal(5, report.Total));
+            Assert.Equal(5, progress.Reports.Max(report => report.Completed));
+        }
+
+        [Fact]
+        public async Task RunAsync_WithTiedScores_RanksTrialsInParameterSpaceOrderDeterministically()
+        {
+            // A constant Objective ties every Trial's Score, so ranking order is decided purely by the order
+            // results are collected in. Parallel execution must still reproduce the sequential result: the
+            // Parameter-space (Expand) order, identically on every run.
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 12, step: 1);
+            Objective allTied = Objective.Maximize(stats => 0m);
+
+            OptimizationResult first = await QtyOptimizer(RisingAaplFetcher(), space, objective: allTied).RunAsync();
+            OptimizationResult second = await QtyOptimizer(RisingAaplFetcher(), space, objective: allTied).RunAsync();
+
+            int[] expected = Enumerable.Range(1, 12).ToArray();
+            Assert.Equal(expected, first.Trials.Select(trial => trial.Parameters.Int("qty")));
+            Assert.Equal(expected, second.Trials.Select(trial => trial.Parameters.Int("qty")));
+        }
+
+        [Fact]
+        public async Task RunAsync_WithCancelledToken_PropagatesCancellation()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+            using CancellationTokenSource cts = new();
+            cts.Cancel();
+
+            // A cancelled token stops the sweep and surfaces as an OperationCanceledException, not a completed run.
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => QtyOptimizer(RisingAaplFetcher(), space).RunAsync(progress: null, ct: cts.Token));
+        }
+
+        /// <summary>Records every progress report synchronously and thread-safely, avoiding Progress&lt;T&gt;'s async posting to a captured context.</summary>
+        private sealed class RecordingProgress : IProgress<OptimizationProgress>
+        {
+            private readonly object _gate = new();
+            private readonly List<OptimizationProgress> _reports = new();
+
+            /// <summary>Gets a snapshot of the reports received so far.</summary>
+            public IReadOnlyList<OptimizationProgress> Reports
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        return _reports.ToList();
+                    }
+                }
+            }
+
+            /// <summary>Records one progress report; called synchronously from the sweep, possibly on many threads.</summary>
+            public void Report(OptimizationProgress value)
+            {
+                lock (_gate)
+                {
+                    _reports.Add(value);
+                }
+            }
+        }
+
         /// <summary>Buys a fixed quantity of every symbol on its first bar, then sells the same quantity on its next.</summary>
         private class BuySellQtyStrategy : StrategyBase
         {
