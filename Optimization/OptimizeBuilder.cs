@@ -64,6 +64,9 @@ namespace Backtester.Optimization
         /// </summary>
         /// <typeparam name="TValue">The selected property's type, inferred from the selector.</typeparam>
         /// <param name="selector">Names the Parameter to vary, e.g. <c>parameters => parameters.StopAtrMultiple</c>.</param>
+        /// <param name="from">The first value of the axis, inclusive.</param>
+        /// <param name="to">The last value of the axis, inclusive.</param>
+        /// <param name="step">The increment between successive values of the axis.</param>
         public OptimizeBuilder<TParameters> Vary<TValue>(
             Expression<Func<TParameters, TValue>> selector, TValue from, TValue to, TValue step)
         {
