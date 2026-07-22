@@ -29,11 +29,13 @@ namespace Backtester.Optimization
         private readonly ParameterSpace _space;
         private readonly Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> _trialFactory;
         private readonly bool _retainAllBacktestResults;
+        private readonly Objective _objective;
 
         /// <summary>
         /// Initializes a new Optimizer over the shared run inputs, the Parameter space to sweep, and the
         /// Trial factory that builds a fresh strategy and broker for each Parameter set. A fresh
-        /// <see cref="Portfolio"/> is produced per Trial from <paramref name="portfolioFactory"/>.
+        /// <see cref="Portfolio"/> is produced per Trial from <paramref name="portfolioFactory"/>. Trials are
+        /// ranked by <paramref name="objective"/>; when it is null the default is maximise Sharpe.
         /// </summary>
         public Optimizer(
             IHistoricalDataFetcher fetcher,
@@ -44,7 +46,8 @@ namespace Backtester.Optimization
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
             Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
-            bool retainAllBacktestResults = false)
+            bool retainAllBacktestResults = false,
+            Objective objective = null)
         {
             _fetcher = fetcher;
             _symbols = symbols;
@@ -55,6 +58,7 @@ namespace Backtester.Optimization
             _space = space;
             _trialFactory = trialFactory;
             _retainAllBacktestResults = retainAllBacktestResults;
+            _objective = objective ?? Objectives.Sharpe;
         }
 
         /// <summary>
@@ -76,11 +80,13 @@ namespace Backtester.Optimization
                 BacktestResult result = await engine.StartAsync(ct).ConfigureAwait(false);
 
                 PerformanceStats stats = portfolio.GetPerformanceStats();
-                evaluated.Add((parameters, stats, stats.Sharpe, result));
+                evaluated.Add((parameters, stats, _objective.Score(stats), result));
             }
 
             List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)> ranked =
-                evaluated.OrderByDescending(trial => trial.Score).ToList();
+                (_objective.Direction == OptimizationDirection.Maximize
+                    ? evaluated.OrderByDescending(trial => trial.Score)
+                    : evaluated.OrderBy(trial => trial.Score)).ToList();
 
             List<Trial> trials = new();
             for (int index = 0; index < ranked.Count; index++)

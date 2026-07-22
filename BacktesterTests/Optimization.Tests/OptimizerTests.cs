@@ -51,7 +51,8 @@ namespace BacktesterTests.Optimization.Tests
         private static Optimizer QtyOptimizer(
             IHistoricalDataFetcher fetcher,
             ParameterSpace space,
-            bool retainAllBacktestResults = false)
+            bool retainAllBacktestResults = false,
+            Objective objective = null)
         {
             return new Optimizer(
                 fetcher,
@@ -62,7 +63,8 @@ namespace BacktesterTests.Optimization.Tests
                 () => new Portfolio(100_000m),
                 space,
                 (parameters, portfolio) => (new BuySellQtyStrategy(parameters.Int("qty")), new BrokerSimulator(portfolio)),
-                retainAllBacktestResults);
+                retainAllBacktestResults,
+                objective);
         }
 
         private static Trial TrialForQty(OptimizationResult result, int qty)
@@ -116,6 +118,53 @@ namespace BacktesterTests.Optimization.Tests
 
             Assert.Same(result.Trials[0], result.Best);
             Assert.Equal(result.Trials.Max(trial => trial.Score), result.Best.Score);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithMaximizeObjective_RanksHighestMetricTrialFirst()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+            Objective maximizeNetProfit = Objective.Maximize(stats => stats.NetProfit);
+
+            OptimizationResult result = await QtyOptimizer(RisingAaplFetcher(), space, objective: maximizeNetProfit).RunAsync();
+
+            // qty scales realized net profit: 1->10, 2->20, 3->30, so maximising NetProfit puts qty 3 first.
+            Assert.Equal(new[] { 3, 2, 1 }, result.Trials.Select(trial => trial.Parameters.Int("qty")));
+            Assert.Equal(30m, result.Best.Score);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithMinimizeObjective_RanksLowestMetricTrialFirst()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+            Objective minimizeNetProfit = Objective.Minimize(stats => stats.NetProfit);
+
+            OptimizationResult result = await QtyOptimizer(RisingAaplFetcher(), space, objective: minimizeNetProfit).RunAsync();
+
+            // The same grid ranked in the opposite direction: qty 1 (net profit 10) now wins.
+            Assert.Equal(new[] { 1, 2, 3 }, result.Trials.Select(trial => trial.Parameters.Int("qty")));
+            Assert.Equal(10m, result.Best.Score);
+        }
+
+        [Fact]
+        public async Task RunAsync_ByDefault_ScoresEachTrialByItsSharpe()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+
+            OptimizationResult result = await QtyOptimizer(RisingAaplFetcher(), space).RunAsync();
+
+            Assert.All(result.Trials, trial => Assert.Equal(trial.Stats.Sharpe, trial.Score));
+        }
+
+        [Fact]
+        public async Task RunAsync_WithNamedPreset_DrivesRankingEndToEnd()
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+
+            OptimizationResult result = await QtyOptimizer(RisingAaplFetcher(), space, objective: Objectives.NetProfit).RunAsync();
+
+            Assert.Equal(3, result.Best.Parameters.Int("qty"));
+            Assert.Equal(30m, result.Best.Score);
         }
 
         [Fact]
