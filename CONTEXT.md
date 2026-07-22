@@ -267,3 +267,63 @@ well-formed is a **violation** and is rejected, never repaired or coerced. A run
 or none at all — a partially-understood Analysis would leave the reader unable to tell which parts the
 AI actually produced.
 _Avoid_: schema (unqualified), format, response.
+
+### Optimization
+
+**Optimization**:
+The produced artifact of sweeping a strategy's Parameters to find the best configuration by an
+Objective: the ranked Trials plus the best one. The noun names the *result*, the way **Analysis** names
+the critique artifact — not the process.
+_Avoid_: sweep (as the result), search, tuning, grid (grid is the search method).
+
+**Optimizer**:
+The orchestrator that runs an Optimization: it expands the Parameter ranges into a Parameter space,
+runs a backtest per Parameter set, scores each by the Objective, and ranks them. Parallels the
+**Analyzer**.
+_Avoid_: tuner, searcher, sweeper, solver.
+
+**Parameter**:
+A strategy's tunable input that an Optimization varies (e.g. a moving average's window, an ATR stop
+multiple). Orthogonal to a **Setting**: the same property may carry both a Parameter range and a
+`[ReportSetting]` — "Parameter" names the concern that it *can vary*, while configuration/Setting names
+how a run's inputs are *rendered* in the report. What varies is a Parameter; how it is shown is a
+Setting.
+_Avoid_: setting (for the varying concern), knob, variable, argument.
+
+**Parameter space**:
+Every Parameter set an Optimization will evaluate: the cartesian product of each varied Parameter's
+range (from/to/step). v1 evaluates the space **exhaustively** — a grid search — with no pluggable
+search-method seam; a seam is added later, deliberately, only when a second method (random, walk-forward)
+arrives.
+_Avoid_: grid (as the space itself; grid names the exhaustive method), search space, domain.
+
+**Parameter set**:
+One complete assignment of values to the varied Parameters — a single point in the Parameter space.
+Not yet evaluated; a Trial is a Parameter set once a backtest has scored it.
+_Avoid_: combination, combo, configuration (configuration is the report's view of a run's inputs).
+
+**Trial**:
+One Parameter set evaluated by a backtest, carrying its Performance stats and its Score. An
+Optimization is a set of Trials; the best Trial is the winner. A Trial wraps a single backtest — "run"
+stays the informal word for that underlying backtest.
+_Avoid_: candidate, run (for the scored unit), sample, iteration.
+
+**Objective**:
+The rule an Optimization ranks Trials by: a function over a Trial's **combined** (whole-run)
+Performance stats paired with a direction (maximize or minimize), e.g. maximize Sharpe or minimize
+Max drawdown. It reads the combined stats only — never Per-symbol stats — so ranking is always on
+whole-run performance.
+_Avoid_: fitness, goal, target, metric (a metric is one Performance stat; the Objective is the rule).
+
+**Score**:
+The single number an Objective assigns to a Trial — the value Trials are ranked by. Higher wins when
+the Objective maximizes, lower when it minimizes.
+_Avoid_: fitness, objective value, rank, result.
+
+**Eligibility**:
+Whether a Trial is allowed to be the winner. A Trial is **eligible** only if it meets the
+Optimization's minimum round-trip count; a Trial below it is **ineligible** and can never be the best,
+so a lucky handful of round trips cannot top the ranking. An ineligible Trial is still ranked and
+shown — flagged as ineligible — never silently dropped. Mirrors the Analysis stance of rejecting
+rather than hiding.
+_Avoid_: filter, disqualified, valid/invalid.
