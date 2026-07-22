@@ -14,8 +14,8 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds seven NuGet packages. Use the engine on its own, and add a data source,
-reporting, or analysis when you want them. The core makes no outbound network call on its own — every live data
+The repository builds eight NuGet packages. Use the engine on its own, and add a data source,
+reporting, analysis, or optimization when you want them. The core makes no outbound network call on its own — every live data
 provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
 | Package | What it is | Depends on |
@@ -27,6 +27,7 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | [`backtester.net.report.toolkit`](Report.Toolkit/README.md) | Opt-in report-side helper that reflects an attributed settings object into configuration cards, so a strategy's parameters render at the top of the report. | `backtester.net.report` |
 | [`backtester.net.analysis`](Analysis/README.md) | Opt-in, AI-agnostic Analysis: reduces a report model to an Analysis digest, asks an Analysis client, and enforces the Analysis contract. Makes no outbound call. | `backtester.net.report` |
 | [`backtester.net.analysis.claude`](Analysis.Claude/README.md) | Opt-in Claude Analysis client. All the network code for the analysis feature lives here. | `backtester.net.analysis`, `Anthropic` |
+| [`backtester.net.optimization`](Optimization/README.md) | Opt-in Parameter Optimization: sweeps a strategy's Parameters over a grid, runs a backtest per combination, and ranks the Trials by an Objective, with a sortable leaderboard report. In-sample grid search (ADR 0020). Makes no outbound call. | `backtester.net`, `backtester.net.report` |
 
 ---
 <!-- 
@@ -408,6 +409,80 @@ suite: no test depends on an API key or on network access.
 
 ---
 
+## Optimization
+
+**Optimization** sweeps a strategy's **Parameters** over a grid, runs a full backtest per combination
+(a **Trial**), and ranks the Trials by an **Objective** — so you can ask "sweep the fast period from 5
+to 15 and the slow period from 20 to 40, run them all, and show me which did best and how the neighbours
+compare." It ships in the opt-in [`backtester.net.optimization`](Optimization/README.md) package and
+makes no outbound call.
+
+The documented lead is **attributes-first**: mark the Parameters to vary with `[Optimize(min, max, step)]`
+(a `bool` uses the parameterless `[Optimize]` and expands to `{ false, true }`), and supply one factory
+that builds a Trial's strategy *and* broker from a Parameter set — so a Parameter driving an execution
+model (e.g. `RiskFraction` → risk-per-trade sizing) actually takes effect instead of being a silent no-op.
+
+```csharp
+using Backtester.Optimization;
+
+public class MaCrossParameters
+{
+    [Optimize(5, 15, 5)]    // 5, 10, 15
+    public int FastPeriod { get; set; }
+
+    [Optimize(20, 40, 10)]  // 20, 30, 40
+    public int SlowPeriod { get; set; }
+}
+
+// Attributes-first authoring: the [Optimize] properties become the swept axes, and the factory
+// realizes each Parameter set into a fresh strategy and broker.
+OptimizationSetup setup = Optimize
+    .For(new MaCrossParameters(), (parameters, portfolio) =>
+        (new MovingAverageCrossStrategy(parameters.FastPeriod, parameters.SlowPeriod),
+         new BrokerSimulator(portfolio)))
+    .FromAttributes();
+
+Optimizer optimizer = new Optimizer(
+    fetcher,
+    symbols: new[] { "SPY", "QQQ" },
+    fromUtc, toUtc, interval: "1d",
+    portfolioFactory: () => new Portfolio(100_000m),
+    setup,
+    objective: Objectives.Sharpe);   // the default; or Calmar, NetProfit, MinDrawdown, …
+
+OptimizationResult result = await optimizer.RunAsync();
+
+// The whole sweep as a leaderboard-and-heatmap report:
+new OptimizationHtmlReportWriter().Write(
+    new OptimizationReportModelBuilder().Build(result), "optimization.html");
+
+// The winner's full BacktestResult is exposed, so you render its single-run report yourself:
+new HtmlReportWriter().Write(result.Best.BacktestResult, "winner.html");
+```
+
+Two more authoring paths compile to the same primitive: a fluent
+`.Vary(parameters => parameters.FastPeriod, 5, 15, 5)` that keeps the search space in the experiment
+rather than on the strategy, and an explicit `ParameterSpace` for a bare-constructor strategy with no
+parameters class.
+
+The Optimizer fetches the bars **once** and shares them across every Trial, runs Trials in **parallel**
+with a progress callback and `CancellationToken`, and reuses the existing `Engine` unchanged. The
+Optimization report renders the whole sweep as a sortable leaderboard — best highlighted, ineligible
+Trials flagged — with a Score **heatmap** when exactly two Parameters vary (per-Parameter marginals
+otherwise).
+
+**A winning Trial is the best *in-sample* configuration, not a validated one.** v1 is in-sample grid
+search only ([ADR 0020](docs/adr/0020-optimization-in-sample-grid-search.md)): it tunes and reports on
+the same data, with no out-of-sample or walk-forward split. Overfitting is guarded only by a
+minimum-trades **Eligibility** rule (a Trial with too few round trips cannot win) and by surfacing the
+full ranked leaderboard.
+
+A complete, offline example lives in
+[`samples/OptimizationSample`](samples/OptimizationSample/README.md); the
+[package README](Optimization/README.md) covers the authoring paths, Objectives, and Eligibility in full.
+
+---
+
 ## Project layout
 
 ```
@@ -424,9 +499,11 @@ Report/                HTML reporting (backtester.net.report)
 Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
 Analysis/              AI-agnostic Analysis (backtester.net.analysis)
 Analysis.Claude/       Claude Analysis client (backtester.net.analysis.claude)
+Optimization/          Parameter Optimization (backtester.net.optimization)
 BacktesterTests/       Test suite
 samples/data/          Example OHLCV CSVs
-samples/AnalysisSample/  End-to-end run ending in a report with an Analysis
+samples/AnalysisSample/      End-to-end run ending in a report with an Analysis
+samples/OptimizationSample/  End-to-end offline Parameter sweep writing both reports
 CONTEXT.md             The engine's ubiquitous language (glossary)
 ```
 
@@ -435,8 +512,9 @@ Each library has its own focused README: [`Backtester/README.md`](Backtester/REA
 [`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md),
 [`Report/README.md`](Report/README.md),
 [`Report.Toolkit/README.md`](Report.Toolkit/README.md),
-[`Analysis/README.md`](Analysis/README.md), and
-[`Analysis.Claude/README.md`](Analysis.Claude/README.md).
+[`Analysis/README.md`](Analysis/README.md),
+[`Analysis.Claude/README.md`](Analysis.Claude/README.md), and
+[`Optimization/README.md`](Optimization/README.md).
 
 ---
 

@@ -46,6 +46,15 @@ The page renders a grouped stats panel (headline, trade-quality, run context) wi
 currency, ratio stats as percentages, and P&L colour-coded green/red, plus a sortable round-trips
 table. Displayed P&L is gross of commission and slippage.
 
+## Optimization report
+
+This package also carries the **Optimization** report — a separate report that renders a whole Parameter
+sweep as a sortable leaderboard with a Score heatmap. Its serializable model (`OptimizationReportModel`)
+and writer (`OptimizationHtmlReportWriter`) live here so that the
+[`backtester.net.optimization`](https://www.nuget.org/packages/backtester.net.optimization) package can
+project into them without this package ever depending on it (the same arrangement as `ReportAnalysis`).
+The Optimization package builds the model and drives the writer; see its README for the full flow.
+
 ## Stat reference
 
 The stats panel is split into cards. Each card column shows the value for **All symbols** (the
