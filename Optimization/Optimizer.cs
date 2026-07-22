@@ -30,12 +30,16 @@ namespace Backtester.Optimization
         private readonly Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> _trialFactory;
         private readonly bool _retainAllBacktestResults;
         private readonly Objective _objective;
+        private readonly int _minimumTrades;
 
         /// <summary>
         /// Initializes a new Optimizer over the shared run inputs, the Parameter space to sweep, and the
         /// Trial factory that builds a fresh strategy and broker for each Parameter set. A fresh
         /// <see cref="Portfolio"/> is produced per Trial from <paramref name="portfolioFactory"/>. Trials are
-        /// ranked by <paramref name="objective"/>; when it is null the default is maximise Sharpe.
+        /// ranked by <paramref name="objective"/>; when it is null the default is maximise Sharpe. A Trial
+        /// with fewer Round trips than <paramref name="minimumTrades"/> is flagged ineligible and can never be
+        /// <see cref="OptimizationResult.Best"/>, guarding against a degenerate low-trade Trial winning on a
+        /// lucky Score.
         /// </summary>
         public Optimizer(
             IHistoricalDataFetcher fetcher,
@@ -47,7 +51,8 @@ namespace Backtester.Optimization
             ParameterSpace space,
             Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults = false,
-            Objective objective = null)
+            Objective objective = null,
+            int minimumTrades = 30)
         {
             _fetcher = fetcher;
             _symbols = symbols;
@@ -59,6 +64,7 @@ namespace Backtester.Optimization
             _trialFactory = trialFactory;
             _retainAllBacktestResults = retainAllBacktestResults;
             _objective = objective ?? Objectives.Sharpe;
+            _minimumTrades = minimumTrades;
         }
 
         /// <summary>
@@ -88,15 +94,22 @@ namespace Backtester.Optimization
                     ? evaluated.OrderByDescending(trial => trial.Score)
                     : evaluated.OrderBy(trial => trial.Score)).ToList();
 
+            // Best is the highest-scoring eligible Trial: ranked is score-ordered, so the first eligible one
+            // wins. A higher-scoring ineligible Trial stays in the list, flagged, but never becomes Best.
+            int bestIndex = ranked.FindIndex(trial => trial.Stats.Trades >= _minimumTrades);
+
             List<Trial> trials = new();
             for (int index = 0; index < ranked.Count; index++)
             {
                 (ParameterSet parameters, PerformanceStats stats, decimal score, BacktestResult result) = ranked[index];
-                bool keepResult = _retainAllBacktestResults || index == 0;
-                trials.Add(new Trial(parameters, stats, score, keepResult ? result : null));
+                bool eligible = stats.Trades >= _minimumTrades;
+                // Retain the full result for the winning Trial (so Best.BacktestResult is populated even when
+                // a higher-scoring Trial is ineligible) and for every Trial when the caller opted in.
+                bool keepResult = _retainAllBacktestResults || index == bestIndex;
+                trials.Add(new Trial(parameters, stats, score, eligible, keepResult ? result : null));
             }
 
-            Trial best = trials.Count > 0 ? trials[0] : null;
+            Trial best = bestIndex >= 0 ? trials[bestIndex] : null;
             return new OptimizationResult(trials, best);
         }
 

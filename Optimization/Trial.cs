@@ -10,12 +10,13 @@ namespace Backtester.Optimization
     /// </summary>
     public class Trial
     {
-        /// <summary>Initializes a new Trial for the given Parameter set, stats, score, and optional result.</summary>
-        public Trial(ParameterSet parameters, PerformanceStats stats, decimal score, BacktestResult backtestResult)
+        /// <summary>Initializes a new Trial for the given Parameter set, stats, score, eligibility, and optional result.</summary>
+        public Trial(ParameterSet parameters, PerformanceStats stats, decimal score, bool eligible, BacktestResult backtestResult)
         {
             Parameters = parameters;
             Stats = stats;
             Score = score;
+            Eligible = eligible;
             BacktestResult = backtestResult;
         }
 
@@ -27,6 +28,13 @@ namespace Backtester.Optimization
 
         /// <summary>Gets the Score the Objective assigned this Trial; Trials are ranked by it.</summary>
         public decimal Score { get; }
+
+        /// <summary>
+        /// Gets whether this Trial has enough Round trips to be eligible to win. A Trial with fewer Round
+        /// trips than the Optimizer's configured minimum is ineligible: it is still ranked and shown, but it
+        /// can never be <see cref="OptimizationResult.Best"/>.
+        /// </summary>
+        public bool Eligible { get; }
 
         /// <summary>
         /// Gets the full backtest result for this Trial, or null when it was not retained. The best Trial

@@ -52,7 +52,8 @@ namespace BacktesterTests.Optimization.Tests
             IHistoricalDataFetcher fetcher,
             ParameterSpace space,
             bool retainAllBacktestResults = false,
-            Objective objective = null)
+            Objective objective = null,
+            int minimumTrades = 0)
         {
             return new Optimizer(
                 fetcher,
@@ -64,7 +65,8 @@ namespace BacktesterTests.Optimization.Tests
                 space,
                 (parameters, portfolio) => (new BuySellQtyStrategy(parameters.Int("qty")), new BrokerSimulator(portfolio)),
                 retainAllBacktestResults,
-                objective);
+                objective,
+                minimumTrades);
         }
 
         private static Trial TrialForQty(OptimizationResult result, int qty)
@@ -209,6 +211,129 @@ namespace BacktesterTests.Optimization.Tests
                 .MustHaveHappenedOnceExactly();
         }
 
+        /// <summary>A rising series of <paramref name="bars"/> bars from 100 in +10 steps, so consecutive fills differ by 10.</summary>
+        private static IHistoricalDataFetcher RisingSeriesFetcher(int bars)
+        {
+            List<Candle> candles = new();
+            for (int index = 0; index < bars; index++)
+            {
+                candles.Add(Bar(T0.AddDays(index), 100m + 10m * index));
+            }
+
+            return FetcherReturning(("AAPL", candles));
+        }
+
+        /// <summary>
+        /// Builds an Optimizer whose "case" axis maps to two hand-picked Trials: case 1 does few Round trips
+        /// at a large quantity (high Score, low trade count) and case 2 does many Round trips at quantity one
+        /// (lower Score, high trade count), so Eligibility decides the winner.
+        /// </summary>
+        private static Optimizer TradeCountOptimizer(IHistoricalDataFetcher fetcher, int minimumTrades)
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("case", from: 1, to: 2, step: 1);
+            return new Optimizer(
+                fetcher,
+                new[] { "AAPL" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                () => new Portfolio(100_000m),
+                space,
+                (parameters, portfolio) =>
+                {
+                    (int roundTrips, int quantity) = parameters.Int("case") == 1 ? (2, 100) : (10, 1);
+                    return (new NRoundTripStrategy(roundTrips, quantity), new BrokerSimulator(portfolio));
+                },
+                objective: Objectives.NetProfit,
+                minimumTrades: minimumTrades);
+        }
+
+        private static Trial TrialForCase(OptimizationResult result, int caseNumber)
+        {
+            return result.Trials.First(trial => trial.Parameters.Int("case") == caseNumber);
+        }
+
+        [Fact]
+        public async Task RunAsync_BestIsHighestScoringEligibleTrial_NotAHigherScoringIneligibleOne()
+        {
+            // Case 1 scores 2000 net profit over 2 Round trips (ineligible); case 2 scores 100 over 10 (eligible).
+            OptimizationResult result = await TradeCountOptimizer(RisingSeriesFetcher(bars: 22), minimumTrades: 5).RunAsync();
+
+            Assert.Equal(2, result.Best.Parameters.Int("case"));
+        }
+
+        [Fact]
+        public async Task RunAsync_KeepsHigherScoringIneligibleTrialInTheRankedListFlagged()
+        {
+            OptimizationResult result = await TradeCountOptimizer(RisingSeriesFetcher(bars: 22), minimumTrades: 5).RunAsync();
+
+            Trial ineligible = TrialForCase(result, 1);
+            Assert.Contains(ineligible, result.Trials);
+            Assert.False(ineligible.Eligible);
+        }
+
+        /// <summary>Runs a single Trial of exactly <paramref name="roundTrips"/> Round trips with no minimum passed, so the constructor default governs Eligibility.</summary>
+        private static async Task<Trial> DefaultMinimumTrialAsync(int roundTrips)
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 1, step: 1);
+            Optimizer optimizer = new Optimizer(
+                RisingSeriesFetcher(bars: roundTrips * 2 + 2),
+                new[] { "AAPL" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                () => new Portfolio(100_000m),
+                space,
+                (parameters, portfolio) => (new NRoundTripStrategy(roundTrips, quantity: 1), new BrokerSimulator(portfolio)));
+
+            OptimizationResult result = await optimizer.RunAsync();
+            return result.Trials.Single();
+        }
+
+        [Fact]
+        public async Task RunAsync_ByDefault_MarksTrialWithTwentyNineRoundTripsIneligible()
+        {
+            Trial trial = await DefaultMinimumTrialAsync(roundTrips: 29);
+
+            Assert.False(trial.Eligible);
+        }
+
+        [Fact]
+        public async Task RunAsync_ByDefault_MarksTrialWithThirtyRoundTripsEligible()
+        {
+            Trial trial = await DefaultMinimumTrialAsync(roundTrips: 30);
+
+            Assert.True(trial.Eligible);
+        }
+
+        [Fact]
+        public async Task RunAsync_BestCarriesItsBacktestResult_EvenWhenAHigherScoringTrialIsIneligible()
+        {
+            OptimizationResult result = await TradeCountOptimizer(RisingSeriesFetcher(bars: 22), minimumTrades: 5).RunAsync();
+
+            Assert.NotNull(result.Best.BacktestResult);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenNoTrialMeetsTheMinimum_HasNoBest()
+        {
+            // Both Trials do at most 10 Round trips, so a minimum of 100 leaves none eligible.
+            OptimizationResult result = await TradeCountOptimizer(RisingSeriesFetcher(bars: 22), minimumTrades: 100).RunAsync();
+
+            Assert.Null(result.Best);
+        }
+
+        [Fact]
+        public async Task RunAsync_FlagsTrialWithFewerRoundTripsThanMinimumIneligible()
+        {
+            // BuySellQtyStrategy completes a single round trip, so one Trade is below a minimum of five.
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 1, step: 1);
+
+            OptimizationResult result = await QtyOptimizer(RisingAaplFetcher(), space, minimumTrades: 5).RunAsync();
+
+            Assert.False(result.Trials.Single().Eligible);
+        }
+
         /// <summary>Buys a fixed quantity of every symbol on its first bar, then sells the same quantity on its next.</summary>
         private class BuySellQtyStrategy : StrategyBase
         {
@@ -233,6 +358,35 @@ namespace BacktesterTests.Optimization.Tests
                     _sold = true;
                     broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = _quantity });
                 }
+            }
+        }
+
+        /// <summary>
+        /// Performs exactly <c>roundTrips</c> buy-then-sell cycles at a fixed quantity, submitting one order
+        /// per bar (buy on even orders, sell on odd), so a rising series yields that many completed Round trips.
+        /// </summary>
+        private class NRoundTripStrategy : StrategyBase
+        {
+            private readonly int _roundTrips;
+            private readonly int _quantity;
+            private int _ordersSubmitted;
+
+            public NRoundTripStrategy(int roundTrips, int quantity)
+            {
+                _roundTrips = roundTrips;
+                _quantity = quantity;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (_ordersSubmitted >= _roundTrips * 2)
+                {
+                    return;
+                }
+
+                OrderSide side = _ordersSubmitted % 2 == 0 ? OrderSide.Buy : OrderSide.Sell;
+                broker.Submit(new OrderRequest { Symbol = symbol, Side = side, Type = OrderType.Market, Quantity = _quantity });
+                _ordersSubmitted++;
             }
         }
     }
