@@ -59,6 +59,26 @@ namespace BacktesterTests.Data.Tests
         }
 
         [Fact]
+        public async Task Fetch_EmptyCache_EstablishesCoverageFloorAtFrom()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            DateTime from = TruncateToSecond(DateTime.UtcNow).AddDays(-10);
+            DateTime to = TruncateToSecond(DateTime.UtcNow);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .Returns(Task.FromResult<IEnumerable<Candle>>(new[] { new Candle { Timestamp = from, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } }));
+
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+            await fetcher.FetchAsync("AAPL", from, to, "1h");
+
+            CoverageFloorLoader floors = new();
+            DateTime? floor = floors.Read(Path.Combine(tmp, floors.FileName("AAPL", "1h")));
+            Assert.Equal(from, floor);
+        }
+
+        [Fact]
         public async Task Fetch_FreshCacheNotReachingTo_NoProviderCall()
         {
             string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
@@ -157,6 +177,87 @@ namespace BacktesterTests.Data.Tests
             A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
                 .MustNotHaveHappened();
             Assert.Single(res);
+        }
+
+        [Fact]
+        public async Task Fetch_FromBeforeCoverageFloor_ThrowsWithoutProviderCall()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            DateTime now = TruncateToSecond(DateTime.UtcNow);
+            DateTime floor = now.AddDays(-100);
+            DateTime latest = now.AddDays(-2);
+
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1h.csv"), new[] { new Candle { Timestamp = latest, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } });
+            CoverageFloorLoader floors = new();
+            floors.Write(Path.Combine(tmp, floors.FileName("AAPL", "1h")), floor);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+
+            DateTime requestedFrom = now.AddYears(-1);
+            DataCoverageException ex = await Assert.ThrowsAsync<DataCoverageException>(
+                async () => await fetcher.FetchAsync("AAPL", requestedFrom, now, "1h"));
+
+            Assert.Equal("AAPL", ex.Symbol);
+            Assert.Equal(requestedFrom, ex.RequestedFromUtc);
+            Assert.Equal(floor, ex.CoverageFloorUtc);
+            Assert.Equal("1h", ex.Interval);
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustNotHaveHappened();
+        }
+
+        [Fact]
+        public async Task Fetch_FromAtOrAfterFloor_LateListing_ServesCacheWithoutProviderCall()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            DateTime now = TruncateToSecond(DateTime.UtcNow);
+            DateTime floor = now.AddYears(-2);
+            // The symbol's data starts long after the floor (a late listing): the only cached bar is recent,
+            // yet the floor confirms we asked from two years ago, so the range is covered and trusted.
+            DateTime latest = now.AddDays(-2);
+
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1h.csv"), new[] { new Candle { Timestamp = latest, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } });
+            CoverageFloorLoader floors = new();
+            floors.Write(Path.Combine(tmp, floors.FileName("AAPL", "1h")), floor);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+
+            IReadOnlyList<Candle> res = await fetcher.FetchAsync("AAPL", now.AddYears(-1), now, "1h");
+
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustNotHaveHappened();
+            Assert.Single(res);
+        }
+
+        [Fact]
+        public async Task Fetch_StaleTailSelfHeal_LeavesCoverageFloorUnchanged()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            DateTime baseTime = DateTime.UtcNow.Date.AddDays(-30).AddHours(9);
+            DateTime to = baseTime.AddDays(10);
+
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1h.csv"), new[] { new Candle { Timestamp = baseTime, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } });
+            CoverageFloorLoader floors = new();
+            string floorPath = Path.Combine(tmp, floors.FileName("AAPL", "1h"));
+            floors.Write(floorPath, baseTime);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .Returns(Task.FromResult<IEnumerable<Candle>>(new[] { new Candle { Timestamp = to, Open = 2, High = 2, Low = 2, Close = 2, Volume = 2 } }));
+
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+            await fetcher.FetchAsync("AAPL", baseTime, to, "1h");
+
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustHaveHappened();
+            Assert.Equal(baseTime, floors.Read(floorPath));
         }
 
         [Fact]

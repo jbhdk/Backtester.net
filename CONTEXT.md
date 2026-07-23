@@ -48,6 +48,21 @@ while a run ending at the present goes stale as time passes. Bounded at one week
 week's bars are not required.
 _Avoid_: TTL, expiry.
 
+**Prime**:
+To populate the Cache for a range of bars ahead of any backtest, so later runs over sub-ranges are
+served entirely from the Cache without contacting the Provider. Distinct from a Fetch, which happens
+as part of a run and self-heals a stale tail; a Prime is a deliberate up-front warm of a wide range.
+_Avoid_: preload, warm, seed, cache (as a verb).
+
+**Coverage floor**:
+The earliest range start the Fetcher has ever requested from the Provider for one symbol-and-interval.
+Below it — for a `from` earlier than the floor — the Cache's lack of bars is *unknown* (that window was
+never requested), so the Fetcher refuses the run rather than serve a silently short slice. At or above
+it, a missing bar is *known* to not exist at the source (e.g. before a late listing) and the Cache is
+trusted. It is a front-edge low-water mark only; the recent edge remains the Freshness window's concern.
+_Avoid_: coverage range, completeness, start date, earliest bar (the floor is what was *asked*, not what
+was *returned*).
+
 ### Orders & execution
 
 **Order**:

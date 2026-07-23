@@ -16,6 +16,7 @@ namespace Backtester.Data
     {
         private readonly IHistoricalDataProvider _provider;
         private readonly CsvBarLoader _csv;
+        private readonly CoverageFloorLoader _floors;
         private readonly string _dataFolder;
         private readonly TimeSpan _freshnessWindow = TimeSpan.FromDays(7);
 
@@ -26,12 +27,14 @@ namespace Backtester.Data
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _csv = new();
+            _floors = new();
             _dataFolder = dataFolder ?? Path.Combine(Directory.GetCurrentDirectory(), "data");
         }
 
         /// <summary>
-        /// Returns candles for the symbol and date range, fetching from the provider only when the cache is absent,
-        /// stale, or does not cover the full requested range.
+        /// Returns candles for the symbol and date range, fetching from the provider only when the cache is absent
+        /// or stale. A requested start earlier than the cache's Coverage floor is refused with a
+        /// <see cref="DataCoverageException"/> rather than served a silently short slice.
         /// </summary>
         public async Task<IReadOnlyList<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
@@ -44,15 +47,27 @@ namespace Backtester.Data
 
             Directory.CreateDirectory(_dataFolder);
             string filename = Path.Combine(_dataFolder, CsvBarLoader.FileName(symbol, interval));
+            string floorFilename = Path.Combine(_dataFolder, _floors.FileName(symbol, interval));
 
             List<Candle> existing = _csv.ReadAll(filename).ToList();
 
-            // Empty cache: fetch the full requested range and persist it.
+            // Empty cache: fetch the full requested range, persist it, and establish the Coverage floor at
+            // the requested start — this is the earliest range start we have asked the Provider for.
             if (existing.Count == 0)
             {
                 List<Candle> fetched = (await _provider.FetchAsync(symbol, fromUtc, toUtc, interval, ct).ConfigureAwait(false)).ToList();
                 _csv.WriteAll(filename, fetched);
+                _floors.Write(floorFilename, fromUtc);
                 return fetched;
+            }
+
+            // Front-edge guard: a requested start earlier than the Coverage floor is refused, because below
+            // the floor the Cache's lack of bars is unknown (that window was never asked of the Provider).
+            // A legacy Cache with no floor sidecar is trusted as before. See ADR 0021.
+            DateTime? floor = _floors.Read(floorFilename);
+            if (floor.HasValue && fromUtc < floor.Value)
+            {
+                throw new DataCoverageException(symbol, fromUtc, floor.Value, interval);
             }
 
             // A non-empty cache is trusted while its most recent bar is within the freshness window of the

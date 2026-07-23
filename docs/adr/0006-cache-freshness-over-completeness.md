@@ -1,5 +1,11 @@
 # Cache freshness over completeness
 
+> **Amended by [ADR 0021](0021-coverage-floor-and-priming.md).** The "no coverage metadata" stance
+> below still governs the *recent* edge, but the front edge now records a Coverage floor (the earliest
+> range start ever asked of the Provider) to support the explicit prime / out-of-sample workflow.
+> The specific consequence "an earlier `from` is never back-filled … silently" is superseded: an
+> earlier `from` before the floor is now refused loudly with a `DataCoverageException`.
+
 The `HistoricalDataFetcher` decides whether to serve cached bars or call the Provider purely from
 a **Freshness window**: a non-empty Cache is trusted when its most recent bar is no older than one
 week, measured against the requested end of range (or now, whichever is earlier). It deliberately

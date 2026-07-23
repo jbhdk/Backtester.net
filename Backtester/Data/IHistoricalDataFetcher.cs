@@ -13,8 +13,9 @@ namespace Backtester.Data
     public interface IHistoricalDataFetcher
     {
         /// <summary>
-        /// Returns candles for the symbol and date range, fetching from the underlying provider only when the cache is absent,
-        /// stale, or does not cover the full requested range.
+        /// Returns candles for the symbol and date range, fetching from the underlying provider only when the cache is
+        /// absent or stale. A requested start earlier than the cache's Coverage floor is refused with a
+        /// <see cref="DataCoverageException"/> rather than served a silently short slice.
         /// </summary>
         Task<IReadOnlyList<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default);
     }
