@@ -11,6 +11,7 @@ A bar-by-bar backtesting engine for financial market strategies, written in C# o
 - **Pluggable models** — swap in your own implementations of `IFillModel`, `ICommissionModel`, `ISlippageModel`, and `ISizingModel` without touching engine code.
 - **Reg-T margin account** — the account enforces initial margin intrinsically (50% long, 150% short), rejecting any opening order whose margin exceeds `Portfolio.BuyingPower` (marked equity less the margin already committed).
 - **Data seams** — the engine fetches each symbol through `IHistoricalDataFetcher` and synchronizes multi-symbol data internally. The core ships the cache-aware `HistoricalDataFetcher`, the offline `CsvHistoricalDataFetcher`, and `CsvBarLoader`; live network providers are opt-in packages (`backtester.net.yahoo`, `backtester.net.alpaca`).
+- **Coverage floor & priming** — the cache-aware fetcher records the earliest range start ever asked of the provider (a per-symbol+interval sidecar) and refuses a run that starts before it with a `DataCoverageException`, rather than silently serving a short slice. `IDataPrimer.PrimeAsync` warms a wide range up front so in-sample and out-of-sample sub-ranges run entirely from the cache.
 - **Performance stats** — `Portfolio.GetPerformanceStats()` returns win rate, profit factor, expectancy, max drawdown, CAGR, Sharpe, and more, computed from completed round trips.
 
 ## Quick start
@@ -57,7 +58,7 @@ PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 | `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `Indicator`, `IndicatorSeries`, `IndicatorShape`, `IndicatorPoint`, `IndicatorPane` |
 | `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
 | `Backtester.Broker` | `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
-| `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader` |
+| `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader`, `IDataPrimer`, `CoverageFloorLoader`, `DataCoverageException` |
 | `Backtester.Strategies` | `IStrategy`, `IIndicatorSource`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
 | `Backtester.ExecutionModels.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
 

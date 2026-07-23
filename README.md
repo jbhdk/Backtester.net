@@ -297,6 +297,26 @@ CSV files use the canonical name `SYMBOL_INTERVAL.csv` (e.g. `AAPL_1d.csv`) with
 reproducible — the same input
 produces the same result every time, which is ideal for tests and CI.
 
+### Priming for out-of-sample runs
+
+The cache-aware fetcher tracks a **coverage floor** per symbol+interval — the earliest range start
+ever asked of the provider. A run that starts *before* the floor is refused with a
+`DataCoverageException` instead of being served a silently short slice, so an out-of-sample window you
+never fetched fails loudly rather than producing a plausible curve from missing data. To run the same
+instruments over several windows (in-sample, then out-of-sample) without repeated network trips, **prime**
+the wide range once and let every sub-range read the warm cache:
+
+```csharp
+HistoricalDataFetcher fetcher = new(new YahooHistoricalDataProvider(), dataFolder: "data");
+
+// Warm 2020→now once (no backtest runs here) …
+await fetcher.PrimeAsync(new[] { "AAPL", "MSFT" }, new DateTime(2020, 1, 1), DateTime.UtcNow, "1d");
+
+// … then in-sample and out-of-sample runs are served entirely from the cache.
+```
+
+See [ADR 0021](docs/adr/0021-coverage-floor-and-priming.md) for the design.
+
 ---
 
 ## Reporting
