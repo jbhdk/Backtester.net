@@ -76,7 +76,10 @@ namespace Backtester.Broker
             if (_sizingModel != null)
             {
                 int sized = _sizingModel.Size(request, _portfolio);
-                if (sized == 0)
+                // Reject any non-positive size: a sizing model that yields zero has nothing to trade, and a
+                // negative quantity would flow into the fill, Position, and RoundTrip and corrupt their
+                // prices/quantity, so no sizing model is allowed to inject one into the pipeline.
+                if (sized <= 0)
                 {
                     return null;
                 }

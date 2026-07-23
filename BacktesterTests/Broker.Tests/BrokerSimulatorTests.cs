@@ -6,6 +6,7 @@ using Backtester.Core;
 using Backtester.ExecutionModels.Commission;
 using Backtester.ExecutionModels.Sizing;
 using Backtester.ExecutionModels.Slippage;
+using FakeItEasy;
 using Xunit;
 
 namespace BacktesterTests.Broker.Tests
@@ -56,6 +57,24 @@ namespace BacktesterTests.Broker.Tests
             string id = broker.SubmitOrder(MarketBuy("AAPL", 10));
 
             Assert.NotNull(id);
+        }
+
+        [Fact]
+        public void SubmitOrder_WithNegativeSize_RejectsAndReturnsNull()
+        {
+            // A sizing model that returns a negative share count must never reach the fill/position pipeline;
+            // the submission gate rejects it exactly as it does a zero size (returns null, applies nothing).
+            Portfolio portfolio = new(10_000m);
+            ISizingModel sizing = A.Fake<ISizingModel>();
+            A.CallTo(() => sizing.Size(A<OrderRequest>._, A<Portfolio>._)).Returns(-5);
+            BrokerSimulator broker = new(portfolio, sizingModel: sizing);
+
+            string id = broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            Assert.Null(id);
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 100m)).ToList();
+            Assert.Empty(trades);
+            Assert.Empty(portfolio.Positions);
         }
 
         [Fact]
