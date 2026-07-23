@@ -76,6 +76,36 @@ The Optimizer fetches each symbol **once**, wraps the bars in an in-memory `IHis
 shared read-only across every Trial, and runs Trials in **parallel** via `Parallel.ForEachAsync` — yet
 collects results in Parameter-space order, so a parallel sweep ranks identically to a sequential one.
 
+## Priming across runs (in-sample + out-of-sample)
+
+A single sweep already fetches each symbol once — priming is not needed *within* a sweep. It pays off
+across **several** sweeps over the same instruments: run an in-sample sweep and then a separate
+out-of-sample sweep (or re-run with different ranges) without re-hitting the network for each. Pass a
+cache-aware `HistoricalDataFetcher`, **prime** the wide range once up front with `IDataPrimer`, then run
+each window over sub-ranges served entirely from the warm Cache:
+
+```csharp
+HistoricalDataFetcher fetcher = new(new YahooHistoricalDataProvider(), dataFolder: "data");
+
+// Warm the whole span once — no backtest runs here.
+await fetcher.PrimeAsync(new[] { "SPY", "QQQ" },
+    new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), DateTime.UtcNow, "1d");
+
+// In-sample sweep, then out-of-sample sweep — both read the warm Cache, no further network calls.
+// buildOptimizer is your own factory that news up an Optimizer over the given [from, to] window.
+OptimizationResult inSample = await buildOptimizer(fetcher, new DateTime(2020, 1, 1), new DateTime(2022, 1, 1)).RunAsync();
+OptimizationResult outOfSample = await buildOptimizer(fetcher, new DateTime(2022, 1, 1), new DateTime(2024, 1, 1)).RunAsync();
+```
+
+The Optimizer **inherits the coverage guard for free**: it fetches through `IHistoricalDataFetcher`, so a
+window whose start precedes what has been fetched (or primed) fails the sweep loudly with a
+`DataCoverageException` rather than sweeping on a silently short slice. Priming is a **caller** step — the
+Optimizer's API is unchanged. See [ADR 0021](https://github.com/jbhdk/Backtester.net/blob/main/docs/adr/0021-coverage-floor-and-priming.md).
+
+> The Optimizer itself is still **in-sample** (ADR 0020): it does not split train/test or validate a
+> winner out-of-sample. Priming just makes running your own separate out-of-sample sweep cheap and safe;
+> a built-in walk-forward seam is deferred.
+
 ## Objective, Score, and Eligibility
 
 - **Objective** — the rule Trials are ranked by: a function over the combined (whole-run)
