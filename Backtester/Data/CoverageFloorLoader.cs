@@ -56,6 +56,19 @@ namespace Backtester.Data
         }
 
         /// <summary>
+        /// Lowers the Coverage floor to <paramref name="candidateFromUtc"/>, writing it only when no floor
+        /// exists yet or the candidate is earlier than the current floor. The floor never rises.
+        /// </summary>
+        public void Lower(string path, DateTime candidateFromUtc)
+        {
+            DateTime? current = Read(path);
+            if (!current.HasValue || candidateFromUtc < current.Value)
+            {
+                Write(path, candidateFromUtc);
+            }
+        }
+
+        /// <summary>
         /// Writes the Coverage floor to the sidecar file at the given path, replacing any existing file.
         /// </summary>
         public void Write(string path, DateTime floorUtc)

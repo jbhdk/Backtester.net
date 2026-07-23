@@ -12,7 +12,7 @@ namespace Backtester.Data
     /// Fetches historical candle data from a provider and caches the results as CSV files on disk.
     /// Subsequent requests are served from cache when data is fresh and covers the requested range.
     /// </summary>
-    public class HistoricalDataFetcher : IHistoricalDataFetcher
+    public class HistoricalDataFetcher : IHistoricalDataFetcher, IDataPrimer
     {
         private readonly IHistoricalDataProvider _provider;
         private readonly CsvBarLoader _csv;
@@ -91,6 +91,42 @@ namespace Backtester.Data
             }
 
             return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
+        }
+
+        /// <summary>
+        /// Warms the Cache for each symbol over the given range and lowers each symbol's Coverage floor to
+        /// <paramref name="fromUtc"/>. Symbols are primed concurrently.
+        /// </summary>
+        public async Task PrimeAsync(string[] symbols, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
+        {
+            if (symbols is null)
+            {
+                throw new ArgumentNullException(nameof(symbols));
+            }
+
+            Directory.CreateDirectory(_dataFolder);
+            Task[] primes = symbols.Select(symbol => PrimeSymbolAsync(symbol, fromUtc, toUtc, interval, ct)).ToArray();
+            await Task.WhenAll(primes).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Primes one symbol: fetches the full range wholesale, merges it into the Cache (dedup absorbs any
+        /// overlap), then lowers the symbol's Coverage floor to the requested start.
+        /// </summary>
+        private async Task PrimeSymbolAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                throw new ArgumentNullException(nameof(symbol));
+            }
+
+            symbol = symbol.Trim().ToUpperInvariant();
+            string filename = Path.Combine(_dataFolder, CsvBarLoader.FileName(symbol, interval));
+            string floorFilename = Path.Combine(_dataFolder, _floors.FileName(symbol, interval));
+
+            List<Candle> fetched = (await _provider.FetchAsync(symbol, fromUtc, toUtc, interval, ct).ConfigureAwait(false)).ToList();
+            _csv.AppendAndMerge(filename, fetched);
+            _floors.Lower(floorFilename, fromUtc);
         }
     }
 }

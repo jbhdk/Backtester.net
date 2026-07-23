@@ -36,7 +36,8 @@ namespace Backtester.Data
         private static string BuildMessage(string symbol, DateTime requestedFromUtc, DateTime coverageFloorUtc, string interval)
         {
             return $"{symbol} {interval}: requested range starts {requestedFromUtc:yyyy-MM-dd} but data has only ever been " +
-                $"fetched from {coverageFloorUtc:yyyy-MM-dd}. Delete the cache file {symbol}_{interval}.csv to re-fetch from the earlier start.";
+                $"fetched from {coverageFloorUtc:yyyy-MM-dd}. Prime from {requestedFromUtc:yyyy-MM-dd} via IDataPrimer.PrimeAsync, " +
+                $"or delete the cache file {symbol}_{interval}.csv to re-fetch from the earlier start.";
         }
     }
 }
