@@ -50,15 +50,15 @@ without interacting, so a Parameter can be both varied and displayed.
 
 ## Running the Optimizer
 
-The Optimizer owns the shared run inputs (fetcher, symbols, date range, interval) and hands the factory a
+The Optimizer owns the shared run inputs (fetcher, symbols, Test range, interval) and hands the factory a
 fresh `Portfolio` per Trial, so one Trial's positions or cash never leak into the next.
 
 ```csharp
 Optimizer optimizer = new Optimizer(
     fetcher,
     symbols: new[] { "SPY", "QQQ" },
-    fromUtc: new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-    toUtc:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testFrom: new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testTo:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
     interval: "1d",
     portfolioFactory: () => new Portfolio(100_000m),
     setup,
@@ -75,6 +75,16 @@ OptimizationResult result = await optimizer.RunAsync(progress, cancellationToken
 The Optimizer fetches each symbol **once**, wraps the bars in an in-memory `IHistoricalDataFetcher`
 shared read-only across every Trial, and runs Trials in **parallel** via `Parallel.ForEachAsync` — yet
 collects results in Parameter-space order, so a parallel sweep ranks identically to a sequential one.
+
+### Warmup
+
+The Optimizer mirrors the engine's **Test range + Warmup** overloads: insert a warmup argument after
+`testTo` — a `TimeSpan` lead-in, an absolute `DateTime` Data start, or a bar-count `int` (which needs an
+`IWarmupResolvingFetcher`). The fetch-once step then pulls the **Data range** (Test range plus lead-in)
+so every Trial's `OnStart` is warmed identically while each Trial is measured over the same Test range —
+keeping Scores comparable. A bar-count warmup is resolved per symbol **once**, here, and a symbol lacking
+that many bars above its Coverage floor is refused once rather than per Trial. Warmup is fixed run
+configuration, never a swept Parameter — only strategy Parameters vary across the grid.
 
 ## Priming across runs (in-sample + out-of-sample)
 

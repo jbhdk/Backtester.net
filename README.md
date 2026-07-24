@@ -101,8 +101,8 @@ IHistoricalDataFetcher fetcher = new HistoricalDataFetcher(new YahooHistoricalDa
 IEngine engine = new Engine(
     fetcher,
     symbols:  new[] { "AAPL", "MSFT" },
-    fromUtc:  new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-    toUtc:    new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testFrom: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testTo:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
     interval: "1d",
     strategy,
     broker,
@@ -123,8 +123,9 @@ new HtmlReportWriter().Write(result, "report.html");
 
 `StartAsync` returns a [`BacktestResult`](Backtester/Engine/BacktestResult.cs) — the single source
 of truth for a run. It bundles the exact candle history the engine stepped through, the final
-portfolio, the run inputs (symbols, interval, date range, starting equity), and any indicator series
-the strategy exposed. A report is produced from this result alone.
+portfolio, the run inputs (symbols, interval, Test range, starting equity), and any indicator series
+the strategy exposed. Its `from`/`to` are the Test range, and its candles and indicators are clipped
+to it, so the report shows exactly the measured window. A report is produced from this result alone.
 
 ---
 
@@ -134,6 +135,15 @@ The engine has a precise vocabulary — the full glossary lives in [`CONTEXT.md`
 essentials:
 
 - **Bar / Candle** — one OHLCV interval. The engine advances one bar at a time.
+- **Test range** — the window the engine actually steps through: the loop, all accounting (equity,
+  round trips, stats), and the report follow it. `testFrom`/`testTo` on the engine define it.
+- **Data range** — what the fetcher pulls and the full history handed to `OnStart`. Its end coincides
+  with the Test range's end; only its start may reach further back, forming an optional **Warmup**
+  lead-in (see below). With no warmup, the Data range equals the Test range.
+- **Warmup** — an optional lead-in of bars before the Test range, included in the Data range so a
+  lookback indicator is already valid on the first Test bar. Warmup bars reach `OnStart`'s history
+  only — they are never looped, so they produce no orders, fills, round trips, or equity points, and a
+  run's results are confined to the Test range by construction.
 - **Slice** — all symbols' bars at a single timestamp; the unit the engine processes per step.
 - **Next-bar fill** — an order submitted while processing bar _N_ is evaluated against bar _N+1_.
   This is the engine's anti-lookahead rule: a strategy can never trade on information it would not
@@ -465,7 +475,7 @@ OptimizationSetup setup = Optimize
 Optimizer optimizer = new Optimizer(
     fetcher,
     symbols: new[] { "SPY", "QQQ" },
-    fromUtc, toUtc, interval: "1d",
+    testFrom, testTo, interval: "1d",
     portfolioFactory: () => new Portfolio(100_000m),
     setup,
     objective: Objectives.Sharpe);   // the default; or Calmar, NetProfit, MinDrawdown, …
@@ -486,7 +496,10 @@ rather than on the strategy, and an explicit `ParameterSpace` for a bare-constru
 parameters class.
 
 The Optimizer fetches the bars **once** and shares them across every Trial, runs Trials in **parallel**
-with a progress callback and `CancellationToken`, and reuses the existing `Engine` unchanged. The
+with a progress callback and `CancellationToken`, and reuses the existing `Engine` unchanged. It
+mirrors the engine's **Test range + Warmup** overloads (`TimeSpan`, `DateTime`, or bar-count `int`
+after `testTo`): the shared fetch pulls the Data range so every Trial is warmed identically over one
+Test range, keeping Scores comparable. Warmup is fixed run configuration, never a swept Parameter. The
 Optimization report renders the whole sweep as a sortable leaderboard — best highlighted, ineligible
 Trials flagged — with a Score **heatmap** when exactly two Parameters vary (per-Parameter marginals
 otherwise).

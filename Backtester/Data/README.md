@@ -10,8 +10,10 @@ Summary
   - `HistoricalDataFetcher` — orchestrator that decides whether to use cached data or fetch missing ranges. Also implements `IDataPrimer`.
   - `CsvHistoricalDataFetcher` — offline `IHistoricalDataFetcher` that reads candles straight from a committed `{SYMBOL}_{interval}.csv` file (no provider, no cache logic) for deterministic, repeatable runs.
   - `IDataPrimer` — a separate seam (kept off `IHistoricalDataFetcher` for ISP) for **priming**: warming the cache for a wide range up front so later runs over sub-ranges never touch the network.
+  - `IWarmupResolvingFetcher` — a warmup-capable fetcher (extends `IHistoricalDataFetcher`) exposing `ResolveWarmupStartAsync(symbol, testFrom, warmupBars, interval, ct)`: resolves a bar-count warmup ("N bars before the Test start") to an exact per-symbol Data start from the cache and coverage floor — no provider call. Implemented by `HistoricalDataFetcher` and the Optimizer's in-memory fetcher.
   - `CoverageFloorLoader` — reads/writes the per-symbol+interval **coverage-floor** sidecar (`{SYMBOL}_{interval}.meta.json`).
   - `DataCoverageException` — thrown when a run's start precedes the coverage floor (see below).
+  - `InsufficientWarmupBarsException` — thrown when a bar-count warmup asks for more lead-in bars than a symbol has above its coverage floor; mirrors `DataCoverageException`'s refuse-don't-serve-short stance.
 
 Cache files
 - Location: repo root `data/` folder by default (configurable via `HistoricalDataFetcher` constructor).

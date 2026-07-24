@@ -38,12 +38,16 @@ IHistoricalDataFetcher fetcher = new CsvHistoricalDataFetcher(dataFolder: "data"
 IEngine engine = new Engine(
     fetcher,
     symbols: new[] { "AAPL" },
-    fromUtc: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-    toUtc:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testFrom: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+    testTo:   new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
     interval: "1d",
     strategy,
     broker,
     portfolio);
+// testFrom/testTo are the Test range: the window looped, measured, and reported. To warm a lookback
+// indicator, add a Warmup lead-in after testTo — a TimeSpan, an absolute DateTime start, or a bar-count
+// int (e.g. `warmupBars: 200`). Warmup bars reach OnStart's history only; they are never looped, so the
+// run's results stay confined to the Test range.
 // StartAsync returns a BacktestResult bundling the run's candle history, portfolio,
 // and (once exposed) indicator series — a single source of truth for reporting.
 BacktestResult result = await engine.StartAsync();
