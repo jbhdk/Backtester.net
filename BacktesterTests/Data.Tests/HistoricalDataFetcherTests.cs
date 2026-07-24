@@ -261,6 +261,71 @@ namespace BacktesterTests.Data.Tests
         }
 
         [Fact]
+        public async Task ResolveWarmupStart_PrimedCache_ReturnsExactNthBarBeforeTestFrom()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            // Daily bars on days 1..10; the Test range starts on day 8, so days 1..7 are candidate warmup
+            // bars. Asking for 3 warmup bars must resolve the Data start to day 5 (days 5,6,7 are the lead-in).
+            DateTime day1 = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            Candle[] bars = new Candle[10];
+            for (int index = 0; index < 10; index++)
+            {
+                DateTime ts = day1.AddDays(index);
+                bars[index] = new Candle { Timestamp = ts, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 };
+            }
+
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1d.csv"), bars);
+            CoverageFloorLoader floors = new();
+            floors.Write(Path.Combine(tmp, floors.FileName("AAPL", "1d")), day1);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+
+            DateTime testFrom = day1.AddDays(7); // day 8
+            DateTime resolved = await fetcher.ResolveWarmupStartAsync("AAPL", testFrom, 3, "1d");
+
+            Assert.Equal(day1.AddDays(4), resolved); // day 5
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustNotHaveHappened();
+        }
+
+        [Fact]
+        public async Task ResolveWarmupStart_FewerBarsAboveFloorThanRequested_Throws()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            // A late listing: the floor reaches back to day 1 but the symbol's data only begins on day 5, so
+            // days 5,6,7 are the only bars before the day-8 Test start. Asking for 5 warmup bars must refuse
+            // rather than serve the 3 that exist.
+            DateTime day1 = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            Candle[] bars = new Candle[6];
+            for (int index = 0; index < 6; index++)
+            {
+                DateTime ts = day1.AddDays(4 + index); // days 5..10
+                bars[index] = new Candle { Timestamp = ts, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 };
+            }
+
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1d.csv"), bars);
+            CoverageFloorLoader floors = new();
+            floors.Write(Path.Combine(tmp, floors.FileName("AAPL", "1d")), day1);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            HistoricalDataFetcher fetcher = new(provider, tmp);
+
+            DateTime testFrom = day1.AddDays(7); // day 8
+            InsufficientWarmupBarsException ex = await Assert.ThrowsAsync<InsufficientWarmupBarsException>(
+                async () => await fetcher.ResolveWarmupStartAsync("AAPL", testFrom, 5, "1d"));
+
+            Assert.Equal("AAPL", ex.Symbol);
+            Assert.Equal(5, ex.RequestedBars);
+            Assert.Equal(3, ex.AvailableBars);
+            Assert.Equal("1d", ex.Interval);
+        }
+
+        [Fact]
         public async Task Fetch_ProviderNotSupported_PropagatesError()
         {
             string tmp = Path.Combine(Path.GetTempPath(), "bt_fetcher_test", Guid.NewGuid().ToString());

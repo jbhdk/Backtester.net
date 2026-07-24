@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Backtester.Engine
 {
@@ -9,9 +11,9 @@ namespace Backtester.Engine
     internal sealed class NoWarmup : Warmup
     {
         /// <summary>Returns the Test range's start unchanged — the fetch reaches back no further.</summary>
-        public override DateTime DataStart(DateTime testFrom)
+        public override Task<DateTime> ResolveDataStartAsync(string symbol, DateTime testFrom, string interval, CancellationToken ct)
         {
-            return testFrom;
+            return Task.FromResult(testFrom);
         }
     }
 }

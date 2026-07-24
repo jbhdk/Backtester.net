@@ -92,6 +92,29 @@ namespace Backtester.Engine
         }
 
         /// <summary>
+        /// Initializes a new engine over a Test range with a bar-count warmup lead-in (ADR 0022): the Data
+        /// range reaches back exactly <paramref name="warmupBars"/> bars before <paramref name="testFrom"/>,
+        /// resolved per symbol at fetch time through the warmup-capable <paramref name="fetcher"/>. The full
+        /// Data-range history is handed to the strategy's <c>OnStart</c>, but only the Test range is looped and
+        /// measured. A symbol lacking that many bars above its Coverage floor is refused with an
+        /// <c>InsufficientWarmupBarsException</c>. Requiring an <see cref="IWarmupResolvingFetcher"/> makes
+        /// bar-count warmup a compile-time capability rather than a runtime hope.
+        /// </summary>
+        public Engine(
+            IWarmupResolvingFetcher fetcher,
+            string[] symbols,
+            DateTime testFrom,
+            DateTime testTo,
+            int warmupBars,
+            string interval,
+            IStrategy strategy,
+            IBrokerSimulator broker,
+            Portfolio portfolio)
+            : this(fetcher, symbols, testFrom, testTo, new BarCountWarmup(warmupBars, fetcher), interval, strategy, broker, portfolio)
+        {
+        }
+
+        /// <summary>
         /// The private core all overloads delegate to, holding the resolved <see cref="Warmup"/> that
         /// governs how far the Data range reaches ahead of the Test range.
         /// </summary>
@@ -162,13 +185,14 @@ namespace Backtester.Engine
         }
 
         /// <summary>
-        /// Fetches every configured symbol concurrently and assembles the per-symbol series.
+        /// Fetches every configured symbol concurrently and assembles the per-symbol series. Each symbol's
+        /// Data-range start is resolved from the warmup first (per-symbol, since a bar-count warmup resolves
+        /// to a different date per symbol), then fetched through to the Test range end.
         /// </summary>
         private async Task<IReadOnlyDictionary<string, IReadOnlyList<Candle>>> FetchSeriesAsync(CancellationToken ct)
         {
-            DateTime dataFromUtc = _warmup.DataStart(_testFromUtc);
             Task<IReadOnlyList<Candle>>[] fetches = _symbols
-                .Select(symbol => _fetcher.FetchAsync(symbol, dataFromUtc, _testToUtc, _interval, ct))
+                .Select(symbol => FetchSymbolSeriesAsync(symbol, ct))
                 .ToArray();
 
             IReadOnlyList<Candle>[] results = await Task.WhenAll(fetches).ConfigureAwait(false);
@@ -181,6 +205,16 @@ namespace Backtester.Engine
             }
 
             return series;
+        }
+
+        /// <summary>
+        /// Resolves one symbol's Data-range start from the warmup and fetches its series through to the Test
+        /// range end.
+        /// </summary>
+        private async Task<IReadOnlyList<Candle>> FetchSymbolSeriesAsync(string symbol, CancellationToken ct)
+        {
+            DateTime dataFromUtc = await _warmup.ResolveDataStartAsync(symbol, _testFromUtc, _interval, ct).ConfigureAwait(false);
+            return await _fetcher.FetchAsync(symbol, dataFromUtc, _testToUtc, _interval, ct).ConfigureAwait(false);
         }
 
         /// <summary>

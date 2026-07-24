@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Backtester.Engine
 {
@@ -30,9 +32,9 @@ namespace Backtester.Engine
         }
 
         /// <summary>Returns the pinned warmup start — the Data range begins exactly there.</summary>
-        public override DateTime DataStart(DateTime testFrom)
+        public override Task<DateTime> ResolveDataStartAsync(string symbol, DateTime testFrom, string interval, CancellationToken ct)
         {
-            return _warmupStart;
+            return Task.FromResult(_warmupStart);
         }
     }
 }

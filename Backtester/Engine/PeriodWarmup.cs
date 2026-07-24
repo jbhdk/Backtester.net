@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Backtester.Engine
 {
@@ -18,9 +20,9 @@ namespace Backtester.Engine
         }
 
         /// <summary>Returns the Test range's start moved earlier by the warmup period.</summary>
-        public override DateTime DataStart(DateTime testFrom)
+        public override Task<DateTime> ResolveDataStartAsync(string symbol, DateTime testFrom, string interval, CancellationToken ct)
         {
-            return testFrom - _period;
+            return Task.FromResult(testFrom - _period);
         }
     }
 }

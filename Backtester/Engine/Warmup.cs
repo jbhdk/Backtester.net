@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Backtester.Engine
 {
@@ -14,8 +16,11 @@ namespace Backtester.Engine
         public static Warmup None { get; } = new NoWarmup();
 
         /// <summary>
-        /// Resolves the Data range's start from the Test range's start: how far back the fetch reaches.
+        /// Resolves the Data range's start for one symbol: how far back the fetch reaches ahead of the Test
+        /// range start. Per-symbol and asynchronous so a bar-count warmup can resolve "N bars before the Test
+        /// start" against the fetcher's own coverage; the period, absolute, and no-warmup forms resolve to the
+        /// same date for every symbol and ignore <paramref name="symbol"/> and <paramref name="interval"/>.
         /// </summary>
-        public abstract DateTime DataStart(DateTime testFrom);
+        public abstract Task<DateTime> ResolveDataStartAsync(string symbol, DateTime testFrom, string interval, CancellationToken ct);
     }
 }

@@ -12,7 +12,7 @@ namespace Backtester.Data
     /// Fetches historical candle data from a provider and caches the results as CSV files on disk.
     /// Subsequent requests are served from cache when data is fresh and covers the requested range.
     /// </summary>
-    public class HistoricalDataFetcher : IHistoricalDataFetcher, IDataPrimer
+    public class HistoricalDataFetcher : IWarmupResolvingFetcher, IDataPrimer
     {
         private readonly IHistoricalDataProvider _provider;
         private readonly CsvBarLoader _csv;
@@ -91,6 +91,44 @@ namespace Backtester.Data
             }
 
             return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
+        }
+
+        /// <summary>
+        /// Resolves the exact Data-range start for the symbol that yields exactly <paramref name="warmupBars"/>
+        /// bars before <paramref name="testFrom"/>, reading only the cached bars and the Coverage floor (no
+        /// Provider call). Counts the cached bars at or above the floor and strictly before the Test start;
+        /// when at least that many exist, returns the timestamp of the Nth-from-last such bar, otherwise throws
+        /// <see cref="InsufficientWarmupBarsException"/> rather than serve a short lead-in (ADR 0021 / 0022).
+        /// </summary>
+        public Task<DateTime> ResolveWarmupStartAsync(string symbol, DateTime testFrom, int warmupBars, string interval, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                throw new ArgumentNullException(nameof(symbol));
+            }
+
+            if (warmupBars <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(warmupBars), warmupBars, "Warmup bar count must be positive.");
+            }
+
+            symbol = symbol.Trim().ToUpperInvariant();
+            string filename = Path.Combine(_dataFolder, CsvBarLoader.FileName(symbol, interval));
+            string floorFilename = Path.Combine(_dataFolder, _floors.FileName(symbol, interval));
+
+            DateTime? floor = _floors.Read(floorFilename);
+            List<Candle> eligible = _csv.ReadAll(filename)
+                .Where(candle => candle.Timestamp < testFrom && (!floor.HasValue || candle.Timestamp >= floor.Value))
+                .OrderBy(candle => candle.Timestamp)
+                .ToList();
+
+            if (eligible.Count < warmupBars)
+            {
+                throw new InsufficientWarmupBarsException(symbol, warmupBars, eligible.Count, interval);
+            }
+
+            DateTime dataStart = eligible[eligible.Count - warmupBars].Timestamp;
+            return Task.FromResult(DateTime.SpecifyKind(dataStart, DateTimeKind.Utc));
         }
 
         /// <summary>
