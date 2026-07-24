@@ -63,6 +63,32 @@ trusted. It is a front-edge low-water mark only; the recent edge remains the Fre
 _Avoid_: coverage range, completeness, start date, earliest bar (the floor is what was *asked*, not what
 was *returned*).
 
+### Run windows
+
+**Data range**:
+The span of bars a single run pulls from the Fetcher and hands to the strategy's History — the Test
+range plus any earlier Warmup. Its end coincides with the Test range's end; only its start may reach
+further back. Distinct from a Prime, which warms the Cache across many runs — the Data range is one
+run's own reach into that Cache.
+_Avoid_: fetch range, lookback, full history, window.
+
+**Test range**:
+The span of bars a run actually steps through: the loop iterates it, every Performance stat is measured
+over it, and the report shows it. It sits within the Data range; the Warmup bars ahead of it feed
+History only. Because the loop, the accounting, and the report all follow the Test range, a run's
+results are confined to it by construction — nothing is clipped after the fact.
+_Avoid_: backtest range (every run is a backtest), measured window, sample, in-sample / out-of-sample
+(those name a workflow role a Test range plays, not the range itself).
+
+**Warmup**:
+The stretch of bars immediately before the Test range, included in the Data range so a strategy's
+indicators are already valid on the first Test bar. Optional and caller-chosen — as a period, an
+absolute start, or a bar count. Warmup bars reach the strategy's History only: they are never looped,
+so they produce no orders, fills, round trips, or equity points. Over-provisioning is harmless; asking
+for more bars than the Cache holds above its Coverage floor is refused rather than served short.
+_Avoid_: burn-in (implies running-but-not-measuring; Warmup is not looped at all), priming (a Prime
+warms the Cache, a Warmup deepens one run's History), lookback, seasoning.
+
 ### Orders & execution
 
 **Order**:
