@@ -148,6 +148,10 @@ essentials:
 - **Next-bar fill** — an order submitted while processing bar _N_ is evaluated against bar _N+1_.
   This is the engine's anti-lookahead rule: a strategy can never trade on information it would not
   yet have had.
+- **Gap-aware fill** — a triggered order never fills better than the bar's open. A stop that gaps
+  through fills at the open (a real gap loss, not a truncated stop-distance loss); a limit the bar
+  gaps past fills at the open too (the improved price a resting order would actually get). The
+  strategy is never credited a price the bar's open didn't offer.
 - **Order** — a resting instruction (Market, Limit, or Stop) that persists across bars until filled
   or cancelled (GTC). A **bracket** is an entry plus an attached stop-loss and take-profit that form
   an OCO group.

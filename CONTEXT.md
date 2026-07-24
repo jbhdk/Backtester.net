@@ -96,10 +96,20 @@ A working instruction to buy or sell (`Market`, `Limit`, or `Stop`). Orders are 
 they persist across bars until filled or cancelled (GTC).
 _Avoid_: trade, transaction.
 
-**Next-bar fill**:
-An order submitted while processing bar N is evaluated against bar N+1 (Market at N+1's open;
-Stop/Limit at their trigger if N+1's range crosses it). This is the engine's anti-lookahead rule.
+**Next-bar fill** (timing):
+An order submitted while processing bar N is evaluated against bar N+1 — never bar N itself. This is
+the engine's anti-lookahead rule. Names *when* an order is matched; **Gap-aware fill** names at what
+price.
 _Avoid_: same-bar fill, immediate fill.
+
+**Gap-aware fill** (pricing):
+A triggered order never fills at a price better than the bar's open. A Market fills at the open; a
+Stop or Limit fills at its trigger unless the bar gapped past it, in which case the open. So a gap
+through a stop fills *worse* than the stop and a gap past a limit fills *better* than the limit — the
+strategy is never credited a price the bar's open did not offer. The rule is geometric: a
+below-market trigger (a Buy limit or a Sell stop) fills at `min(trigger, open)`, an above-market
+trigger (a Sell limit or a Buy stop) at `max(trigger, open)`.
+_Avoid_: trigger-price fill, exact-stop fill.
 
 **Bracket**:
 An entry order with an attached stop-loss and take-profit that form an OCO group.
