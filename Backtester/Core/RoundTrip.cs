@@ -25,6 +25,13 @@ namespace Backtester.Core
         /// <summary>Gets or sets the realized profit/loss for this round trip, excluding commission and slippage.</summary>
         public decimal RealizedPnL { get; set; }
 
+        /// <summary>
+        /// Gets or sets the currency this round trip stood to lose if its entry stop had been hit, before
+        /// any trailing: the per-share stop distance frozen at entry times this trip's quantity. Null when
+        /// the entry declared no protective stop, in which case no R-multiple is defined.
+        /// </summary>
+        public decimal? InitialRisk { get; set; }
+
         /// <summary>Gets or sets the number of bars the position was held before exit.</summary>
         public int BarsHeld { get; set; }
 

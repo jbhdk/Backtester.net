@@ -36,6 +36,20 @@ namespace BacktesterTests.Core.Tests
             };
         }
 
+        private static Trade BuyWithStop(string symbol, decimal price, int qty, DateTime ts, decimal stopPrice)
+        {
+            Trade trade = Buy(symbol, price, qty, ts);
+            trade.EntryStopPrice = stopPrice;
+            return trade;
+        }
+
+        private static Trade SellWithStop(string symbol, decimal price, int qty, DateTime ts, decimal stopPrice)
+        {
+            Trade trade = Sell(symbol, price, qty, ts);
+            trade.EntryStopPrice = stopPrice;
+            return trade;
+        }
+
         private static MarketSlice Slice(string symbol, decimal markPrice, DateTime ts)
         {
             return new()
@@ -206,6 +220,68 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(150m, trip.EntryPrice);
             Assert.Equal(140m, trip.ExitPrice);
             Assert.Equal(100m, trip.RealizedPnL);
+        }
+
+        [Fact]
+        public void ApplyTrade_EntryStopStamped_CarriesInitialRiskDistanceTimesQuantity()
+        {
+            // Buy 10 @ 100 with an entry stop at 90 → per-share distance 10, initial risk 10 * 10 = 100.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 10, T0, stopPrice: 90m));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_ScaleInAtDifferentStop_InitialRiskAnchorsOnOpeningStop()
+        {
+            // Open 10 @ 100 stop 90 (distance 10); add 10 @ 120 stop 118 (distance 2). The add must not
+            // re-blend the frozen distance: initial risk = 10 * 20 shares = 200, not the added stop's 2.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 10, T0, stopPrice: 90m));
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 120m, 10, T0.AddDays(1), stopPrice: 118m));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 20, T0.AddDays(2)));
+
+            Assert.Equal(200m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_PartialExit_InitialRiskScalesToEachExitedSlice()
+        {
+            // Open 20 @ 100 stop 90 (distance 10); exit 10 then 10. Each slice risks distance * its qty:
+            // 10 * 10 = 100 apiece, on the same frozen per-share distance.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 20, T0, stopPrice: 90m));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(2)));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            Assert.Equal(100m, portfolio.RoundTrips[0].InitialRisk);
+            Assert.Equal(100m, portfolio.RoundTrips[1].InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_EntryWithoutStop_LeavesInitialRiskNull()
+        {
+            // An entry that declared no protective stop has no initial risk, so no R-multiple is defined.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            Assert.Null(Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_ShortEntryStop_InitialRiskIsPositiveDistanceTimesQuantity()
+        {
+            // Short 10 @ 150 with a stop above at 160 → distance |150 - 160| = 10, initial risk 10 * 10 = 100.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(SellWithStop("AAPL", 150m, 10, T0, stopPrice: 160m));
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10, T0.AddDays(1)));
+
+            Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
         }
 
         [Fact]

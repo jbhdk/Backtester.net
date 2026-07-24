@@ -134,6 +134,7 @@
       <th data-key="quantity" data-type="num">Qty</th>
       <th data-key="realizedPnL" data-type="num">P&amp;L</th>
       <th data-key="returnPercent" data-type="num">Return %</th>
+      <th data-key="rMultiple" data-type="num">R</th>
       <th data-key="timeHeld" data-type="str">Time held</th>
     </tr>
   </thead>
@@ -160,6 +161,9 @@
   // Pre-formatted duration strings (e.g. "3d 14h") pass straight through; absent values show a dash.
   function fmtDur(v) { return v == null ? "–" : v; }
   function signClass(v) { return v > 0 ? "pos" : v < 0 ? "neg" : ""; }
+  // R-multiple: realized profit in units of initial risk, e.g. "+2.00R"; a dash when the entry had no
+  // stop (no initial risk, so no R is defined).
+  function fmtR(v) { return v == null ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "R"; }
 
   // value may carry an explicit css class for P&L colour-coding
   function row(label, value, cls) {
@@ -414,7 +418,7 @@
         return '<tr data-number="" class="rejected">' +
           cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
           cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell(t.quantity) +
-          cell(rejectedBadge(t.reason)) + cell("–") + cell("–") +
+          cell(rejectedBadge(t.reason)) + cell("–") + cell("–") + cell("–") +
           "</tr>";
       }
       return '<tr data-number="' + t.number + '">' +
@@ -422,6 +426,7 @@
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.exitReason) + cell(t.quantity) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
         cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +
+        cell(fmtR(t.rMultiple), signClass(t.rMultiple)) +
         cell(t.timeHeld) +
         "</tr>";
     }).join("");

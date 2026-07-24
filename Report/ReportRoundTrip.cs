@@ -38,6 +38,13 @@ namespace Backtester.Report
         /// <summary>Gets or sets the price return as a fraction: (exit − entry) / entry.</summary>
         public decimal ReturnPercent { get; set; }
 
+        /// <summary>
+        /// Gets or sets the realized profit in units of initial risk (<c>RealizedPnL / InitialRisk</c>),
+        /// e.g. <c>2</c> for a +2R win. Null when the round trip has no initial risk (its entry declared
+        /// no protective stop), in which case the report shows no R.
+        /// </summary>
+        public decimal? RMultiple { get; set; }
+
         /// <summary>Gets or sets the holding time formatted compactly (e.g. <c>"5d 6h"</c>).</summary>
         public string TimeHeld { get; set; }
 

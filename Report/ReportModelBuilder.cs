@@ -78,6 +78,10 @@ namespace Backtester.Report
                     Quantity = trip.Quantity,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
+                    // Realized profit in units of initial risk; undefined when the entry declared no stop.
+                    RMultiple = trip.InitialRisk.HasValue && trip.InitialRisk.Value != 0m
+                        ? trip.RealizedPnL / trip.InitialRisk.Value
+                        : (decimal?)null,
                     TimeHeld = FormatTimeHeld(trip.ExitTime - trip.EntryTime),
                     ExitReason = FormatExitReason(trip.ExitReason)
                 });

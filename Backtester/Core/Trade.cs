@@ -42,5 +42,12 @@ namespace Backtester.Core
         /// fills are <see cref="BracketLeg.None"/>; the broker stamps a protective leg's role here.
         /// </summary>
         public BracketLeg Leg { get; set; }
+
+        /// <summary>
+        /// Gets or sets the protective stop-loss price declared for the entry that produced this fill,
+        /// stamped by the broker on an entry fill so the round trip can carry its initial risk. Null when
+        /// the entry declared no stop; unset (null) on protective-leg and plain reducing fills.
+        /// </summary>
+        public decimal? EntryStopPrice { get; set; }
     }
 }

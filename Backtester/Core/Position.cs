@@ -32,6 +32,14 @@ namespace Backtester.Core
         /// </summary>
         public int EntryBarIndex { get; set; }
 
+        /// <summary>
+        /// Gets or sets the per-share stop distance frozen when the current lot opened from flat
+        /// (<c>|openingFillPrice − entryStopPrice|</c>). Preserved across same-direction adds and partial
+        /// reductions, so a round trip carries the risk of the entry that opened it. Null when the opening
+        /// entry declared no protective stop.
+        /// </summary>
+        public decimal? EntryStopDistance { get; set; }
+
         /// <summary>Gets the list of all trades that have affected this position.</summary>
         public List<Trade> Trades { get; } = new();
 

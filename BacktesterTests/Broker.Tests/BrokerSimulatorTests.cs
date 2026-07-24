@@ -597,6 +597,38 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_EntryFills_StampsEntryTradeWithEntryStopPrice()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: the market entry fills at Open=100; its own bracket stop sits at 90.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(90m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitOrder_PlainEntryFills_LeavesEntryStopPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            // A plain market entry with no attached bracket declares no protective stop.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryStopPrice);
+        }
+
+        [Fact]
         public void SubmitBracket_FlattenedBySignalOrder_RestingLegsNeverFill()
         {
             Portfolio portfolio = new(10_000m);

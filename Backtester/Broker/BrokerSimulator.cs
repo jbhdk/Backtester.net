@@ -203,6 +203,13 @@ namespace Backtester.Broker
                     decimal slippageAmount = Math.Abs(adjustedPrice - rawPrice);
                     decimal commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
 
+                    // An entry that armed a bracket carries a protective stop; stamp it on the entry fill
+                    // before the portfolio applies the trade, so the position freezes its initial risk as
+                    // it opens from flat. Peeked here (not removed) — the leg-arming below still consumes it.
+                    decimal? entryStopPrice = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) pending)
+                        ? pending.stopPrice
+                        : (decimal?)null;
+
                     Trade trade = new()
                     {
                         Id = fill.TradeId,
@@ -214,7 +221,8 @@ namespace Backtester.Broker
                         Slippage = slippageAmount,
                         Commission = commission,
                         Timestamp = slice.Timestamp,
-                        Leg = leg
+                        Leg = leg,
+                        EntryStopPrice = entryStopPrice
                     };
                     _portfolio.ApplyTrade(trade);
                     trades.Add(trade);

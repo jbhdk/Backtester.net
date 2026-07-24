@@ -184,6 +184,19 @@ _Avoid_: notional sizing, percent sizing.
 The per-share loss if the stop is hit: `|entry − stopPrice|`.
 _Avoid_: risk, spread.
 
+**Initial risk**:
+The currency a round trip stood to lose if its **entry** stop had been hit, before any trailing:
+`Stop distance at entry · Quantity`. Fixed at entry; a trailed **Stop level** moving later does not
+change it. Undefined for a round trip that entered without a protective stop.
+_Avoid_: risk (unqualified), current risk, stop-out amount.
+
+**R-multiple**:
+A round trip's realized profit expressed in units of its **Initial risk**:
+`RealizedPnL / Initial risk`. `+2R` is a win of twice the risked amount; `−1R` is a full stop-out
+loss. Defined only when Initial risk is (the round trip entered with a stop).
+_Avoid_: R (unqualified in prose), reward-to-risk (that is a forward-looking target ratio, not a
+realized outcome).
+
 ### Margin
 
 **Margin account**:

@@ -222,6 +222,35 @@ namespace BacktesterTests.Report.Tests
             Assert.Equal(-0.1m, Assert.Single(model.RoundTrips).ReturnPercent);
         }
 
+        [Fact]
+        public void Build_RoundTripWithInitialRisk_DerivesRMultiple()
+        {
+            // Entry 100 with a stop at 90 risks 10/share; over 10 shares initial risk is 100. Exiting at
+            // 120 realizes 200, so R = 200 / 100 = 2.
+            Portfolio portfolio = new(10_000m);
+            Trade entry = Trade("AAPL", OrderSide.Buy, 100m, 10, T0);
+            entry.EntryStopPrice = 90m;
+            portfolio.ApplyTrade(entry);
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal(2m, Assert.Single(model.RoundTrips).RMultiple);
+        }
+
+        [Fact]
+        public void Build_RoundTripWithoutInitialRisk_LeavesRMultipleNull()
+        {
+            // The winning portfolio's entry declared no stop, so there is no initial risk and no R.
+            BacktestResult result = Result(NoCandles(), WinningPortfolio(), NoIndicators());
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Null(Assert.Single(model.RoundTrips).RMultiple);
+        }
+
         [Theory]
         [InlineData(5, 6, 0, "5d 6h")]
         [InlineData(0, 3, 30, "3h 30m")]
