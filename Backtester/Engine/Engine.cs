@@ -71,6 +71,27 @@ namespace Backtester.Engine
         }
 
         /// <summary>
+        /// Initializes a new engine over a Test range with an absolute-date warmup lead-in (ADR 0022): the
+        /// Data range starts exactly at <paramref name="warmupStart"/> (guarded to be on or before
+        /// <paramref name="testFrom"/>), the full Data-range history is handed to the strategy's <c>OnStart</c>,
+        /// but only the Test range is looped and measured. A <paramref name="warmupStart"/> below a symbol's
+        /// Coverage floor surfaces the existing <c>DataCoverageException</c> from the fetch.
+        /// </summary>
+        public Engine(
+            IHistoricalDataFetcher fetcher,
+            string[] symbols,
+            DateTime testFrom,
+            DateTime testTo,
+            DateTime warmupStart,
+            string interval,
+            IStrategy strategy,
+            IBrokerSimulator broker,
+            Portfolio portfolio)
+            : this(fetcher, symbols, testFrom, testTo, new AbsoluteWarmup(warmupStart, testFrom), interval, strategy, broker, portfolio)
+        {
+        }
+
+        /// <summary>
         /// The private core all overloads delegate to, holding the resolved <see cref="Warmup"/> that
         /// governs how far the Data range reaches ahead of the Test range.
         /// </summary>
