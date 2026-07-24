@@ -38,9 +38,14 @@ whereas a request from 2019 against a floor of 2020 is a known under-fetch and i
 - The floor may be lowered to `X` **only after actually calling the Provider from `X`** — otherwise the
   floor would claim coverage the Cache lacks. So it moves only on an empty-Cache fetch (which sets
   `floor = from`) and on a Prime.
-- **Prime fetches the whole `[from, to]` wholesale** and lets `AppendAndMerge` dedup absorb the overlap
-  with any existing Cache, then lowers the floor. This re-downloads the already-cached middle on a
-  re-prime; we accepted that cost for simpler code, since priming is deliberate and infrequent.
+- **Prime shares `FetchAsync`'s caching policy** (amended by [issue #94](../../)): it fetches wholesale
+  only when the Cache is empty or the requested `from` reaches below the covered front (below the floor,
+  or below the earliest cached bar on a legacy Cache), since only an actual Provider call from `from`
+  may honestly lower the floor to `from`. When the front is already covered it applies the same
+  tail-freshness rule as a run — no Provider call on a fresh Cache, an incremental `latest → to` fetch on
+  a stale one — so a re-prime of an already-warm range no longer re-downloads it. Lowering the floor to
+  `from` on the covered-front path is a no-op, because a covered front means `from` is at or after the
+  existing floor.
 - A run **never** back-fills the front (unchanged from ADR 0006) — it throws. Only a Prime fills the
   front, by virtue of fetching the wide range wholesale.
 - `PrimeAsync` lives on a **separate `IDataPrimer` seam**, not on `IHistoricalDataFetcher`, so the

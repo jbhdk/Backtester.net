@@ -70,19 +70,30 @@ namespace Backtester.Data
                 throw new DataCoverageException(symbol, fromUtc, floor.Value, interval);
             }
 
-            // A non-empty cache is trusted while its most recent bar is within the freshness window of the
-            // requested end (or now, when the end is in the future). This treats a completed historical window
-            // as fresh forever, and tolerates the cache lagging the requested end by up to one window. See
-            // docs/adr/0006-cache-freshness-over-completeness.md.
+            // The front edge is covered (guarded above); apply the shared tail-freshness policy to warm the
+            // recent edge if needed, then serve the requested slice.
+            List<Candle> warmed = await RefreshTailAsync(symbol, filename, existing, toUtc, interval, ct).ConfigureAwait(false);
+            return warmed.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
+        }
+
+        /// <summary>
+        /// Applies the shared tail-freshness policy to a non-empty cache: the cache is trusted with no
+        /// Provider call while its most recent bar is within the freshness window of the requested end (or
+        /// now, when the end is in the future); otherwise the tail is extended from the latest cached bar and
+        /// the dedup in <c>AppendAndMerge</c> absorbs the overlap. Returns the (possibly extended) cache. The
+        /// front edge is assumed already covered by the caller. See
+        /// docs/adr/0006-cache-freshness-over-completeness.md.
+        /// </summary>
+        private async Task<List<Candle>> RefreshTailAsync(string symbol, string filename, List<Candle> existing, DateTime toUtc, string interval, CancellationToken ct)
+        {
             DateTime latest = existing.Max(candle => candle.Timestamp);
             DateTime now = DateTime.UtcNow;
             DateTime reference = toUtc < now ? toUtc : now;
             if (latest >= reference - _freshnessWindow)
             {
-                return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).ToList();
+                return existing;
             }
 
-            // Stale: extend the tail from the latest cached bar. The dedup in AppendAndMerge absorbs the overlap.
             List<Candle> fetchedMore = (await _provider.FetchAsync(symbol, latest, toUtc, interval, ct).ConfigureAwait(false)).ToList();
             if (fetchedMore.Count > 0)
             {
@@ -90,7 +101,7 @@ namespace Backtester.Data
                 existing.AddRange(fetchedMore);
             }
 
-            return existing.Where(candle => candle.Timestamp >= fromUtc && candle.Timestamp <= toUtc).OrderBy(candle => candle.Timestamp).ToList();
+            return existing;
         }
 
         /// <summary>
@@ -148,8 +159,11 @@ namespace Backtester.Data
         }
 
         /// <summary>
-        /// Primes one symbol: fetches the full range wholesale, merges it into the Cache (dedup absorbs any
-        /// overlap), then lowers the symbol's Coverage floor to the requested start.
+        /// Primes one symbol cache-aware, sharing <see cref="FetchAsync"/>'s caching policy: an empty Cache,
+        /// or a requested start that reaches below the front already covered, triggers a wholesale
+        /// <c>[from, to]</c> fetch (which alone may honestly lower the floor to <paramref name="fromUtc"/>);
+        /// otherwise only the stale tail is extended and a still-fresh Cache costs no Provider call. The
+        /// Coverage floor is then lowered to the requested start (a no-op when it already sits earlier).
         /// </summary>
         private async Task PrimeSymbolAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct)
         {
@@ -162,8 +176,35 @@ namespace Backtester.Data
             string filename = Path.Combine(_dataFolder, CsvBarLoader.FileName(symbol, interval));
             string floorFilename = Path.Combine(_dataFolder, _floors.FileName(symbol, interval));
 
-            List<Candle> fetched = (await _provider.FetchAsync(symbol, fromUtc, toUtc, interval, ct).ConfigureAwait(false)).ToList();
-            _csv.AppendAndMerge(filename, fetched);
+            List<Candle> existing = _csv.ReadAll(filename).ToList();
+            DateTime? floor = _floors.Read(floorFilename);
+
+            // The front is uncovered when the requested start reaches below the earliest range ever asked of
+            // the Provider — the Coverage floor, or (for a legacy Cache with no floor) the earliest cached bar.
+            // Only then must we fetch wholesale, because the floor may be lowered to X only after actually
+            // calling the Provider from X (ADR 0021); a still-covered front lets the shared tail policy run.
+            bool frontUncovered = existing.Count > 0
+                && (floor.HasValue ? fromUtc < floor.Value : fromUtc < existing.Min(candle => candle.Timestamp));
+
+            if (existing.Count == 0 || frontUncovered)
+            {
+                List<Candle> fetched = (await _provider.FetchAsync(symbol, fromUtc, toUtc, interval, ct).ConfigureAwait(false)).ToList();
+                if (existing.Count == 0)
+                {
+                    _csv.WriteAll(filename, fetched);
+                }
+                else
+                {
+                    _csv.AppendAndMerge(filename, fetched);
+                }
+
+                _floors.Lower(floorFilename, fromUtc);
+                return;
+            }
+
+            // Front already covered: reuse FetchAsync's tail-freshness policy — no Provider call when fresh,
+            // incremental tail otherwise. Lowering the floor to fromUtc here is a no-op (fromUtc >= floor).
+            await RefreshTailAsync(symbol, filename, existing, toUtc, interval, ct).ConfigureAwait(false);
             _floors.Lower(floorFilename, fromUtc);
         }
     }

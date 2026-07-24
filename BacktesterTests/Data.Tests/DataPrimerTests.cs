@@ -134,6 +134,62 @@ namespace BacktesterTests.Data.Tests
             Assert.Equal(from, floors.Read(Path.Combine(tmp, floors.FileName("MSFT", "1h"))));
         }
 
+        [Fact]
+        public async Task Prime_FreshCacheAlreadyCoveringRange_NoProviderCall()
+        {
+            string tmp = NewTempFolder();
+            DateTime now = TruncateToSecond(DateTime.UtcNow);
+            DateTime from = now.AddYears(-2);
+            // The cache already spans the requested range: the front is at the floor and the tail is recent,
+            // so a re-prime of the same range must not touch the Provider (issue #94).
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1h.csv"), new[]
+            {
+                new Candle { Timestamp = from, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 },
+                new Candle { Timestamp = now.AddDays(-1), Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 }
+            });
+            CoverageFloorLoader floors = new();
+            string floorPath = Path.Combine(tmp, floors.FileName("AAPL", "1h"));
+            floors.Write(floorPath, from);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            IDataPrimer primer = new HistoricalDataFetcher(provider, tmp);
+
+            await primer.PrimeAsync(new[] { "AAPL" }, from, now, "1h");
+
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustNotHaveHappened();
+            Assert.Equal(from, floors.Read(floorPath));
+        }
+
+        [Fact]
+        public async Task Prime_StaleTailOverCoveredFront_FetchesIncrementalTailOnly()
+        {
+            string tmp = NewTempFolder();
+            DateTime now = TruncateToSecond(DateTime.UtcNow);
+            DateTime from = now.AddYears(-2);
+            // The front is covered by the floor, but the newest cached bar lags the requested end by more than
+            // the freshness window: priming must extend only the tail from the latest bar, not re-download the
+            // whole range from 'from'.
+            DateTime latest = now.AddDays(-30);
+            CsvBarLoader loader = new();
+            loader.WriteAll(Path.Combine(tmp, "AAPL_1h.csv"), new[] { new Candle { Timestamp = latest, Open = 1, High = 1, Low = 1, Close = 1, Volume = 1 } });
+            CoverageFloorLoader floors = new();
+            string floorPath = Path.Combine(tmp, floors.FileName("AAPL", "1h"));
+            floors.Write(floorPath, from);
+
+            IHistoricalDataProvider provider = A.Fake<IHistoricalDataProvider>();
+            A.CallTo(() => provider.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .Returns(Task.FromResult<IEnumerable<Candle>>(new[] { new Candle { Timestamp = now, Open = 2, High = 2, Low = 2, Close = 2, Volume = 2 } }));
+
+            IDataPrimer primer = new HistoricalDataFetcher(provider, tmp);
+            await primer.PrimeAsync(new[] { "AAPL" }, from, now, "1h");
+
+            A.CallTo(() => provider.FetchAsync("AAPL", latest, now, "1h", A<CancellationToken>._)).MustHaveHappenedOnceExactly();
+            A.CallTo(() => provider.FetchAsync("AAPL", from, now, "1h", A<CancellationToken>._)).MustNotHaveHappened();
+            Assert.Equal(from, floors.Read(floorPath));
+        }
+
         private static string NewTempFolder()
         {
             string tmp = Path.Combine(Path.GetTempPath(), "bt_primer_test", Guid.NewGuid().ToString());
