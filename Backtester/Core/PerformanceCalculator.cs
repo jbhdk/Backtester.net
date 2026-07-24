@@ -49,7 +49,15 @@ namespace Backtester.Core
 
             decimal calmar         = maxDrawdown != 0m ? cagr / maxDrawdown : 0m;
             decimal recoveryFactor = maxDrawdownAmount != 0m ? netProfit / maxDrawdownAmount : 0m;
-            decimal avgRMultiple   = avgLoss != 0m ? expectancy / Math.Abs(avgLoss) : 0m;
+
+            // "Avg R" is the plain mean of per-trade R (RealizedPnL / InitialRisk) over the round trips
+            // that declared an initial risk; trips with no stop (null risk) are excluded from both the
+            // sum and the divisor rather than counted as 0R, and the stat is null when none qualify.
+            List<decimal> definedRMultiples = roundTrips
+                .Where(trip => trip.InitialRisk.HasValue && trip.InitialRisk.Value != 0m)
+                .Select(trip => trip.RealizedPnL / trip.InitialRisk.Value)
+                .ToList();
+            decimal? avgRMultiple = definedRMultiples.Count > 0 ? definedRMultiples.Average() : (decimal?)null;
 
             decimal medianTrade = Median(roundTrips.Select(r => r.RealizedPnL).ToList());
             decimal largestWin  = wins.Count   > 0 ? wins.Max(r => r.RealizedPnL)   : 0m;

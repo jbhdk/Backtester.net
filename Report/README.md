@@ -85,7 +85,7 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 - **Win rate** — fraction of round trips that were profitable.
 - **Profit factor** — gross profit divided by absolute gross loss; zero when there are no losses.
 - **Expectancy** — expected value per trade: the mean realized P&L across all round trips (`NetProfit ÷ Trades`). This equals `WinRate × AvgWin + (1 − WinRate) × AvgLoss` only when there are no break-even trades; otherwise that formula over-weights the average loss, because `1 − WinRate` includes the break-even trips while `AvgLoss` is averaged over losers only.
-- **Avg R** — average R multiple: expectancy expressed in units of the average losing trade (the loss stands in for per-trade risk, as no stop is modelled).
+- **Avg R** — average R multiple: the mean of per-trade R (`RealizedPnL ÷ InitialRisk`) across the round trips that declared an entry stop. No-stop trips carry no R and are excluded from both the sum and the count (not counted as 0R, which would drag the mean toward zero); the value is a dash when no trip has a defined initial risk. _This meaning changed from prior reports_, where "Avg R" was a proxy — expectancy expressed in units of the average losing trade.
 - **Avg win** — average profit of winning round trips.
 - **Avg loss** — average loss of losing round trips (negative).
 - **Median trade** — median realized P&L across all round trips.

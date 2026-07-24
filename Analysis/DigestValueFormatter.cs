@@ -28,6 +28,12 @@ namespace Backtester.Analysis
             return value.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Formats an optional ratio as the report does: two decimals, or the report's en-dash when absent.</summary>
+        public static string Number(decimal? value)
+        {
+            return value.HasValue ? Number(value.Value) : "–";
+        }
+
         /// <summary>Formats a UTC timestamp as the report does, e.g. <c>"2024-01-02 14:30Z"</c>.</summary>
         public static string Timestamp(DateTime value)
         {

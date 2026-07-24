@@ -617,6 +617,73 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void GetPerformanceStats_AvgR_IsMeanOfPerTripRMultiples()
+        {
+            // Win:  buy 10@100 stop 90 (risk 10*10=100), sell 10@120 → +$200 → 2.0R
+            // Loss: buy 10@110 stop 100 (risk 10*10=100), sell 10@105 → -$50 → -0.5R
+            // Avg R is the plain mean of the two per-trip R's: (2.0 + -0.5) / 2 = 0.75.
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 10, T0, stopPrice: 90m));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 110m, 10, T0.AddDays(2), stopPrice: 100m));
+            portfolio.ApplyTrade(Sell("AAPL", 105m, 10, T0.AddDays(3)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(0.75m, stats.AvgRMultiple);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_AvgR_ExcludesNoStopTripsFromSumAndDivisor()
+        {
+            // Stopped win: buy 10@100 stop 90 (risk 100), sell 10@110 → +$100 → 1.0R.
+            // No-stop win:  buy 10@100 (no stop), sell 10@130 → +$300 → no R defined.
+            // The no-stop trip is excluded entirely, so Avg R is the single 1.0R, not (1.0 + 0)/2 = 0.5.
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 10, T0, stopPrice: 90m));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(3)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(1.0m, stats.AvgRMultiple);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_AvgR_IsNullWhenNoTripHasDefinedRisk()
+        {
+            // No round trip declared an entry stop, so no R is defined anywhere: Avg R is a dash (null),
+            // not zero.
+            Portfolio portfolio = new(20_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("AAPL", 120m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 110m, 10, T0.AddDays(3)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Null(stats.AvgRMultiple);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_AvgR_UsesPerTripDefinitionPerSymbol()
+        {
+            // AAPL: buy 10@100 stop 90 (risk 100), sell 10@120 → +$200 → 2.0R.
+            // MSFT: buy 10@50 (no stop), sell 10@60 → no R defined, so MSFT's Avg R is a dash (null).
+            Portfolio portfolio = new(30_000m);
+            portfolio.ApplyTrade(BuyWithStop("AAPL", 100m, 10, T0, stopPrice: 90m));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("MSFT", 50m, 10, T0));
+            portfolio.ApplyTrade(Sell("MSFT", 60m, 10, T0.AddDays(1)));
+
+            IReadOnlyDictionary<string, PerformanceStats> bySymbol = portfolio.GetPerformanceStatsBySymbol();
+
+            Assert.Equal(2.0m, bySymbol["AAPL"].AvgRMultiple);
+            Assert.Null(bySymbol["MSFT"].AvgRMultiple);
+        }
+
+        [Fact]
         public void GetPerformanceStats_DirectionalWinRates_SplitLongAndShort()
         {
             // Longs: one win (+$100), one loss (-$100) → 0.5. Shorts: one win (+$100) → 1.0.

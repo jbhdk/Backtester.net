@@ -121,9 +121,22 @@ namespace BacktesterTests.Analysis.Tests
             Assert.Contains("| Net profit | $12,345.68 |", request.UserPrompt);
             Assert.Contains("| Win rate | 66.67% |", request.UserPrompt);
             Assert.Contains("| Profit factor | 1.62 |", request.UserPrompt);
+            Assert.Contains("| Avg R | 1.00 |", request.UserPrompt);
             Assert.Contains("| Max drawdown | 8.25% |", request.UserPrompt);
             Assert.Contains("| Drawdown length | 63d 5h |", request.UserPrompt);
             Assert.Contains("| Avg duration | 3d 14h |", request.UserPrompt);
+        }
+
+        [Fact]
+        public async Task AnalyzeAsync_DigestRendersAvgRAsDashWhenNoTripHasDefinedRisk()
+        {
+            // A run whose trips never declared a stop has no defined R anywhere: "Avg R" is a dash, not 0.00.
+            ReportModel model = SampleReportModel.Build();
+            model.Stats.AvgRMultiple = null;
+
+            AnalysisRequest request = await CaptureRequestAsync(model, new AnalysisOptions());
+
+            Assert.Contains("| Avg R | – |", request.UserPrompt);
         }
 
         [Fact]

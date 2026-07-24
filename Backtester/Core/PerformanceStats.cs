@@ -104,10 +104,12 @@ namespace Backtester.Core
         public decimal LargestLoss { get; set; }
 
         /// <summary>
-        /// Gets or sets the average R multiple: expectancy expressed in units of the average losing trade.
-        /// No per-trade stop is modelled, so the average loss stands in for the risk (R) of a trade.
+        /// Gets or sets the average R multiple: the mean of per-trade R (<c>RealizedPnL / InitialRisk</c>)
+        /// over the round trips that declared an initial risk. Trips with no entry stop (null initial risk)
+        /// are excluded from both the sum and the count, so a no-stop trip does not drag the mean toward
+        /// zero. Null when no round trip has a defined initial risk.
         /// </summary>
-        public decimal AvgRMultiple { get; set; }
+        public decimal? AvgRMultiple { get; set; }
 
         /// <summary>Gets or sets the fraction of long round trips that were profitable (0–1).</summary>
         public decimal LongWinRate { get; set; }

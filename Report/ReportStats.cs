@@ -86,8 +86,8 @@ namespace Backtester.Report
         /// <summary>Gets or sets the largest single losing round trip's loss (negative value).</summary>
         public decimal LargestLoss { get; set; }
 
-        /// <summary>Gets or sets the average R multiple (expectancy in units of the average losing trade).</summary>
-        public decimal AvgRMultiple { get; set; }
+        /// <summary>Gets or sets the average R multiple: the mean of per-trade R over trips that declared an initial risk; null (rendered as a dash) when none did.</summary>
+        public decimal? AvgRMultiple { get; set; }
 
         /// <summary>Gets or sets the fraction of long round trips that were profitable (0–1).</summary>
         public decimal LongWinRate { get; set; }
