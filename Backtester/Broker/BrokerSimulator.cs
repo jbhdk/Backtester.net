@@ -31,6 +31,10 @@ namespace Backtester.Broker
         // key: order ID → its bracket leg role, recorded when a protective leg is armed so the fill it
         // produces can be stamped (the round trip's exit reason is derived from this).
         private readonly Dictionary<string, BracketLeg> _legRoles = new();
+        // key: entry order ID → the sizing stop (OrderRequest.StopPrice) a risk-sized entry declared but
+        // did not arm as a bracket. Stamped onto the entry fill as its EntryStopPrice when the entry armed
+        // no bracket, so a signal-exit strategy that risk-sizes still reports R (ADR 0023).
+        private readonly Dictionary<string, decimal> _sizingStops = new();
         // Orders the broker declined, in attempt order, captured for audit (e.g. margin-gate rejections).
         private readonly List<RejectedOrder> _rejectedOrders = new();
         // Bracket protective-leg level changes, in record order: one when each leg is armed and one per
@@ -115,6 +119,14 @@ namespace Backtester.Broker
                 SubmittedAt = _currentBarTimestamp
             };
             _orderBook[order.Id] = order;
+
+            // Retain the sizing stop the request declared so the entry fill can be stamped with it. A
+            // bracketed entry overrides this with its armed bracket stop (SubmitBracket records the pending
+            // bracket), so the precedence resolves at fill time in ProcessBar.
+            if (request.StopPrice.HasValue)
+            {
+                _sizingStops[order.Id] = request.StopPrice.Value;
+            }
 
             return order.Id;
         }
@@ -203,12 +215,15 @@ namespace Backtester.Broker
                     decimal slippageAmount = Math.Abs(adjustedPrice - rawPrice);
                     decimal commission = _commissionModel?.Calculate(adjustedPrice * fill.Quantity, fill.Quantity) ?? 0m;
 
-                    // An entry that armed a bracket carries a protective stop; stamp it on the entry fill
-                    // before the portfolio applies the trade, so the position freezes its initial risk as
-                    // it opens from flat. Peeked here (not removed) — the leg-arming below still consumes it.
+                    // Stamp the entry fill with the stop it declared, so the position freezes its initial
+                    // risk as it opens from flat. Precedence per ADR 0023: the armed bracket stop if the
+                    // entry armed a bracket, else the sizing stop (OrderRequest.StopPrice) a risk-sized
+                    // signal-exit entry carried. The bracket is peeked (not removed) — the leg-arming below
+                    // still consumes it; the sizing stop is a fill-time leftover, so drop it.
+                    bool hasSizingStop = _sizingStops.Remove(fill.OrderId, out decimal sizingStop);
                     decimal? entryStopPrice = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) pending)
                         ? pending.stopPrice
-                        : (decimal?)null;
+                        : hasSizingStop ? sizingStop : (decimal?)null;
 
                     Trade trade = new()
                     {
@@ -321,6 +336,7 @@ namespace Backtester.Broker
         {
             _orderBook.Remove(orderId);
             _legRoles.Remove(orderId);
+            _sizingStops.Remove(orderId);
         }
 
 

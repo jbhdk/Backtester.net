@@ -616,6 +616,25 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_EntryAlsoCarriesSizingStop_BracketStopWins()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            // The entry declares a sizing stop at 85 but also arms a bracket whose stop sits at 90. The
+            // armed bracket stop is the real protective level and must win over the sizing-stop fallback.
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(90m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
         public void SubmitOrder_PlainEntryFills_LeavesEntryStopPriceNull()
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
@@ -626,6 +645,41 @@ namespace BacktesterTests.Broker.Tests
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
             Assert.Null(trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitOrder_EntryCarriesSizingStop_StampsEntryTradeWithEntryStopPrice()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            // A risk-sized entry declares the stop it sized against on the request, but arms no bracket.
+            OrderRequest entry = MarketBuy("AAPL", 10);
+            entry.StopPrice = 90m;
+            broker.SubmitOrder(entry);
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(90m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SizingStopEntry_SignalExit_RoundTripCarriesInitialRisk()
+        {
+            // End-to-end: a risk-sized entry (stop 90, no bracket) opens 10 @ 100 → per-share distance 10.
+            // A later signal exit flattens it, and the emitted round trip carries initial risk 10 * 10 = 100
+            // — R is now defined where a signal-exit strategy previously showed a dash.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            OrderRequest entry = MarketBuy("AAPL", 10);
+            entry.StopPrice = 90m;
+            broker.SubmitOrder(entry);
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 120m, 125m, 119m, 122m, T0.AddHours(1)));
+
+            Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
         }
 
         [Fact]
