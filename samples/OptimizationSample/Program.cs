@@ -63,8 +63,8 @@ namespace OptimizationSample
             Optimizer optimizer = new(
                 fetcher,
                 Symbols,
-                fromUtc: new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                toUtc: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                testFrom: new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                testTo: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 interval: "1d",
                 portfolioFactory: () => new Portfolio(StartingEquity),
                 setup,
