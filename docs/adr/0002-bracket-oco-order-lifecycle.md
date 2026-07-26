@@ -20,3 +20,12 @@ stop each bar (it knows the current ATR).
 
 - The strategy submits exit intent once; the broker guarantees the stop and target never both
   fill. This is the headline reason the engine can express realistic strategies.
+
+## Amendment: single-leg brackets (2026-07)
+
+`BracketRequest.StopPrice` and `TargetPrice` are now nullable: a Bracket may attach a stop-loss
+**and/or** a take-profit. The **OCO group is conditional on two legs** — with a single leg there is
+no sibling to cancel, so the lone leg simply rests until it fills or a Signal exit cancels it. A
+Bracket must have **at least one** leg; `SubmitBracket` throws `ArgumentException` on a zero-leg
+request (caller misuse, distinct from the funds rejection that returns null — an entry with no
+protection is a plain `Submit`). The glossary's `Bracket` and `OCO` entries are updated to match.

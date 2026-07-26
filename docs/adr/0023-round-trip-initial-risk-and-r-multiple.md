@@ -56,3 +56,12 @@ new per-trip "R" column — so there is one stored number and no ratio to drift.
   consecutive −1R trips.
 - The report's round-trips table gains one "R" column after "Return %"; no separate initial-risk
   currency column. Undefined R renders as the em-dash used for rejected-attempt cells.
+
+## Amendment: target-only brackets carry no R (2026-07)
+
+With single-leg brackets (ADR 0002 amendment), a bracket may arm a take-profit and no stop. Such a
+**target-only bracket has no armed protective stop, so it has no Initial risk and shows no R** — even
+if its entry `OrderRequest` carried a sizing `StopPrice`. The precedence in ADR 0023 is read
+strictly: for a bracketed entry the stop is the **armed bracket stop leg** (now nullable), and the
+sizing-stop fallback applies only to a non-bracketed entry. A stop-only bracket is unaffected: its
+armed stop defines Initial risk exactly as before.

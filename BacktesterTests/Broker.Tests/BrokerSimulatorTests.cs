@@ -745,6 +745,247 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(BracketLeg.None, trades[0].Leg);
         }
 
+        // --- Single-leg brackets ---
+
+        [Fact]
+        public void SubmitBracket_NoLegs_Throws()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            // A bracket with neither a stop nor a target is caller misuse — an unprotected entry is a
+            // plain Submit, not a bracket.
+            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 }
+            }));
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_HandlePopulatesStopButNotTarget()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+
+            // Entry fills at Open=100; only the stop leg arms.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.NotNull(handle.StopOrderId);
+            Assert.Null(handle.TargetOrderId);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_StopFills()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: Low=85, stop at 90 triggers.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 95m, 98m, 85m, 88m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+            Assert.Equal(BracketLeg.StopLoss, trades[0].Leg);
+            Assert.Equal(90m, trades[0].Price);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_HighSpike_NoPhantomTargetFills()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: a large upward spike — a stop-only bracket has no take-profit leg to fill against it.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 110m, 200m, 108m, 190m, T0.AddHours(1))).ToList();
+
+            Assert.Empty(trades);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_EntryStampsEntryStopPrice()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+
+            // The armed stop defines initial risk exactly as a two-legged bracket does.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(90m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_RecordsOnlyStopLevel()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.Single(broker.BracketLevelChanges);
+            Assert.Equal(BracketLeg.StopLoss, broker.BracketLevelChanges[0].Leg);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_FlattenedBySignal_RestingStopNeverFills()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+
+            // Bar 1: entry fills at Open=100; the lone stop (90) arms.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // A Signal exit flattens the position; the resting stop must be cancelled.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(1)));
+
+            // Bar 3: Low=80 would have triggered the former stop at 90 — nothing must fill from flat.
+            List<Trade> bar3Trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 80m, 95m, T0.AddHours(2))).ToList();
+
+            Assert.Empty(bar3Trades);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_HandlePopulatesTargetButNotStop()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.NotNull(handle.TargetOrderId);
+            Assert.Null(handle.StopOrderId);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_TargetFills()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: High=125, target limit at 120 triggers.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 118m, 125m, 117m, 122m, T0.AddHours(1))).ToList();
+
+            Assert.Single(trades);
+            Assert.Equal(BracketLeg.TakeProfit, trades[0].Leg);
+            Assert.Equal(120m, trades[0].Price);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_EntryLeavesEntryStopPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+
+            // No armed stop leg, so the round trip has no initial risk and no R.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_EntryCarriesSizingStop_StillLeavesEntryStopPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            // The entry declares a sizing stop, but the bracket arms no protective stop leg. Per the
+            // ADR 0023 amendment, a bracketed entry's initial risk comes from the armed stop only — the
+            // sizing-stop fallback is for a non-bracketed entry — so this target-only bracket has no R.
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
+                TargetPrice = 120m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_RecordsOnlyTargetLevel()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.Single(broker.BracketLevelChanges);
+            Assert.Equal(BracketLeg.TakeProfit, broker.BracketLevelChanges[0].Leg);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_FlattenedBySignal_RestingTargetNeverFills()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+
+            // Bar 1: entry fills at Open=100; the lone target (120) arms.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // A Signal exit flattens the position; the resting target must be cancelled.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(1)));
+
+            // Bar 3: High=130 would have triggered the former target at 120 — nothing must fill from flat.
+            List<Trade> bar3Trades = broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 99m, 110m, T0.AddHours(2))).ToList();
+
+            Assert.Empty(bar3Trades);
+        }
+
         // --- Bracket level ledger ---
 
         [Fact]

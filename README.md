@@ -153,8 +153,11 @@ essentials:
   gaps past fills at the open too (the improved price a resting order would actually get). The
   strategy is never credited a price the bar's open didn't offer.
 - **Order** — a resting instruction (Market, Limit, or Stop) that persists across bars until filled
-  or cancelled (GTC). A **bracket** is an entry plus an attached stop-loss and take-profit that form
-  an OCO group.
+  or cancelled (GTC). A **bracket** is an entry with one or two attached protective legs — a
+  stop-loss and/or a take-profit. When both are present they form an OCO group (one filling cancels
+  the other); a single-leg bracket has no sibling and its lone leg simply rests until it fills or the
+  position is closed by a signal exit. A bracket must have at least one leg; a target-only bracket
+  arms no stop, so it carries no initial risk and reports no R.
 - **Position** — the net holding in a symbol, as a **signed** quantity: positive is long, negative is
   short, zero is flat. No single fill flips the sign — an opposing order reduces the position and
   clamps at zero, so reversing direction takes a second order from flat.
@@ -204,9 +207,10 @@ public class BreakoutStrategy : StrategyBase
 }
 ```
 
-The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. For a
-worked example of bracket orders and a trailing stop, see
-[`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs); for pre-computed signals from
+The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. A
+`BracketRequest` attaches a stop-loss and/or a take-profit — leave `StopPrice` or `TargetPrice` null
+to arm just one leg (at least one is required). For a worked example of bracket orders and a trailing
+stop, see [`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs); for pre-computed signals from
 history and long/short reversal (going short on a death cross, long on a golden cross), see
 [`MovingAverageCrossStrategy`](Backtester/Strategies/MovingAverageCrossStrategy.cs).
 

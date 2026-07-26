@@ -20,8 +20,9 @@ namespace Backtester.Broker
         private readonly ISizingModel _sizingModel;
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
-        // key: entry order ID → (stopPrice, targetPrice, quantity, handle) for pending bracket legs
-        private readonly Dictionary<string, (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
+        // key: entry order ID → (stopPrice, targetPrice, quantity, handle) for pending bracket legs.
+        // stopPrice/targetPrice are nullable: a single-leg bracket leaves the absent leg null.
+        private readonly Dictionary<string, (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
         // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
         private readonly Dictionary<string, string> _ocoLinks = new();
         // key: symbol → the OCO protective legs (stop + target order IDs) currently resting against that
@@ -141,11 +142,18 @@ namespace Backtester.Broker
 
 
         /// <summary>
-        /// Queues an entry order with attached stop-loss and take-profit. Returns a handle whose
-        /// StopOrderId and TargetOrderId are populated once the entry fills.
+        /// Queues an entry order with one or two attached protective legs (a stop-loss and/or a
+        /// take-profit). Returns a handle whose StopOrderId and TargetOrderId are populated once the
+        /// entry fills — each is null when its leg was not requested. Throws if the request attaches
+        /// neither leg (an unprotected entry is a plain <see cref="Submit"/>, not a bracket).
         /// </summary>
         public BracketHandle SubmitBracket(BracketRequest request)
         {
+            if (request.StopPrice == null && request.TargetPrice == null)
+            {
+                throw new ArgumentException("A bracket must have at least one leg (a stop-loss and/or a take-profit).", nameof(request));
+            }
+
             string entryId = SubmitOrder(request.Entry);
             if (entryId == null)
             {
@@ -209,6 +217,13 @@ namespace Backtester.Broker
                         _legRoles.Remove(siblingId);
                         _bracketLegsBySymbol.Remove(symbol);
                     }
+                    else if (leg != BracketLeg.None)
+                    {
+                        // A single-leg bracket's lone protective leg just filled: it has no OCO sibling, so
+                        // the block above did not run. Clear the per-symbol tracking anyway so a later fill
+                        // never tries to cancel an already-filled leg.
+                        _bracketLegsBySymbol.Remove(symbol);
+                    }
 
                     decimal rawPrice = fill.Price;
                     decimal adjustedPrice = _slippageModel?.Apply(rawPrice, filledOrder.Side) ?? rawPrice;
@@ -218,10 +233,12 @@ namespace Backtester.Broker
                     // Stamp the entry fill with the stop it declared, so the position freezes its initial
                     // risk as it opens from flat. Precedence per ADR 0023: the armed bracket stop if the
                     // entry armed a bracket, else the sizing stop (OrderRequest.StopPrice) a risk-sized
-                    // signal-exit entry carried. The bracket is peeked (not removed) — the leg-arming below
-                    // still consumes it; the sizing stop is a fill-time leftover, so drop it.
+                    // signal-exit entry carried. A target-only bracket arms no stop, so its stopPrice is
+                    // null and the round trip has no initial risk — the sizing-stop fallback is only for a
+                    // non-bracketed entry (ADR 0023 amendment). The bracket is peeked (not removed) — the
+                    // leg-arming below still consumes it; the sizing stop is a fill-time leftover, so drop it.
                     bool hasSizingStop = _sizingStops.Remove(fill.OrderId, out decimal sizingStop);
-                    decimal? entryStopPrice = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) pending)
+                    decimal? entryStopPrice = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) pending)
                         ? pending.stopPrice
                         : hasSizingStop ? sizingStop : (decimal?)null;
 
@@ -252,16 +269,25 @@ namespace Backtester.Broker
                         CancelBracketLegs(symbol, restingLegs);
                     }
 
-                    if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal stopPrice, decimal targetPrice, int quantity, BracketHandle handle) bracket))
+                    if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) bracket))
                     {
                         _pendingBrackets.Remove(fill.OrderId);
                         // Protective legs close the entry, so they take the side opposite the entry:
-                        // a long entry arms Sell legs, a short entry arms Buy legs.
+                        // a long entry arms Sell legs, a short entry arms Buy legs. A single-leg bracket
+                        // arms only the leg it declared; the absent leg's order ID stays null.
                         OrderSide legSide = filledOrder.Side == OrderSide.Buy ? OrderSide.Sell : OrderSide.Buy;
-                        string stopId = ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice, bracket.quantity, BracketLeg.StopLoss);
-                        string targetId = ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice, bracket.quantity, BracketLeg.TakeProfit);
-                        _ocoLinks[stopId] = targetId;
-                        _ocoLinks[targetId] = stopId;
+                        string stopId = bracket.stopPrice.HasValue
+                            ? ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice.Value, bracket.quantity, BracketLeg.StopLoss)
+                            : null;
+                        string targetId = bracket.targetPrice.HasValue
+                            ? ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice.Value, bracket.quantity, BracketLeg.TakeProfit)
+                            : null;
+                        // Only a two-legged bracket forms an OCO group; a single leg has no sibling to cancel.
+                        if (stopId != null && targetId != null)
+                        {
+                            _ocoLinks[stopId] = targetId;
+                            _ocoLinks[targetId] = stopId;
+                        }
                         _bracketLegsBySymbol[symbol] = (stopId, targetId);
                         bracket.handle.StopOrderId = stopId;
                         bracket.handle.TargetOrderId = targetId;
@@ -301,15 +327,22 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Cancels a bracket's resting stop and target legs and forgets the OCO pairing and per-symbol
-        /// tracking, used when the position they protected was closed by an order that is not a leg.
+        /// Cancels a bracket's resting protective legs and forgets the OCO pairing and per-symbol
+        /// tracking, used when the position they protected was closed by an order that is not a leg. A
+        /// single-leg bracket leaves the absent leg's order ID null, so each leg is guarded.
         /// </summary>
         private void CancelBracketLegs(string symbol, (string stopOrderId, string targetOrderId) legs)
         {
-            Cancel(legs.stopOrderId);
-            Cancel(legs.targetOrderId);
-            _ocoLinks.Remove(legs.stopOrderId);
-            _ocoLinks.Remove(legs.targetOrderId);
+            if (legs.stopOrderId != null)
+            {
+                Cancel(legs.stopOrderId);
+                _ocoLinks.Remove(legs.stopOrderId);
+            }
+            if (legs.targetOrderId != null)
+            {
+                Cancel(legs.targetOrderId);
+                _ocoLinks.Remove(legs.targetOrderId);
+            }
             _bracketLegsBySymbol.Remove(symbol);
         }
 

@@ -112,12 +112,16 @@ trigger (a Sell limit or a Buy stop) at `max(trigger, open)`.
 _Avoid_: trigger-price fill, exact-stop fill.
 
 **Bracket**:
-An entry order with an attached stop-loss and take-profit that form an OCO group.
+An entry order with one or two attached protective legs — a stop-loss and/or a take-profit. When
+both are present they form an OCO group (one filling cancels the other); with a single leg there is
+no sibling to cancel and the lone leg simply rests until filled or the position is closed by Signal.
+A Bracket must have at least one leg — an entry with neither is a plain Order, not a Bracket.
 _Avoid_: OTO, parent/child order.
 
 **OCO** (one-cancels-other):
 A group of orders in which one filling automatically cancels the siblings. Prevents the
-stop-loss and take-profit both filling in the same bar.
+stop-loss and take-profit both filling in the same bar. Applies only to a two-legged Bracket; a
+single-leg Bracket forms no OCO group.
 _Avoid_: bracket-cancel, linked orders.
 
 **Bracket level**:
