@@ -29,6 +29,19 @@ namespace Backtester.Report
         /// <summary>Gets or sets the exit fill price.</summary>
         public decimal ExitPrice { get; set; }
 
+        /// <summary>
+        /// Gets or sets the initial stop: the entry-time stop-loss level, before any trailing. Null when
+        /// the entry declared no stop (a target-only bracket or a plain entry), in which case the report
+        /// shows a dash.
+        /// </summary>
+        public decimal? EntryStopPrice { get; set; }
+
+        /// <summary>
+        /// Gets or sets the initial target: the entry-time take-profit level. Null when the entry armed no
+        /// take-profit leg (a stop-only bracket or a plain entry), in which case the report shows a dash.
+        /// </summary>
+        public decimal? EntryTargetPrice { get; set; }
+
         /// <summary>Gets or sets the number of shares exited.</summary>
         public int Quantity { get; set; }
 

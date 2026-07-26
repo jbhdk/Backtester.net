@@ -241,6 +241,26 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_RoundTripWithEntryLevels_MapsInitialStopAndTarget()
+        {
+            // The entry declared stop 90 and target 130; the report row carries both entry-time levels.
+            Portfolio portfolio = new(10_000m);
+            Trade entry = Trade("AAPL", OrderSide.Buy, 100m, 10, T0);
+            entry.EntryStopPrice = 90m;
+            entry.EntryTargetPrice = 130m;
+            portfolio.ApplyTrade(entry);
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Trade("AAPL", OrderSide.Sell, 120m, 10, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 120m, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            ReportRoundTrip row = Assert.Single(model.RoundTrips);
+            Assert.Equal(90m, row.EntryStopPrice);
+            Assert.Equal(130m, row.EntryTargetPrice);
+        }
+
+        [Fact]
         public void Build_RoundTripWithoutInitialRisk_LeavesRMultipleNull()
         {
             // The winning portfolio's entry declared no stop, so there is no initial risk and no R.

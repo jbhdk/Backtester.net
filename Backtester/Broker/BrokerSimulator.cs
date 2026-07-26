@@ -238,9 +238,13 @@ namespace Backtester.Broker
                     // non-bracketed entry (ADR 0023 amendment). The bracket is peeked (not removed) — the
                     // leg-arming below still consumes it; the sizing stop is a fill-time leftover, so drop it.
                     bool hasSizingStop = _sizingStops.Remove(fill.OrderId, out decimal sizingStop);
-                    decimal? entryStopPrice = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) pending)
+                    bool hasPendingBracket = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) pending);
+                    decimal? entryStopPrice = hasPendingBracket
                         ? pending.stopPrice
                         : hasSizingStop ? sizingStop : (decimal?)null;
+                    // The initial target is the armed bracket's take-profit level; a target exists only
+                    // through a bracket (there is no sizing target), so a non-bracketed entry has none.
+                    decimal? entryTargetPrice = hasPendingBracket ? pending.targetPrice : (decimal?)null;
 
                     Trade trade = new()
                     {
@@ -254,7 +258,8 @@ namespace Backtester.Broker
                         Commission = commission,
                         Timestamp = slice.Timestamp,
                         Leg = leg,
-                        EntryStopPrice = entryStopPrice
+                        EntryStopPrice = entryStopPrice,
+                        EntryTargetPrice = entryTargetPrice
                     };
                     _portfolio.ApplyTrade(trade);
                     trades.Add(trade);

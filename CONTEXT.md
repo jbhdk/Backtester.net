@@ -131,6 +131,20 @@ it, so a leg's level over a round trip is a series, not a single number. Distinc
 distance**, which is the fixed per-share risk measured from entry to the stop at sizing time.
 _Avoid_: stop price / target price (unqualified — those name the leg, not its evolving level), line.
 
+**Initial stop**:
+The entry-time level of a round trip's stop-loss — the first **Bracket level** its stop takes, frozen
+at open-from-flat and unchanged by any later trailing (the same anchor as **Initial risk**). It is the
+*any declared entry stop*: an armed bracket stop leg, or the sizing stop of a risk-sized entry that
+armed no bracket. Null when the entry declared no stop — a target-only bracket or a plain entry.
+_Avoid_: stop price (unqualified), current stop, stop-loss level (that is the evolving Bracket level).
+
+**Initial target**:
+The entry-time level of a round trip's take-profit — the first **Bracket level** its target takes,
+frozen at open-from-flat. A target exists only through a bracket (there is no sizing target), so it is
+null for a stop-only bracket or a plain entry.
+_Avoid_: target price (unqualified), current target, take-profit level (that is the evolving Bracket
+level).
+
 **Fill**:
 A single execution of an order at a price, producing a `Trade` record.
 _Avoid_: execution (in prose).

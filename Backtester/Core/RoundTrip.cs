@@ -32,6 +32,21 @@ namespace Backtester.Core
         /// </summary>
         public decimal? InitialRisk { get; set; }
 
+        /// <summary>
+        /// Gets or sets the initial stop: the entry-time level of the stop-loss, frozen when the position
+        /// opened from flat and unchanged by any later trailing. It is the declared entry stop — the armed
+        /// bracket stop leg, or the sizing stop of a risk-sized entry that armed no bracket. Null when the
+        /// entry declared no stop (a target-only bracket or a plain entry).
+        /// </summary>
+        public decimal? EntryStopPrice { get; set; }
+
+        /// <summary>
+        /// Gets or sets the initial target: the entry-time level of the take-profit, frozen when the
+        /// position opened from flat. A target exists only through a bracket, so this is null for a
+        /// stop-only bracket or a plain entry.
+        /// </summary>
+        public decimal? EntryTargetPrice { get; set; }
+
         /// <summary>Gets or sets the number of bars the position was held before exit.</summary>
         public int BarsHeld { get; set; }
 

@@ -130,6 +130,8 @@
       <th data-key="exitTime" data-type="date">Exit</th>
       <th data-key="entryPrice" data-type="num">Entry price</th>
       <th data-key="exitPrice" data-type="num">Exit price</th>
+      <th data-key="entryStopPrice" data-type="num">Initial stop</th>
+      <th data-key="entryTargetPrice" data-type="num">Initial target</th>
       <th data-key="exitReason" data-type="str">Exit reason</th>
       <th data-key="quantity" data-type="num">Qty</th>
       <th data-key="realizedPnL" data-type="num">P&amp;L</th>
@@ -417,13 +419,15 @@
         // stay empty and the reason shows where the P&L would be.
         return '<tr data-number="" class="rejected">' +
           cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
-          cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell(t.quantity) +
+          cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell("–") + cell("–") + cell(t.quantity) +
           cell(rejectedBadge(t.reason)) + cell("–") + cell("–") + cell("–") +
           "</tr>";
       }
       return '<tr data-number="' + t.number + '">' +
         cell(t.number) + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
-        cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) + cell(t.exitReason) + cell(t.quantity) +
+        cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) +
+        cell(fmtMoney(t.entryStopPrice)) + cell(fmtMoney(t.entryTargetPrice)) +
+        cell(t.exitReason) + cell(t.quantity) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
         cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +
         cell(fmtR(t.rMultiple), signClass(t.rMultiple)) +

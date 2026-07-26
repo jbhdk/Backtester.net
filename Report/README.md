@@ -13,8 +13,11 @@ which the `BacktestResult` now carries — is derived from the result alone:
 - **Stats** — net profit (currency and percent), CAGR, max drawdown, Sharpe, trades, win rate,
   profit factor, expectancy, average win/loss, max consecutive losses.
 - **Round trips** — number, symbol, entry/exit time and price, quantity, P&L, plus derived
-  **Return %** `(Exit − Entry) / Entry`, the **Exit reason** (`Take-profit`, `Stop-loss`, or
-  `Signal`), and compact **Time Held** (e.g. `5d 6h`).
+  **Return %** `(Exit − Entry) / Entry`, the **Initial stop** and **Initial target** (the entry-time
+  stop-loss and take-profit levels, frozen at entry and unaffected by later trailing; a dash when the
+  entry declared no such leg — Initial stop shows exactly when **R** does, Initial target only when a
+  bracket target armed), the **Exit reason** (`Take-profit`, `Stop-loss`, or `Signal`), and compact
+  **Time Held** (e.g. `5d 6h`).
 - **Run** — symbols, interval, date range, starting equity, and derived final equity and total return %.
 - **Per-symbol candles**, **indicators** (each grouping one or more series in a shared pane), and the portfolio **equity curve**.
 

@@ -218,6 +218,10 @@ namespace Backtester.Core
                     // The frozen per-share entry stop distance scaled to this exited slice; null (no
                     // R-multiple) when the opening entry declared no protective stop.
                     InitialRisk = position.EntryStopDistance.HasValue ? position.EntryStopDistance.Value * executedQty : (decimal?)null,
+                    // The initial stop and target levels frozen at open, carried straight through so the
+                    // report shows the entry setup without reconstructing it from the bracket ledger.
+                    EntryStopPrice   = position.EntryStopPrice,
+                    EntryTargetPrice = position.EntryTargetPrice,
                     BarsHeld    = Math.Max(0, _equityHistory.Count - position.EntryBarIndex),
                     EntryTime   = position.EntryTime,
                     ExitTime    = effective.Timestamp,
@@ -242,6 +246,10 @@ namespace Backtester.Core
                 position.EntryStopDistance = effective.EntryStopPrice.HasValue
                     ? Math.Abs(effective.Price - effective.EntryStopPrice.Value)
                     : (decimal?)null;
+                // Freeze the raw initial stop and target levels from the opening fill, so the round trip
+                // carries the entry setup (the levels before any trailing) for the report.
+                position.EntryStopPrice = effective.EntryStopPrice;
+                position.EntryTargetPrice = effective.EntryTargetPrice;
             }
 
             position.AddTrade(effective);

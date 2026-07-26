@@ -663,6 +663,86 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_EntryFills_StampsEntryTradeWithEntryTargetPrice()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Bar 1: the market entry fills at Open=100; its own bracket target sits at 120.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(120m, trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_EntryLeavesEntryTargetPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m
+            });
+
+            // No target leg armed, so the entry declares no initial target.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetOnly_StampsEntryTradeWithEntryTargetPrice()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m
+            });
+
+            // The lone target leg defines the initial target even though there is no stop.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(120m, trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitOrder_PlainEntryFills_LeavesEntryTargetPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+
+            // A plain market entry arms no bracket, so it declares no target.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitOrder_EntryCarriesSizingStop_LeavesEntryTargetPriceNull()
+        {
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            // A risk-sized entry declares a sizing stop but arms no bracket — there is no sizing target.
+            OrderRequest entry = MarketBuy("AAPL", 10);
+            entry.StopPrice = 90m;
+            broker.SubmitOrder(entry);
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Null(trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
         public void SizingStopEntry_SignalExit_RoundTripCarriesInitialRisk()
         {
             // End-to-end: a risk-sized entry (stop 90, no bracket) opens 10 @ 100 → per-share distance 10.

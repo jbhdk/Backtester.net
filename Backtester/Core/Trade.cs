@@ -49,5 +49,13 @@ namespace Backtester.Core
         /// the entry declared no stop; unset (null) on protective-leg and plain reducing fills.
         /// </summary>
         public decimal? EntryStopPrice { get; set; }
+
+        /// <summary>
+        /// Gets or sets the take-profit target price declared for the entry that produced this fill,
+        /// stamped by the broker on an entry fill so the round trip can carry its initial target level. A
+        /// target exists only through a bracket, so this is null when the entry armed no take-profit leg;
+        /// unset (null) on protective-leg and plain reducing fills.
+        /// </summary>
+        public decimal? EntryTargetPrice { get; set; }
     }
 }

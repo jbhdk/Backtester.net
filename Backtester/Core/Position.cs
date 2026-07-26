@@ -40,6 +40,20 @@ namespace Backtester.Core
         /// </summary>
         public decimal? EntryStopDistance { get; set; }
 
+        /// <summary>
+        /// Gets or sets the initial stop level frozen when the current lot opened from flat: the declared
+        /// entry stop price, preserved across same-direction adds and partial reductions so a round trip
+        /// carries the entry that opened it. Null when the opening entry declared no protective stop.
+        /// </summary>
+        public decimal? EntryStopPrice { get; set; }
+
+        /// <summary>
+        /// Gets or sets the initial target level frozen when the current lot opened from flat: the declared
+        /// entry take-profit price, preserved across same-direction adds and partial reductions. Null when
+        /// the opening entry armed no take-profit leg.
+        /// </summary>
+        public decimal? EntryTargetPrice { get; set; }
+
         /// <summary>Gets the list of all trades that have affected this position.</summary>
         public List<Trade> Trades { get; } = new();
 

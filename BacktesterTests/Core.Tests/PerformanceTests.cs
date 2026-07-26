@@ -50,6 +50,14 @@ namespace BacktesterTests.Core.Tests
             return trade;
         }
 
+        private static Trade BuyWithLevels(string symbol, decimal price, int qty, DateTime ts, decimal? stopPrice, decimal? targetPrice)
+        {
+            Trade trade = Buy(symbol, price, qty, ts);
+            trade.EntryStopPrice = stopPrice;
+            trade.EntryTargetPrice = targetPrice;
+            return trade;
+        }
+
         private static MarketSlice Slice(string symbol, decimal markPrice, DateTime ts)
         {
             return new()
@@ -282,6 +290,66 @@ namespace BacktesterTests.Core.Tests
             portfolio.ApplyTrade(Buy("AAPL", 140m, 10, T0.AddDays(1)));
 
             Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_EntryStopAndTargetStamped_RoundTripCarriesBothLevels()
+        {
+            // Buy 10 @ 100 with stop 90 and target 130: the round trip carries both entry-time levels verbatim.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithLevels("AAPL", 100m, 10, T0, stopPrice: 90m, targetPrice: 130m));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(90m, trip.EntryStopPrice);
+            Assert.Equal(130m, trip.EntryTargetPrice);
+        }
+
+        [Fact]
+        public void ApplyTrade_ScaleInAtDifferentLevels_LevelsAnchorOnOpeningEntry()
+        {
+            // Open 10 @ 100 stop 90 target 130; add 10 @ 120 stop 118 target 150. The add must not re-blend
+            // the frozen entry levels: the round trip carries the opening entry's 90 / 130.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithLevels("AAPL", 100m, 10, T0, stopPrice: 90m, targetPrice: 130m));
+            portfolio.ApplyTrade(BuyWithLevels("AAPL", 120m, 10, T0.AddDays(1), stopPrice: 118m, targetPrice: 150m));
+            portfolio.ApplyTrade(Sell("AAPL", 140m, 20, T0.AddDays(2)));
+
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(90m, trip.EntryStopPrice);
+            Assert.Equal(130m, trip.EntryTargetPrice);
+        }
+
+        [Fact]
+        public void ApplyTrade_PartialExit_EachSliceCarriesOpeningLevels()
+        {
+            // Open 20 @ 100 stop 90 target 130; exit 10 then 10. Each emitted slice carries the same frozen
+            // entry levels, mirroring how initial risk scales per slice.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(BuyWithLevels("AAPL", 100m, 20, T0, stopPrice: 90m, targetPrice: 130m));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(2)));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            Assert.All(portfolio.RoundTrips, trip =>
+            {
+                Assert.Equal(90m, trip.EntryStopPrice);
+                Assert.Equal(130m, trip.EntryTargetPrice);
+            });
+        }
+
+        [Fact]
+        public void ApplyTrade_EntryWithoutStopOrTarget_LeavesBothLevelsNull()
+        {
+            // A plain entry declares neither leg, so the round trip carries no initial stop or target.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));
+
+            RoundTrip trip = Assert.Single(portfolio.RoundTrips);
+            Assert.Null(trip.EntryStopPrice);
+            Assert.Null(trip.EntryTargetPrice);
         }
 
         [Fact]

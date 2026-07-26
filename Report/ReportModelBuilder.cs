@@ -75,6 +75,9 @@ namespace Backtester.Report
                     ExitTime = trip.ExitTime,
                     EntryPrice = trip.EntryPrice,
                     ExitPrice = trip.ExitPrice,
+                    // Initial stop and target levels, carried straight through; null renders as a dash.
+                    EntryStopPrice = trip.EntryStopPrice,
+                    EntryTargetPrice = trip.EntryTargetPrice,
                     Quantity = trip.Quantity,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
