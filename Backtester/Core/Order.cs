@@ -27,5 +27,15 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the UTC timestamp when this order was submitted.</summary>
         public DateTime SubmittedAt { get; set; }
+
+        /// <summary>Gets or sets the intra-bar fill priority carried from the request (higher fills sooner).</summary>
+        public int Priority { get; set; }
+
+        /// <summary>
+        /// Gets or sets the broker-assigned monotonic submission sequence. Used as a stable tie-break when
+        /// ordering equal-priority orders for fill, so the earlier-submitted order fills first regardless of
+        /// order-book iteration order.
+        /// </summary>
+        public long Sequence { get; set; }
     }
 }

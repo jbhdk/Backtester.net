@@ -161,6 +161,12 @@ essentials:
 - **Position** — the net holding in a symbol, as a **signed** quantity: positive is long, negative is
   short, zero is flat. No single fill flips the sign — an opposing order reduces the position and
   clamps at zero, so reversing direction takes a second order from flat.
+- **Intra-bar fill order** — when several of a symbol's resting orders fill on the same bar, they are
+  applied to the portfolio in a deterministic order: highest `OrderRequest.Priority` first, ties
+  broken by submission order. This matters when same-bar fills interact — e.g. a single-bar
+  stop-and-reverse, where the flatten must be applied before the reversing entry so the entry opens
+  from flat and carries its protective stop. Priority defaults to 0, so a strategy that submits one
+  order per bar (or never sets it) is unaffected.
 - **Round trip** — a complete entry-to-exit cycle (either direction: a long buys then sells, a short
   sells then covers), carrying realized P&L. The unit of per-trade analytics.
 - **Execution model** — a pluggable rule the broker applies: commission, slippage, or sizing.
@@ -209,7 +215,10 @@ public class BreakoutStrategy : StrategyBase
 
 The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. A
 `BracketRequest` attaches a stop-loss and/or a take-profit — leave `StopPrice` or `TargetPrice` null
-to arm just one leg (at least one is required). For a worked example of bracket orders and a trailing
+to arm just one leg (at least one is required). When a strategy submits several orders that fill on
+the same bar, set `OrderRequest.Priority` (higher fills sooner) to control the order they are applied
+— for a single-bar reversal, give the flatten a higher priority than the reversing entry so the entry
+opens from flat with its stop attached. For a worked example of bracket orders and a trailing
 stop, see [`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs); for pre-computed signals from
 history and long/short reversal (going short on a death cross, long on a golden cross), see
 [`MovingAverageCrossStrategy`](Backtester/Strategies/MovingAverageCrossStrategy.cs).

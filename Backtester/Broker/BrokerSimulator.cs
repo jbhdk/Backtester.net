@@ -42,6 +42,9 @@ namespace Backtester.Broker
         // modify that moves it. The report projects a round trip's stepped stop/target line from these.
         private readonly List<BracketLevelChange> _bracketLevelChanges = new();
         private DateTime _currentBarTimestamp;
+        // Monotonic counter stamped onto each order as it is created, giving a deterministic submission
+        // order used to tie-break equal-priority orders when they are sequenced for fill within a bar.
+        private long _submissionSequence;
 
         /// <summary>
         /// Initializes a new broker simulator. All model parameters are optional; defaults are applied when null.
@@ -117,7 +120,9 @@ namespace Backtester.Broker
                 Type = request.Type,
                 Price = request.Price,
                 Quantity = request.Quantity,
-                SubmittedAt = _currentBarTimestamp
+                SubmittedAt = _currentBarTimestamp,
+                Priority = request.Priority,
+                Sequence = _submissionSequence++
             };
             _orderBook[order.Id] = order;
 
@@ -196,7 +201,15 @@ namespace Backtester.Broker
                 {
                     continue;
                 }
-                IEnumerable<FillResult> fills = _fillModel.DetermineFills(symbolGroup, candle);
+                // Sequence the symbol's working orders before fill so that when several fill on the same
+                // bar, they are applied to the portfolio in a deterministic, strategy-controllable order:
+                // highest Priority first, ties broken by submission order. This lets a strategy guarantee,
+                // e.g., that a flatten is applied before the reversing entry so the entry opens from flat and
+                // carries its protective stop, rather than leaving intra-bar order to order-book iteration.
+                IEnumerable<Order> sequenced = symbolGroup
+                    .OrderByDescending(order => order.Priority)
+                    .ThenBy(order => order.Sequence);
+                IEnumerable<FillResult> fills = _fillModel.DetermineFills(sequenced, candle);
                 foreach (FillResult fill in fills)
                 {
                     if (!_orderBook.ContainsKey(fill.OrderId))
@@ -313,7 +326,8 @@ namespace Backtester.Broker
                 Type = type,
                 Price = price,
                 Quantity = quantity,
-                SubmittedAt = _currentBarTimestamp
+                SubmittedAt = _currentBarTimestamp,
+                Sequence = _submissionSequence++
             };
             _orderBook[order.Id] = order;
             _legRoles[order.Id] = leg;

@@ -1156,6 +1156,68 @@ namespace BacktesterTests.Broker.Tests
             Assert.Empty(broker.BracketLevelChanges);
         }
 
+        // --- Intra-bar fill priority ---
+
+        [Fact]
+        public void ProcessBar_SequencesHigherPriorityOrderFirst_RegardlessOfSubmissionOrder()
+        {
+            // Submit the low-priority order first, then a higher-priority one; the fill model must still see
+            // the higher-priority order first, so its fill is applied to the portfolio ahead of the other's.
+            CapturingFillModel capture = new();
+            BrokerSimulator broker = new(new Portfolio(100_000m), fillModel: capture);
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 3, Priority = 0 });
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 7, Priority = 5 });
+
+            broker.ProcessBar(SliceWithBar("AAPL", 100m));
+
+            Assert.Equal(7, capture.CapturedOrders[0].Quantity);
+            Assert.Equal(3, capture.CapturedOrders[1].Quantity);
+        }
+
+        [Fact]
+        public void ProcessBar_EqualPriorityOrders_PreserveSubmissionOrder()
+        {
+            // With no priority set (default 0), the sequence is a stable tie-break: orders are handed to the
+            // fill model in submission order, preserving today's behaviour for strategies that never set it.
+            CapturingFillModel capture = new();
+            BrokerSimulator broker = new(new Portfolio(100_000m), fillModel: capture);
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 3 });
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 7 });
+
+            broker.ProcessBar(SliceWithBar("AAPL", 100m));
+
+            Assert.Equal(3, capture.CapturedOrders[0].Quantity);
+            Assert.Equal(7, capture.CapturedOrders[1].Quantity);
+        }
+
+        [Fact]
+        public void ProcessBar_SingleBarReversal_HigherPriorityFlattenLetsReversedEntryCarryItsStop()
+        {
+            // A single-bar stop-and-reverse: hold a long, then on one bar flatten it and open the reversed
+            // short via a bracket. Both orders oppose the long and fill on the same bar. Giving the flatten
+            // the higher priority guarantees it is applied first, so the bracket entry opens the short from
+            // flat and freezes its protective stop — instead of the entry becoming the reducing fill and the
+            // reversed position opening unprotected.
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10, Priority = 1 });
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 110m,   // stop-loss ABOVE entry for a short
+                TargetPrice = 90m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
+
+            Position position = Assert.Single(portfolio.Positions);
+            Assert.Equal(-10, position.Quantity);
+            Assert.Equal(110m, position.EntryStopPrice);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {
