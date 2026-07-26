@@ -99,8 +99,13 @@ _Avoid_: trade, transaction.
 **Next-bar fill** (timing):
 An order submitted while processing bar N is evaluated against bar N+1 — never bar N itself. This is
 the engine's anti-lookahead rule. Names *when* an order is matched; **Gap-aware fill** names at what
-price.
-_Avoid_: same-bar fill, immediate fill.
+price. One scoped exception: a bracket's protective leg is armed by its entry's fill, and if that leg
+is **already marketable at the arming bar's open** (an adverse or favourable gap put the fill through
+the leg's price), it fills on that same arming bar rather than resting to the next — it is marketable
+the instant it exists, so filling it is not lookahead. A live bracket behaves the same way: the entry
+fills and an already-triggered protective leg executes right after, for a same-bar (often near-scratch)
+round trip. A leg the arming bar merely trades *through* later keeps the ordinary next-bar timing.
+_Avoid_: same-bar fill (as a blanket term; the exception is narrow), immediate fill.
 
 **Gap-aware fill** (pricing):
 A triggered order never fills at a price better than the bar's open. A Market fills at the open; a
@@ -115,7 +120,10 @@ _Avoid_: trigger-price fill, exact-stop fill.
 An entry order with one or two attached protective legs — a stop-loss and/or a take-profit. When
 both are present they form an OCO group (one filling cancels the other); with a single leg there is
 no sibling to cancel and the lone leg simply rests until filled or the position is closed by Signal.
-A Bracket must have at least one leg — an entry with neither is a plain Order, not a Bracket.
+A Bracket must have at least one leg — an entry with neither is a plain Order, not a Bracket. Each
+leg is expressed either as an **absolute** price or as a fill-relative **offset** (a Stop distance /
+target offset the engine resolves against the actual fill when the entry fills) — one form per leg;
+setting both for the same leg is caller misuse.
 _Avoid_: OTO, parent/child order.
 
 **OCO** (one-cancels-other):
@@ -209,7 +217,12 @@ Position size chosen so a stop-out loses a fixed fraction of realized equity:
 _Avoid_: notional sizing, percent sizing.
 
 **Stop distance**:
-The per-share loss if the stop is hit: `|entry − stopPrice|`.
+The per-share loss if the stop is hit: `|entry − stopPrice|`. A bracket can express it two ways: as
+an **absolute** stop price (resolved against the strategy's pre-fill reference, and so vulnerable to a
+gap between decision and fill), or as a fill-relative **offset** — a distance the engine subtracts from
+(long) or adds to (short) the actual fill at fill time, making the realized Stop distance equal the
+requested offset exactly regardless of any gap. The target leg has a mirror **target offset**, but a
+target feeds no risk, so it is not a Stop distance.
 _Avoid_: risk, spread.
 
 **Initial risk**:
