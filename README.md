@@ -14,7 +14,7 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds eight NuGet packages. Use the engine on its own, and add a data source,
+The repository builds nine NuGet packages. Use the engine on its own, and add a data source,
 reporting, analysis, or optimization when you want them. The core makes no outbound network call on its own — every live data
 provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
@@ -28,6 +28,7 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | [`backtester.net.analysis`](Analysis/README.md) | Opt-in, AI-agnostic Analysis: reduces a report model to an Analysis digest, asks an Analysis client, and enforces the Analysis contract. Makes no outbound call. | `backtester.net.report` |
 | [`backtester.net.analysis.claude`](Analysis.Claude/README.md) | Opt-in Claude Analysis client. All the network code for the analysis feature lives here. | `backtester.net.analysis`, `Anthropic` |
 | [`backtester.net.optimization`](Optimization/README.md) | Opt-in Parameter Optimization: sweeps a strategy's Parameters over a grid, runs a backtest per combination, and ranks the Trials by an Objective, with a sortable leaderboard report. In-sample grid search (ADR 0020). Makes no outbound call. | `backtester.net`, `backtester.net.report` |
+| [`backtester.net.stops`](Stops/README.md) | Opt-in reusable protective-stop management: a `TrailingStopManager` that re-anchors a bracket's legs onto the entry fill, moves the stop to break-even at a configured R multiple, and ratchets a trailing stop that tightens toward a separate R reference (never loosening). | `backtester.net` |
 
 ---
 <!-- 
@@ -560,6 +561,7 @@ Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
 Analysis/              AI-agnostic Analysis (backtester.net.analysis)
 Analysis.Claude/       Claude Analysis client (backtester.net.analysis.claude)
 Optimization/          Parameter Optimization (backtester.net.optimization)
+Stops/                 Reusable protective-stop management (backtester.net.stops)
 BacktesterTests/       Test suite
 samples/data/          Example OHLCV CSVs
 samples/AnalysisSample/      End-to-end run ending in a report with an Analysis
@@ -573,8 +575,9 @@ Each library has its own focused README: [`Backtester/README.md`](Backtester/REA
 [`Report/README.md`](Report/README.md),
 [`Report.Toolkit/README.md`](Report.Toolkit/README.md),
 [`Analysis/README.md`](Analysis/README.md),
-[`Analysis.Claude/README.md`](Analysis.Claude/README.md), and
-[`Optimization/README.md`](Optimization/README.md).
+[`Analysis.Claude/README.md`](Analysis.Claude/README.md),
+[`Optimization/README.md`](Optimization/README.md), and
+[`Stops/README.md`](Stops/README.md).
 
 ---
 
