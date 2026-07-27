@@ -1218,6 +1218,212 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(110m, position.EntryStopPrice);
         }
 
+        // --- Marketable-at-arm same-bar fill (#100) ---
+
+        [Fact]
+        public void SubmitBracket_LongEntryGapsBelowWrongSideStop_StopFillsOnArmingBar()
+        {
+            // A long computes its stop from a pre-fill reference (stop 95, below that reference), but the
+            // market entry gaps DOWN to open 90 — below the stop. The stop is now on the wrong side of the
+            // fill and is already marketable at the arming bar's open, so a live bracket would trigger it
+            // right after the entry. It must fill on this same arming bar, not rest to the next.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 95m,
+                TargetPrice = 130m
+            });
+
+            // Arming bar opens at 90 (gapped below the 95 stop); the entry fills at 90 and the stop with it.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0)).ToList();
+
+            Assert.Contains(trades, trade => trade.Side == OrderSide.Sell && trade.Leg == BracketLeg.StopLoss);
+        }
+
+        [Fact]
+        public void SubmitBracket_ShortEntryGapsAboveWrongSideStop_ProducesZeroBarScratchRoundTrip()
+        {
+            // The short-SPY regression (issue #99). A short's stop belongs ABOVE the fill, but a gap-up
+            // entry fills above the absolute stop, leaving it on the wrong side. Under the old next-bar
+            // delay the stop rested a full bar and the gap ran on, manufacturing a ~-28R blowup. Filling
+            // the already-marketable stop on the arming bar covers at ~entry: a zero-bar, ~0-loss scratch.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 103m,   // above the pre-fill reference, but the entry gaps up past it
+                TargetPrice = 90m
+            });
+
+            // Arming bar opens at 105, above the 103 stop; the short fills at 105 and covers at 105.
+            broker.ProcessBar(SliceAt("AAPL", 105m, 107m, 104m, 106m, T0));
+
+            RoundTrip roundTrip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(PositionDirection.Short, roundTrip.Direction);
+            Assert.Equal(0, roundTrip.BarsHeld);
+            Assert.Equal(0m, roundTrip.RealizedPnL);
+        }
+
+        [Fact]
+        public void SubmitBracket_LongEntryGapsAboveTarget_TargetFillsOnArmingBar()
+        {
+            // Symmetric to the wrong-side stop: a favourable gap. The long's entry gaps UP to open 125,
+            // above its own 120 take-profit, so the target is already marketable at the arming bar's open.
+            // A live bracket takes that profit right after the entry; it must fill on this same arming bar.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            // Arming bar opens at 125 (gapped above the 120 target); the entry fills at 125 and the target with it.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 125m, 127m, 123m, 126m, T0)).ToList();
+
+            Assert.Contains(trades, trade => trade.Side == OrderSide.Sell && trade.Leg == BracketLeg.TakeProfit);
+        }
+
+        [Fact]
+        public void SubmitBracket_ArmingBarTradesThroughStopButOpensAbove_StopKeepsNextBarTiming()
+        {
+            // The arming bar opens at 100 — between the 90 stop and 130 target, so the stop is NOT
+            // marketable at the open. The bar later trades down through the stop (Low=85), but a leg the
+            // bar merely reaches later keeps ordinary next-bar timing: only a leg already through the market
+            // at the open fills same-bar. So the arming bar produces the entry alone.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 130m
+            });
+
+            // Open=100 (between the legs), Low=85 (trades through the 90 stop after the open).
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 85m, 95m, T0)).ToList();
+
+            Trade only = Assert.Single(trades);
+            Assert.Equal(BracketLeg.None, only.Leg);
+        }
+
+        [Fact]
+        public void SubmitBracket_SameBarStopFill_CancelsOcoSibling_LaterBarSpanningTargetFillsNothing()
+        {
+            // The stop fills on the arming bar, so its OCO sibling (the target) must be cancelled just as a
+            // next-bar stop fill would cancel it. Otherwise the resting target would fill as a Sell from
+            // flat on a later bar and open a phantom short.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 95m,
+                TargetPrice = 130m
+            });
+
+            // Arming bar opens at 90 (below the 95 stop): entry and stop both fill here, cancelling the target.
+            broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
+
+            // Later bar spikes above the former 130 target — the cancelled sibling must not fill.
+            List<Trade> laterTrades = broker.ProcessBar(SliceAt("AAPL", 128m, 140m, 127m, 138m, T0.AddHours(1))).ToList();
+
+            Assert.Empty(laterTrades);
+        }
+
+        [Fact]
+        public void SubmitBracket_SameBarStopFill_RecordsStopLevelChange()
+        {
+            // The same-bar fill runs back through the ordinary fill path, so the armed stop's level is still
+            // recorded in the ledger even though it fills on the arming bar.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 95m,
+                TargetPrice = 130m
+            });
+
+            broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
+
+            Assert.Contains(broker.BracketLevelChanges, change => change.Leg == BracketLeg.StopLoss && change.Price == 95m);
+        }
+
+        [Fact]
+        public void SubmitBracket_SameBarStopFill_RoundTripExitReasonIsStopLoss()
+        {
+            // A same-bar stop-out is still a stop-loss exit — the round trip's reason comes from the leg
+            // that closed it, exactly as a next-bar stop fill would.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 95m,
+                TargetPrice = 130m
+            });
+
+            broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
+
+            Assert.Equal(ExitReason.StopLoss, Assert.Single(portfolio.RoundTrips).ExitReason);
+        }
+
+        [Fact]
+        public void SubmitBracket_CorrectlySidedBracket_ArmingBarFillsOnlyEntry_LegsRest()
+        {
+            // The happy path: the entry opens between its legs (stop 90 below, target 120 above), so neither
+            // is marketable at the open. The arming bar fills only the entry and the position stays open,
+            // exactly as before — the same-bar rule adds nothing for a correctly-sided bracket.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Trade only = Assert.Single(trades);
+            Assert.Equal(BracketLeg.None, only.Leg);
+            Assert.Equal(10, Assert.Single(portfolio.Positions).Quantity);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOnly_MarketableAtArm_FillsSameBarWithNoSibling()
+        {
+            // A single-leg (stop-only) bracket whose lone stop is marketable at the arming bar's open fills
+            // on that same bar with no OCO sibling to cancel — a zero-bar stop-loss round trip.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 95m
+            });
+
+            // Arming bar opens at 90 (below the 95 stop): entry and lone stop both fill here.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0)).ToList();
+
+            Assert.Contains(trades, trade => trade.Side == OrderSide.Sell && trade.Leg == BracketLeg.StopLoss);
+            Assert.Equal(ExitReason.StopLoss, Assert.Single(portfolio.RoundTrips).ExitReason);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {
