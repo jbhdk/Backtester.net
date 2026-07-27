@@ -1638,6 +1638,46 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(20, trades[0].Quantity);
         }
 
+        [Fact]
+        public void SubmitOrder_QuantitylessReducingOrder_FlattensFullPositionThoughRiskSizerWouldSizeZero()
+        {
+            // A close is not risk-sized: the flatten market order carries no stop, so RiskPerTradeSizing alone
+            // would size it to zero and drop it, stranding the position. The broker instead flattens the whole
+            // open position — the 20-share long the offset bracket opened — so the reducing fill closes exactly.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                StopOffset = 5m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });
+            List<Trade> exitTrades = broker.ProcessBar(SliceAt("AAPL", 103m, 104m, 101m, 102m, T0.AddHours(1))).ToList();
+
+            Assert.Equal(20, Assert.Single(exitTrades).Quantity);
+        }
+
+        [Fact]
+        public void SubmitOrder_ExplicitReducingQuantity_PerformsPartialReduce_NotResizedBySizingModel()
+        {
+            // An explicit reducing quantity is a deliberate partial exit and must be respected, not overwritten
+            // by the sizing model. A FixedSizeModel of 100 would otherwise resize the scale-out to a full close;
+            // the broker keeps the requested 30, leaving 70 of the 100-share long open.
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 100 });
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market });
+            broker.ProcessBar(SliceAt("AAPL", 50m, 51m, 49m, 50m, T0));
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 30 });
+            broker.ProcessBar(SliceAt("AAPL", 50m, 51m, 49m, 50m, T0.AddHours(1)));
+
+            Assert.Equal(70, portfolio.OpenQuantity("AAPL"));
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

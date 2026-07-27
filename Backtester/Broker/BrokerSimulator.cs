@@ -84,16 +84,30 @@ namespace Backtester.Broker
         {
             if (_sizingModel != null)
             {
-                int sized = _sizingModel.Size(request, _portfolio);
-                // Reject any non-positive size: a sizing model that yields zero has nothing to trade, and a
-                // negative quantity would flow into the fill, Position, and RoundTrip and corrupt their
-                // prices/quantity, so no sizing model is allowed to inject one into the pipeline.
-                if (sized <= 0)
+                if (_portfolio.ReducesOpenPosition(request))
                 {
-                    return null;
+                    // A reducing order closes an existing position, so its size comes from that position, not
+                    // the risk model — a close is never risk-sized. A quantity-less reducing order flattens the
+                    // whole position; an explicit quantity performs a partial reduce and is respected as given.
+                    // Overshoot is clamped at fill, so neither can flip the position's sign.
+                    if (request.Quantity <= 0)
+                    {
+                        request.Quantity = Math.Abs(_portfolio.OpenQuantity(request.Symbol));
+                    }
                 }
+                else
+                {
+                    int sized = _sizingModel.Size(request, _portfolio);
+                    // Reject any non-positive size: a sizing model that yields zero has nothing to trade, and a
+                    // negative quantity would flow into the fill, Position, and RoundTrip and corrupt their
+                    // prices/quantity, so no sizing model is allowed to inject one into the pipeline.
+                    if (sized <= 0)
+                    {
+                        return null;
+                    }
 
-                request.Quantity = sized;
+                    request.Quantity = sized;
+                }
             }
 
             // Reg-T initial-margin gate, always enforced by the account. A reducing or unvaluable order

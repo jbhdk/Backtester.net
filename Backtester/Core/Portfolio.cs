@@ -83,6 +83,28 @@ namespace Backtester.Core
         }
 
         /// <summary>
+        /// Returns the signed quantity of the open position for a symbol — positive long, negative short,
+        /// zero when flat — so a caller can size a closing order to the position it closes.
+        /// </summary>
+        public int OpenQuantity(string symbol)
+        {
+            Position position = Positions.FirstOrDefault(p => p.Symbol == symbol);
+            return position?.Quantity ?? 0;
+        }
+
+        /// <summary>
+        /// Returns true when the order's side opposes the open position for its symbol, so filling it would
+        /// reduce or close that position rather than open or add to one. Classified by side alone, so a
+        /// not-yet-sized flatten (quantity zero) is still recognised as reducing.
+        /// </summary>
+        public bool ReducesOpenPosition(OrderRequest request)
+        {
+            int currentQuantity = OpenQuantity(request.Symbol);
+            return currentQuantity != 0
+                && (request.Side == OrderSide.Buy ? currentQuantity < 0 : currentQuantity > 0);
+        }
+
+        /// <summary>
         /// Returns the price used to value an order: the order's own price, or the symbol's latest close
         /// when it has none, or zero when neither is known (so the order cannot be valued).
         /// </summary>

@@ -71,6 +71,66 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void OpenQuantity_FlatSymbol_ReturnsZero()
+        {
+            Portfolio portfolio = new(10_000m);
+
+            Assert.Equal(0, portfolio.OpenQuantity("AAPL"));
+        }
+
+        [Fact]
+        public void OpenQuantity_ShortPosition_ReturnsSignedQuantity()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10));
+
+            Assert.Equal(-10, portfolio.OpenQuantity("AAPL"));
+        }
+
+        [Fact]
+        public void ReducesOpenPosition_SellAgainstLong_IsReducing()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            bool reduces = portfolio.ReducesOpenPosition(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });
+
+            Assert.True(reduces);
+        }
+
+        [Fact]
+        public void ReducesOpenPosition_BuyAgainstShort_IsReducing()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10));
+
+            bool reduces = portfolio.ReducesOpenPosition(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market });
+
+            Assert.True(reduces);
+        }
+
+        [Fact]
+        public void ReducesOpenPosition_BuyAddingToLong_IsNotReducing()
+        {
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            bool reduces = portfolio.ReducesOpenPosition(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market });
+
+            Assert.False(reduces);
+        }
+
+        [Fact]
+        public void ReducesOpenPosition_OrderAgainstFlatSymbol_IsNotReducing()
+        {
+            Portfolio portfolio = new(10_000m);
+
+            bool reduces = portfolio.ReducesOpenPosition(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });
+
+            Assert.False(reduces);
+        }
+
+        [Fact]
         public void ApplyTrade_Buy_CreatesPosition()
         {
             Portfolio portfolio = new(10_000m);
