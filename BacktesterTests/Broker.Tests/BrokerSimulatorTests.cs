@@ -1424,6 +1424,201 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(ExitReason.StopLoss, Assert.Single(portfolio.RoundTrips).ExitReason);
         }
 
+        // --- Fill-relative offset legs (#101) ---
+
+        [Fact]
+        public void SubmitBracket_LongStopOffset_ResolvesStopBelowFill()
+        {
+            // A long submits its stop as a fill-relative offset of 5. The engine resolves it at fill time
+            // against the actual fill (open 100), placing the stop 5 below the fill on the protective side.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 5m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(95m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_ShortStopOffset_ResolvesStopAboveFill()
+        {
+            // A short's protective stop belongs ABOVE the fill; the offset is added to the fill.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 5m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(105m, trades[0].EntryStopPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_LongTargetOffset_ResolvesTargetAboveFill()
+        {
+            // A long's take-profit belongs ABOVE the fill; the target offset is added to the fill.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetOffset = 10m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(110m, trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOffset_RoundTripInitialRiskEqualsOffsetTimesQuantity()
+        {
+            // The guarantee: resolving the stop against the real fill makes realized initial risk equal the
+            // requested offset exactly. Offset 5 on 10 shares → initial risk 50, the R denominator (ADR 0023).
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 5m
+            });
+            // Entry fills at 100; offset stop resolves to 95 (below), so it rests rather than firing.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // A signal exit flattens the position and realizes the round trip.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 110m, 112m, 108m, 111m, T0.AddHours(1)));
+
+            Assert.Equal(50m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void SubmitBracket_LongStopOffset_ArmedLegRestsAtResolvedPrice()
+        {
+            // Resolution feeds the armed leg, not just the entry stamp: the stop rests at the resolved 95
+            // and fills there on a later bar that reaches it.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 5m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // Bar 2: Low=94 reaches the resolved 95 stop.
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 98m, 99m, 94m, 96m, T0.AddHours(1))).ToList();
+
+            Trade stopFill = Assert.Single(trades);
+            Assert.Equal(OrderSide.Sell, stopFill.Side);
+            Assert.Equal(BracketLeg.StopLoss, stopFill.Leg);
+            Assert.Equal(95m, stopFill.Price);
+        }
+
+        [Fact]
+        public void SubmitBracket_AbsoluteStopAndTargetOffset_BothFormsCoexist()
+        {
+            // A bracket may mix forms: an absolute stop and a fill-relative target. Each resolves by its
+            // own rule — the absolute stop to itself (90), the target offset to fill + 10 (110).
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetOffset = 10m
+            });
+
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(90m, trades[0].EntryStopPrice);
+            Assert.Equal(110m, trades[0].EntryTargetPrice);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopOffsetOnly_ArmsStopLegNoTarget()
+        {
+            // A single-leg bracket given only as an offset is valid (the zero-leg check considers both
+            // forms) and arms just the stop leg.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 5m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.NotNull(handle.StopOrderId);
+            Assert.Null(handle.TargetOrderId);
+        }
+
+        [Fact]
+        public void SubmitBracket_StopGivenAsBothPriceAndOffset_Throws()
+        {
+            // Specifying both the absolute and the offset form for the stop leg is contradictory caller
+            // misuse — the engine cannot know which anchor to use.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                StopOffset = 5m
+            }));
+        }
+
+        [Fact]
+        public void SubmitBracket_TargetGivenAsBothPriceAndOffset_Throws()
+        {
+            // The same contradiction on the target leg is likewise caller misuse.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetPrice = 120m,
+                TargetOffset = 10m
+            }));
+        }
+
+        [Fact]
+        public void SubmitBracket_NonPositiveStopOffset_Throws()
+        {
+            // A zero or negative offset would place the stop on the fill (zero risk, undefined R) or the
+            // wrong side — caller misuse rejected at submit.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopOffset = 0m
+            }));
+        }
+
+        [Fact]
+        public void SubmitBracket_NonPositiveTargetOffset_Throws()
+        {
+            // A non-positive target offset is likewise misuse.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+
+            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                TargetOffset = -5m
+            }));
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

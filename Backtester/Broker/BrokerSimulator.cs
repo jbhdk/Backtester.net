@@ -20,9 +20,10 @@ namespace Backtester.Broker
         private readonly ISizingModel _sizingModel;
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
-        // key: entry order ID → (stopPrice, targetPrice, quantity, handle) for pending bracket legs.
-        // stopPrice/targetPrice are nullable: a single-leg bracket leaves the absent leg null.
-        private readonly Dictionary<string, (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle)> _pendingBrackets = new();
+        // key: entry order ID → the pending bracket's legs, resolved to absolute prices once the entry
+        // fills. Each leg is nullable (a single-leg bracket leaves the absent leg null) and may be given as
+        // an absolute price or a fill-relative offset — exactly one form per leg, resolved at fill time.
+        private readonly Dictionary<string, (decimal? stopPrice, decimal? targetPrice, decimal? stopOffset, decimal? targetOffset, int quantity, BracketHandle handle)> _pendingBrackets = new();
         // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
         private readonly Dictionary<string, string> _ocoLinks = new();
         // key: symbol → the OCO protective legs (stop + target order IDs) currently resting against that
@@ -154,7 +155,26 @@ namespace Backtester.Broker
         /// </summary>
         public BracketHandle SubmitBracket(BracketRequest request)
         {
-            if (request.StopPrice == null && request.TargetPrice == null)
+            if (request.StopPrice.HasValue && request.StopOffset.HasValue)
+            {
+                throw new ArgumentException("The stop leg cannot be given as both an absolute price and an offset.", nameof(request));
+            }
+            if (request.TargetPrice.HasValue && request.TargetOffset.HasValue)
+            {
+                throw new ArgumentException("The target leg cannot be given as both an absolute price and an offset.", nameof(request));
+            }
+            if (request.StopOffset.HasValue && request.StopOffset.Value <= 0m)
+            {
+                throw new ArgumentException("The stop offset must be greater than zero.", nameof(request));
+            }
+            if (request.TargetOffset.HasValue && request.TargetOffset.Value <= 0m)
+            {
+                throw new ArgumentException("The target offset must be greater than zero.", nameof(request));
+            }
+
+            bool hasStop = request.StopPrice.HasValue || request.StopOffset.HasValue;
+            bool hasTarget = request.TargetPrice.HasValue || request.TargetOffset.HasValue;
+            if (!hasStop && !hasTarget)
             {
                 throw new ArgumentException("A bracket must have at least one leg (a stop-loss and/or a take-profit).", nameof(request));
             }
@@ -167,7 +187,7 @@ namespace Backtester.Broker
 
             int quantity = _orderBook[entryId].Quantity;
             BracketHandle handle = new() { EntryOrderId = entryId };
-            _pendingBrackets[entryId] = (request.StopPrice, request.TargetPrice, quantity, handle);
+            _pendingBrackets[entryId] = (request.StopPrice, request.TargetPrice, request.StopOffset, request.TargetOffset, quantity, handle);
             return handle;
         }
 
@@ -266,13 +286,22 @@ namespace Backtester.Broker
             // non-bracketed entry (ADR 0023 amendment). The bracket is peeked (not removed) — the
             // leg-arming below still consumes it; the sizing stop is a fill-time leftover, so drop it.
             bool hasSizingStop = _sizingStops.Remove(fill.OrderId, out decimal sizingStop);
-            bool hasPendingBracket = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) pending);
+            bool hasPendingBracket = _pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, decimal? stopOffset, decimal? targetOffset, int quantity, BracketHandle handle) pending);
+            // Resolve each leg to an absolute price against the actual (slippage-adjusted) fill: an absolute
+            // leg resolves to itself; a fill-relative offset leg is placed on the protective side at the
+            // requested distance (long stop below / target above, short mirrored). Resolving against the
+            // real fill makes the frozen stop distance — and therefore initial risk and R (ADR 0023) —
+            // equal the requested offset exactly, regardless of any gap between decision and fill.
+            decimal stopOffsetSign = filledOrder.Side == OrderSide.Buy ? -1m : 1m;
+            decimal targetOffsetSign = filledOrder.Side == OrderSide.Buy ? 1m : -1m;
+            decimal? resolvedStop = hasPendingBracket ? ResolveLegPrice(pending.stopPrice, pending.stopOffset, adjustedPrice, stopOffsetSign) : (decimal?)null;
+            decimal? resolvedTarget = hasPendingBracket ? ResolveLegPrice(pending.targetPrice, pending.targetOffset, adjustedPrice, targetOffsetSign) : (decimal?)null;
             decimal? entryStopPrice = hasPendingBracket
-                ? pending.stopPrice
+                ? resolvedStop
                 : hasSizingStop ? sizingStop : (decimal?)null;
             // The initial target is the armed bracket's take-profit level; a target exists only
             // through a bracket (there is no sizing target), so a non-bracketed entry has none.
-            decimal? entryTargetPrice = hasPendingBracket ? pending.targetPrice : (decimal?)null;
+            decimal? entryTargetPrice = resolvedTarget;
 
             Trade trade = new()
             {
@@ -302,18 +331,19 @@ namespace Backtester.Broker
                 CancelBracketLegs(symbol, restingLegs);
             }
 
-            if (_pendingBrackets.TryGetValue(fill.OrderId, out (decimal? stopPrice, decimal? targetPrice, int quantity, BracketHandle handle) bracket))
+            if (hasPendingBracket)
             {
                 _pendingBrackets.Remove(fill.OrderId);
                 // Protective legs close the entry, so they take the side opposite the entry:
                 // a long entry arms Sell legs, a short entry arms Buy legs. A single-leg bracket
-                // arms only the leg it declared; the absent leg's order ID stays null.
+                // arms only the leg it declared; the absent leg's order ID stays null. Legs arm at the
+                // prices resolved above, so an offset leg rests the requested distance from the real fill.
                 OrderSide legSide = filledOrder.Side == OrderSide.Buy ? OrderSide.Sell : OrderSide.Buy;
-                string stopId = bracket.stopPrice.HasValue
-                    ? ArmBracketLeg(symbol, legSide, OrderType.Stop, bracket.stopPrice.Value, bracket.quantity, BracketLeg.StopLoss)
+                string stopId = resolvedStop.HasValue
+                    ? ArmBracketLeg(symbol, legSide, OrderType.Stop, resolvedStop.Value, pending.quantity, BracketLeg.StopLoss)
                     : null;
-                string targetId = bracket.targetPrice.HasValue
-                    ? ArmBracketLeg(symbol, legSide, OrderType.Limit, bracket.targetPrice.Value, bracket.quantity, BracketLeg.TakeProfit)
+                string targetId = resolvedTarget.HasValue
+                    ? ArmBracketLeg(symbol, legSide, OrderType.Limit, resolvedTarget.Value, pending.quantity, BracketLeg.TakeProfit)
                     : null;
                 // Only a two-legged bracket forms an OCO group; a single leg has no sibling to cancel.
                 if (stopId != null && targetId != null)
@@ -322,11 +352,30 @@ namespace Backtester.Broker
                     _ocoLinks[targetId] = stopId;
                 }
                 _bracketLegsBySymbol[symbol] = (stopId, targetId);
-                bracket.handle.StopOrderId = stopId;
-                bracket.handle.TargetOrderId = targetId;
+                pending.handle.StopOrderId = stopId;
+                pending.handle.TargetOrderId = targetId;
 
                 TryFillMarketableLegsAtArm(stopId, targetId, candle, timestamp, trades);
             }
+        }
+
+        /// <summary>
+        /// Resolves one bracket leg to an absolute trigger price: the absolute price when one was given,
+        /// otherwise the fill-relative offset applied to the actual fill on the protective side
+        /// (<paramref name="offsetSign"/> is -1/+1 to subtract or add), or null when the leg was not
+        /// requested in either form.
+        /// </summary>
+        private static decimal? ResolveLegPrice(decimal? absolutePrice, decimal? offset, decimal fill, decimal offsetSign)
+        {
+            if (absolutePrice.HasValue)
+            {
+                return absolutePrice.Value;
+            }
+            if (offset.HasValue)
+            {
+                return fill + offsetSign * offset.Value;
+            }
+            return null;
         }
 
         /// <summary>
