@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Broker;
@@ -252,6 +253,56 @@ namespace BacktesterTests.Engine.Tests
             RoundTrip roundTrip = Assert.Single(portfolio.RoundTrips);
             Assert.Equal(t4, roundTrip.ExitTime);     // a real AAPL bar, not the phantom T2 slot
             Assert.Equal(110m, roundTrip.ExitPrice);  // T4's open, not the stale T1 open (101)
+        }
+
+        [Fact]
+        public async Task StartAsync_InvokesOnBarForASymbol_OnlyOnItsRealBars_NotForwardFilledSlots()
+        {
+            // AAPL prints at t0 and t3 only; a 24/7 symbol (BTC) drives the t1/t2 slots where AAPL has no bar
+            // of its own and is forward-filled. OnBar must fire for AAPL only on its real bars (t0, t3), never
+            // on the forward-filled t1/t2 slots — acting there would decide on AAPL at a time it never traded
+            // and its orders cannot fill.
+            DateTime t0 = new(2024, 1, 5, 19, 0, 0, DateTimeKind.Utc);
+            DateTime t1 = new(2024, 1, 5, 20, 0, 0, DateTimeKind.Utc);
+            DateTime t2 = new(2024, 1, 5, 21, 0, 0, DateTimeKind.Utc);
+            DateTime t3 = new(2024, 1, 8, 14, 0, 0, DateTimeKind.Utc);
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(t0, 100m), Bar(t3, 110m) }),
+                ("BTC", new[] { Bar(t0, 40_000m), Bar(t1, 40_100m), Bar(t2, 40_200m), Bar(t3, 40_300m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            BarRecordingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "BTC" }, t0, t0.AddYears(1), "1h", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            DateTime[] aaplBars = strategy.Calls.Where(call => call.Symbol == "AAPL").Select(call => call.Timestamp).ToArray();
+            Assert.Equal(new[] { t0, t3 }, aaplBars);
+        }
+
+        [Fact]
+        public async Task StartAsync_FlatEntryAcrossForwardFilledSlots_DoesNotStackTheEntry()
+        {
+            // A strategy that buys whenever AAPL is flat submits on t0; the entry cannot fill until AAPL's
+            // next real bar (t3), because t1/t2 are forward-filled slots driven by the 24/7 symbol. Were OnBar
+            // to fire on those stale slots, the still-flat snapshot would make the strategy re-submit, and the
+            // queued entries would all fill together at t3 — stacking the position. It must open exactly one lot.
+            DateTime t0 = new(2024, 1, 5, 19, 0, 0, DateTimeKind.Utc);
+            DateTime t1 = new(2024, 1, 5, 20, 0, 0, DateTimeKind.Utc);
+            DateTime t2 = new(2024, 1, 5, 21, 0, 0, DateTimeKind.Utc);
+            DateTime t3 = new(2024, 1, 8, 14, 0, 0, DateTimeKind.Utc);
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(t0, 100m), Bar(t3, 110m) }),
+                ("BTC", new[] { Bar(t0, 40_000m), Bar(t1, 40_100m), Bar(t2, 40_200m), Bar(t3, 40_300m) }));
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "BTC" }, t0, t0.AddYears(1), "1h", new BuyAaplWhenFlat(), broker, portfolio);
+            await engine.StartAsync();
+
+            Position position = Assert.Single(portfolio.Positions);
+            Assert.Equal("AAPL", position.Symbol);
+            Assert.Equal(1, position.Quantity);
         }
 
         [Fact]
@@ -546,6 +597,35 @@ namespace BacktesterTests.Engine.Tests
                 {
                     _sold = true;
                     broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 1 });
+                }
+            }
+        }
+
+        /// <summary>Records every (symbol, bar timestamp) pair it is invoked with, so a test can assert the OnBar cadence.</summary>
+        private sealed class BarRecordingStrategy : StrategyBase
+        {
+            public List<(string Symbol, DateTime Timestamp)> Calls { get; } = new();
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                Calls.Add((symbol, bar.Timestamp));
+            }
+        }
+
+        /// <summary>Submits a one-share AAPL market buy on every bar it sees AAPL flat, exercising the stale-bar re-entry trap.</summary>
+        private sealed class BuyAaplWhenFlat : StrategyBase
+        {
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (symbol != "AAPL")
+                {
+                    return;
+                }
+
+                bool flat = !snapshot.Positions.Any(position => position.Symbol == "AAPL" && position.Quantity != 0);
+                if (flat)
+                {
+                    broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
                 }
             }
         }

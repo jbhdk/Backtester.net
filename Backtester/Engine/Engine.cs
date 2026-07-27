@@ -12,8 +12,8 @@ namespace Backtester.Engine
 {
     /// <summary>
     /// Orchestrates the bar-by-bar backtest loop: fetches market data, synchronizes it into slices,
-    /// feeds each bar to the strategy, submits resulting orders to the broker, and records portfolio
-    /// equity after each bar.
+    /// feeds each symbol's real bar to the strategy, submits resulting orders to the broker, and records
+    /// portfolio equity after each bar.
     /// </summary>
     public class Engine : IEngine
     {
@@ -221,6 +221,13 @@ namespace Backtester.Engine
         /// Processes a single slice: fills orders queued on the previous bar, records equity, delivers any
         /// round trips that closed on this bar to a round-trip observer, then invokes the strategy and queues
         /// any new orders for the next bar. This ordering prevents lookahead bias (ADR 0001).
+        ///
+        /// The strategy is invoked only for symbols with a <em>real</em> bar at this timestamp, never on a
+        /// bar forward-filled from an earlier session because another symbol drove the timestamp. A symbol's
+        /// resting orders cannot fill against such a stale bar (issue #56), so calling <c>OnBar</c> there
+        /// would let the strategy act on a symbol whose orders are frozen — most damagingly, re-submit an
+        /// entry whose prior submission is still pending, stacking the position. Gating on the real bar keeps
+        /// each symbol's decision cadence aligned with its fill cadence.
         /// </summary>
         private void RunOnce(MarketSlice slice)
         {
@@ -231,7 +238,7 @@ namespace Backtester.Engine
             PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
-                if (bar is not null)
+                if (slice.HasRealBar(symbol))
                 {
                     _strategy.OnBar(symbol, bar, snapshot, _broker);
                 }

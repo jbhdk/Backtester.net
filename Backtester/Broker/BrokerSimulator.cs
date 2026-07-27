@@ -205,22 +205,18 @@ namespace Backtester.Broker
             foreach (IGrouping<string, Order> symbolGroup in snapshot.GroupBy(o => o.Symbol))
             {
                 string symbol = symbolGroup.Key;
-                if (!slice.HasBar(symbol))
+
+                // Only match orders against a real bar for this symbol — one that printed at this slice's
+                // timestamp. A multi-symbol run forward-fills a symbol's last real bar into slices where it
+                // has no bar of its own (another symbol drove the timestamp, e.g. a 24/7 symbol producing a
+                // post-close slot). Filling against that stale bar would stamp the trade at a time with no
+                // real bar for this symbol (issue #56); such orders rest until the symbol's next real bar.
+                if (!slice.HasRealBar(symbol))
                 {
                     continue;
                 }
 
                 Candle candle = slice.BarsBySymbol[symbol];
-
-                // Only match orders against a bar that actually belongs to this slice. A multi-symbol run
-                // forward-fills a symbol's last real bar into slices where it has no bar of its own (another
-                // symbol drove the timestamp, e.g. a 24/7 symbol producing a post-close slot). Filling
-                // against that stale bar would stamp the trade at a time with no real bar for this symbol
-                // (issue #56); such orders rest until the symbol's next real bar.
-                if (candle.Timestamp != slice.Timestamp)
-                {
-                    continue;
-                }
                 // Sequence the symbol's working orders before fill so that when several fill on the same
                 // bar, they are applied to the portfolio in a deterministic, strategy-controllable order:
                 // highest Priority first, ties broken by submission order. This lets a strategy guarantee,
