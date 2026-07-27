@@ -147,7 +147,11 @@ essentials:
 - **Slice** — all symbols' bars at a single timestamp; the unit the engine processes per step.
 - **Next-bar fill** — an order submitted while processing bar _N_ is evaluated against bar _N+1_.
   This is the engine's anti-lookahead rule: a strategy can never trade on information it would not
-  yet have had.
+  yet have had. One scoped exception: a bracket's protective leg is armed by its entry's fill, and if
+  the fill gapped through that leg's price so it is already marketable at the arming bar's open, it
+  fills on that same bar (a live bracket triggers an already-through leg right after the entry, for a
+  same-bar, often near-scratch round trip); a leg the bar merely trades through later keeps next-bar
+  timing.
 - **Gap-aware fill** — a triggered order never fills better than the bar's open. A stop that gaps
   through fills at the open (a real gap loss, not a truncated stop-distance loss); a limit the bar
   gaps past fills at the open too (the improved price a resting order would actually get). The
@@ -157,7 +161,10 @@ essentials:
   stop-loss and/or a take-profit. When both are present they form an OCO group (one filling cancels
   the other); a single-leg bracket has no sibling and its lone leg simply rests until it fills or the
   position is closed by a signal exit. A bracket must have at least one leg; a target-only bracket
-  arms no stop, so it carries no initial risk and reports no R.
+  arms no stop, so it carries no initial risk and reports no R. Each leg is given either as an
+  absolute price or as a fill-relative **offset** — a distance the engine resolves against the actual
+  fill on the protective side, so the stop lands the intended distance from the fill regardless of any
+  gap between decision and fill.
 - **Position** — the net holding in a symbol, as a **signed** quantity: positive is long, negative is
   short, zero is flat. No single fill flips the sign — an opposing order reduces the position and
   clamps at zero, so reversing direction takes a second order from flat.
@@ -214,8 +221,11 @@ public class BreakoutStrategy : StrategyBase
 ```
 
 The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. A
-`BracketRequest` attaches a stop-loss and/or a take-profit — leave `StopPrice` or `TargetPrice` null
-to arm just one leg (at least one is required). When a strategy submits several orders that fill on
+`BracketRequest` attaches a stop-loss and/or a take-profit, each given either as an absolute price
+(`StopPrice`/`TargetPrice`) or as a fill-relative offset (`StopOffset`/`TargetOffset`, resolved
+against the actual fill on the protective side) — leave a leg's fields null to arm just one leg (at
+least one is required; setting both forms for the same leg, or a non-positive offset, throws). When a
+strategy submits several orders that fill on
 the same bar, set `OrderRequest.Priority` (higher fills sooner) to control the order they are applied
 — for a single-bar reversal, give the flatten a higher priority than the reversing entry so the entry
 opens from flat with its stop attached. For a worked example of bracket orders and a trailing
