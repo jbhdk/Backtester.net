@@ -24,6 +24,7 @@
     <ProjectReference Include="..\Analysis\Analysis.csproj" />
     <ProjectReference Include="..\Analysis.Claude\Analysis.Claude.csproj" />
     <ProjectReference Include="..\Optimization\Backtester.Optimization.csproj" />
+    <ProjectReference Include="..\Stops\Backtester.Stops.csproj" />
   </ItemGroup>
 
 </Project>
