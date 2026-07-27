@@ -23,6 +23,15 @@ namespace Backtester.Core
         /// <summary>Gets or sets the intended stop-loss price for risk-per-trade sizing.</summary>
         public decimal? StopPrice { get; set; }
 
+        /// <summary>
+        /// Gets or sets the intended per-share stop distance for risk-per-trade sizing when the protective
+        /// stop is fill-relative and its absolute price is not yet known at submit time (a bracket entry
+        /// whose stop is a <see cref="BracketRequest.StopOffset"/>). A positive distance; the broker copies
+        /// the bracket's stop offset here before sizing. Preferred over <see cref="StopPrice"/> for sizing,
+        /// since a fill-relative stop has no absolute anchor to measure against yet.
+        /// </summary>
+        public decimal? StopOffset { get; set; }
+
         /// <summary>Gets or sets the priority for order processing (higher = sooner).</summary>
         public int Priority { get; set; }
 

@@ -66,6 +66,48 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(20, qty);
         }
 
+        [Fact]
+        public void RiskPerTradeSizing_SizesFromStopOffset_WhenNoAbsoluteStop()
+        {
+            // A fill-relative bracket entry has no absolute Price/StopPrice at submit time; the per-share risk
+            // is the offset. 1% of $10,000 = $100 budget; offset $5 → floor($100/$5) = 20 shares.
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, StopOffset = 5m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void RiskPerTradeSizing_PrefersStopOffset_OverAbsoluteStop()
+        {
+            // With both present the fill-relative offset wins: it is the risk the fill will actually realize
+            // (ADR 0025), so offset $5 → 20 shares, not the $10 absolute distance's 10.
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 40m, StopOffset = 5m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void RiskPerTradeSizing_ReturnsZero_WhenNoStopDistanceAtAll()
+        {
+            // A plain market order carries neither an offset nor an absolute stop, so there is no risk to
+            // divide the budget by and nothing to size — the model declines rather than guessing a size.
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(0, qty);
+        }
+
         // --- PercentNotionalSizing ---
 
         [Fact]

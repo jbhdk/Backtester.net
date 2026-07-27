@@ -179,6 +179,15 @@ namespace Backtester.Broker
                 throw new ArgumentException("A bracket must have at least one leg (a stop-loss and/or a take-profit).", nameof(request));
             }
 
+            // The stop offset is the per-share risk a risk-sizing model needs, but the sizing model only sees
+            // the entry OrderRequest, not this bracket. Surface the offset on the entry so RiskPerTradeSizing
+            // can size a fill-relative bracket entry, whose absolute stop is not yet known (it resolves against
+            // the fill later, ADR 0025). Left untouched when the caller already set an entry sizing distance.
+            if (request.StopOffset.HasValue && !request.Entry.StopOffset.HasValue)
+            {
+                request.Entry.StopOffset = request.StopOffset;
+            }
+
             string entryId = SubmitOrder(request.Entry);
             if (entryId == null)
             {

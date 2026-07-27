@@ -60,3 +60,20 @@ Re-priced with same-bar execution, the evidence round trip covers at 379.746 (it
   a non-positive offset, or a zero-leg request (neither form on either leg) all throw `ArgumentException`
   — caller misuse, distinct from the funds rejection that returns null (ADR 0002 amendment).
 - No `BracketInvariantPolicy`, no configuration knob, no fill-time invariant type is introduced.
+
+## Amendment: risk sizing consumes the offset (2026-07)
+
+Offset legs shipped without teaching `RiskPerTradeSizing` about them, so a fill-relative bracket entry
+could not be risk-sized at all. The sizer runs at **submit** time and sees only the entry
+`OrderRequest`, but the offset lives on the `BracketRequest`; with no `Price`/`StopPrice` on the market
+entry the sizer found no stop distance and returned zero, and the broker rejected every risk-sized
+bracket entry — silently, regardless of `RiskFraction`.
+
+The offset **is** the per-share risk the sizer needs, and (by this ADR) it is the distance the fill will
+realize exactly. So `OrderRequest` gains a nullable `StopOffset` sizing distance; `SubmitBracket` copies
+the bracket's `StopOffset` onto the entry before sizing; and `RiskPerTradeSizing` divides the risk budget
+by that offset when present, falling back to the absolute `|Price − StopPrice|` otherwise. The offset is
+preferred when both are present, being the exact realized risk rather than a pre-fill anchor. This wires
+risk sizing to fill-relative stops without reintroducing the pre-fill absolute stop this ADR removed; the
+entry's sizing offset is used only to size and does not affect the armed stop or the stamped
+`EntryStopPrice`, which still resolve against the fill.

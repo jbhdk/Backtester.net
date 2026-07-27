@@ -1619,6 +1619,25 @@ namespace BacktesterTests.Broker.Tests
             }));
         }
 
+        [Fact]
+        public void SubmitBracket_RiskSizedOffsetEntry_SizesFromOffset()
+        {
+            // Regression for the sizing gap: a fill-relative bracket entry carries no absolute stop, but a
+            // risk-sizing model must still size it. The broker surfaces the bracket's offset to the sizer, so a
+            // 1%-of-$10,000 = $100 budget over a $5 offset fills 20 shares instead of a rejected zero-size entry.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                StopOffset = 5m
+            });
+            List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
+
+            Assert.Equal(20, trades[0].Quantity);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {
