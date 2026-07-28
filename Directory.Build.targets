@@ -6,17 +6,30 @@
   </PropertyGroup>
 
   <!--
-    Copies the freshly packed NuGet package into the local feed so consuming
-    projects on this machine can restore it immediately. Only runs for projects
-    that actually produce a package.
+    Runs at the end of every packable project's build (Pack produces the package when
+    GeneratePackageOnBuild is set). In Release the freshly packed package is copied to
+    the local feed so consuming projects on this machine can restore it immediately;
+    Debug packages are never published. Either way the pack byproducts left behind are
+    then deleted: the packages (and symbol packages) in the project's output folder and
+    the generated .nuspec in the intermediate folder are pure clutter that otherwise
+    accumulates one file per build, in both the Debug and Release trees.
   -->
-  <Target Name="PublishToLocalFeed"
+  <Target Name="PublishAndCleanPackedOutput"
           AfterTargets="Pack"
-          Condition="'$(GeneratePackageOnBuild)' == 'true' And '$(Configuration)' == 'Release'">
-    <Copy SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
+          Condition="'$(GeneratePackageOnBuild)' == 'true'">
+    <Copy Condition="'$(Configuration)' == 'Release'"
+          SourceFiles="$(PackageOutputPath)$(PackageId).$(PackageVersion).nupkg"
           DestinationFolder="$(LocalNugetFeed)" />
-    <Message Importance="high"
+    <Message Condition="'$(Configuration)' == 'Release'"
+             Importance="high"
              Text="Published $(PackageId).$(PackageVersion).nupkg to $(LocalNugetFeed)." />
+
+    <ItemGroup>
+      <PackedOutput Include="$(PackageOutputPath)*.nupkg;$(PackageOutputPath)*.snupkg;$(BaseIntermediateOutputPath)$(Configuration)\*.nuspec" />
+    </ItemGroup>
+    <Delete Files="@(PackedOutput)" />
+    <Message Importance="high"
+             Text="Cleared pack byproducts for $(PackageId) ($(Configuration))." />
   </Target>
 
 </Project>
