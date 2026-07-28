@@ -23,6 +23,10 @@
   .stat:last-child { border-bottom: none; }
   .stat .label { color: var(--muted); }
   .stat .value { font-variant-numeric: tabular-nums; font-weight: 600; }
+  /* Labels and palette-graded values carry a hover tooltip (native title): a help cursor signals it,
+     and a faint dotted underline hints that a label has a description. */
+  .stat .label[title], .stat .value[title] { cursor: help; }
+  .stat .label[title] { text-decoration: underline dotted var(--line); text-underline-offset: 3px; }
   .stat-group.dual .stat { display: grid; grid-template-columns: 1fr auto auto; column-gap: 16px; }
   .stat-group.dual .stat .value { min-width: 74px; text-align: right; }
   .stat-group.dual .stat.head .value { color: var(--muted); font-weight: 600; font-size: 12px; }
@@ -180,11 +184,11 @@
     sortino:        { t: [0.75, 1.5, 2, 2.5, 3.5] },
     calmar:         { t: [0.5, 1, 2, 3, 5] },
     recoveryFactor: { t: [1, 2, 3, 5, 10] },
-    cagr:           { t: [0, 0.05, 0.10, 0.20, 0.35] },
+    cagr:           { t: [0, 0.05, 0.10, 0.20, 0.35], pct: true },
     profitFactor:   { t: [1, 1.25, 1.5, 2, 3] },
     avgRMultiple:   { t: [0, 0.1, 0.25, 0.5, 1] },
-    maxDrawdown:    { t: [0.05, 0.10, 0.20, 0.30, 0.50], invert: true },
-    avgDrawdown:    { t: [0.02, 0.05, 0.10, 0.15, 0.25], invert: true }
+    maxDrawdown:    { t: [0.05, 0.10, 0.20, 0.30, 0.50], invert: true, pct: true },
+    avgDrawdown:    { t: [0.02, 0.05, 0.10, 0.15, 0.25], invert: true, pct: true }
   };
 
   // The tier (q1..q6) for a value against five ascending boundaries: below the first is q1, at or above
@@ -209,19 +213,101 @@
     return "q" + qualityTier(value, qualityThresholds[field]);
   }
 
-  // value may carry an explicit css class for P&L colour-coding
+  // --- Stat tooltips ---
+  // Plain-language description of each stat, shown on hover over its label. Keyed by the exact label
+  // text the rows render ("Buy &amp; hold" keeps its HTML entity to match). Key: label -> description.
+  var descriptions = {
+    "Net profit": "Total profit or loss over the run, in account currency.",
+    "Net profit %": "Net profit as a percentage of starting equity.",
+    "Buy &amp; hold": "Return from buying at the start and holding to the end — the benchmark the strategy aims to beat.",
+    "CAGR": "Compound annual growth rate: the yearly rate that would grow starting equity to final equity.",
+    "Sharpe": "Return earned per unit of total volatility. Higher means smoother risk-adjusted returns.",
+    "Sortino": "Like Sharpe, but only downside volatility counts as risk, so upside swings aren't penalised.",
+    "Max drawdown": "The largest peak-to-trough drop in equity during the run.",
+    "Avg drawdown": "The average depth of the equity declines during the run.",
+    "Drawdown length": "The longest stretch of time equity spent below a prior peak.",
+    "Time to recover": "The longest time taken to climb back to a prior equity peak.",
+    "Recovery factor": "Net profit divided by max drawdown — reward earned per unit of worst-case pain.",
+    "Calmar": "CAGR divided by max drawdown — annual return relative to the worst decline.",
+    "Trades": "Number of closed round trips (a completed entry and exit).",
+    "Winners": "Trades that closed for a profit.",
+    "Break-even": "Trades that closed at zero profit or loss.",
+    "Losers": "Trades that closed for a loss.",
+    "Win rate": "Winning trades as a percentage of all trades.",
+    "Profit factor": "Gross profit divided by gross loss. Above 1 means wins outweigh losses.",
+    "Expectancy": "Average profit or loss per trade.",
+    "Avg R": "Average trade result in units of initial risk (R-multiple). +1R means the average trade earned what it risked.",
+    "Avg win": "Average profit of the winning trades.",
+    "Avg loss": "Average loss of the losing trades.",
+    "Median trade": "The middle trade's result — half of trades did better, half did worse.",
+    "Largest win": "The single most profitable trade.",
+    "Largest loss": "The single worst-losing trade.",
+    "Max consec. wins": "The longest unbroken streak of winning trades.",
+    "Max consec. losses": "The longest unbroken streak of losing trades.",
+    "Profitable long": "Win rate among long trades only.",
+    "Profitable short": "Win rate among short trades only.",
+    "Avg duration": "Average time a trade was held from entry to exit.",
+    "Median duration": "The middle holding time — half of trades were held longer, half shorter.",
+    "Longest trade": "The longest a single trade was held.",
+    "Shortest trade": "The shortest a single trade was held.",
+    "Market exposure": "Share of the backtest period during which capital was deployed in the market.",
+    "Avg capital": "Average capital invested while positions were open.",
+    "Max capital": "The most capital deployed at any single moment.",
+    "Symbols": "The instruments traded in this run.",
+    "Interval": "The bar timeframe the backtest ran on.",
+    "From": "Backtest start (UTC).",
+    "To": "Backtest end (UTC).",
+    "Starting equity": "Account balance at the start of the run.",
+    "Final equity": "Account balance at the end of the run."
+  };
+
+  // Quality words for tiers 1..6 (poor → excellent), aligned with the q1..q6 colour ramp.
+  var qualityWords = ["poor", "weak", "fair", "good", "strong", "excellent"];
+
+  // A multi-line explanation of how a palette-graded stat is scored: each of the six value bands and
+  // the quality it earns, so a reader can see why a value is the colour it is and what it must reach
+  // to improve. Shown on hover over the value; built from the thresholds so it never drifts from them.
+  function gradeTooltip(field, label) {
+    var spec = qualityThresholds[field];
+    if (!spec) { return ""; }
+    var fmt = spec.pct
+      ? function (n) { return Math.round(n * 100) + "%"; }
+      : function (n) { return String(n); };
+    var bounds = spec.t;
+    var lines = [label + " — graded " + (spec.invert ? "lower-is-better" : "higher-is-better") + ":"];
+    // Six ascending value bands: below the first bound, between each pair, and at or above the last.
+    for (var band = 0; band <= bounds.length; band++) {
+      var range = band === 0 ? "< " + fmt(bounds[0])
+                : band === bounds.length ? "≥ " + fmt(bounds[bounds.length - 1])
+                : fmt(bounds[band - 1]) + "–" + fmt(bounds[band]);
+      var ascendingTier = band + 1;                             // 1..6 in ascending value order
+      var tier = spec.invert ? 7 - ascendingTier : ascendingTier;
+      lines.push("  " + range + "  →  " + qualityWords[tier - 1]);
+    }
+    return lines.join("\n");
+  }
+
+  // Build a title="" attribute (with a leading space) from tooltip text, or "" when there is none.
+  function titleAttr(text) { return text ? ' title="' + esc(text) + '"' : ''; }
+
+  // value may carry an explicit css class for P&L colour-coding; the label carries its description as a
+  // hover tooltip when one is known.
   function row(label, value, cls) {
-    return '<div class="stat"><span class="label">' + label + '</span>' +
+    return '<div class="stat"><span class="label"' + titleAttr(descriptions[label]) + '>' + label + '</span>' +
            '<span class="value ' + (cls || "") + '">' + value + '</span></div>';
   }
 
   function fill(id, html) { document.querySelector("#" + id + " .stat-body").innerHTML = html; }
 
-  // A stat row with two value columns: all-symbols and the selected symbol.
-  function dualRow(label, allValue, selValue, allCls, selCls) {
-    return '<div class="stat"><span class="label">' + label + '</span>' +
-           '<span class="value ' + (allCls || "") + '">' + allValue + '</span>' +
-           '<span class="value ' + (selCls || "") + '">' + selValue + '</span></div>';
+  // A stat row with two value columns: all-symbols and the selected symbol. The label carries its
+  // description as a hover tooltip; `field`, when given, names the palette-graded stat behind the value
+  // so both value cells carry a tooltip explaining the grading bands.
+  function dualRow(label, allValue, selValue, allCls, selCls, field) {
+    var labelTitle = titleAttr(descriptions[label]);
+    var valueTitle = field ? titleAttr(gradeTooltip(field, label)) : "";
+    return '<div class="stat"><span class="label"' + labelTitle + '>' + label + '</span>' +
+           '<span class="value ' + (allCls || "") + '"' + valueTitle + '>' + allValue + '</span>' +
+           '<span class="value ' + (selCls || "") + '"' + valueTitle + '>' + selValue + '</span></div>';
   }
 
   // The two-column header naming each value column.
@@ -249,20 +335,20 @@
       dualRow("Net profit %", fmtPct(stats.netProfitPercent), sel ? fmtPct(sel.netProfitPercent) : dash,
               signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
       dualRow("Buy &amp; hold", fmtPct(stats.buyHoldReturnPercent), sel ? fmtPct(sel.buyHoldReturnPercent) : dash) +
-      dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash, q("cagr"), qs("cagr")) +
-      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash, q("sharpe"), qs("sharpe")) +
-      dualRow("Sortino", fmtNum(stats.sortino), sel ? fmtNum(sel.sortino) : dash, q("sortino"), qs("sortino")));
+      dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash, q("cagr"), qs("cagr"), "cagr") +
+      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash, q("sharpe"), qs("sharpe"), "sharpe") +
+      dualRow("Sortino", fmtNum(stats.sortino), sel ? fmtNum(sel.sortino) : dash, q("sortino"), qs("sortino"), "sortino"));
 
     fill("drawdown-stats", headRow() +
       dualRow("Max drawdown", fmtPct(stats.maxDrawdown), sel ? fmtPct(sel.maxDrawdown) : dash,
-              q("maxDrawdown"), qs("maxDrawdown")) +
+              q("maxDrawdown"), qs("maxDrawdown"), "maxDrawdown") +
       dualRow("Avg drawdown", fmtPct(stats.avgDrawdown), sel ? fmtPct(sel.avgDrawdown) : dash,
-              q("avgDrawdown"), qs("avgDrawdown")) +
+              q("avgDrawdown"), qs("avgDrawdown"), "avgDrawdown") +
       dualRow("Drawdown length", fmtDur(stats.maxDrawdownDuration), sel ? fmtDur(sel.maxDrawdownDuration) : dash) +
       dualRow("Time to recover", fmtDur(stats.timeToRecover), sel ? fmtDur(sel.timeToRecover) : dash) +
       dualRow("Recovery factor", fmtNum(stats.recoveryFactor), sel ? fmtNum(sel.recoveryFactor) : dash,
-              q("recoveryFactor"), qs("recoveryFactor")) +
-      dualRow("Calmar", fmtNum(stats.calmar), sel ? fmtNum(sel.calmar) : dash, q("calmar"), qs("calmar")));
+              q("recoveryFactor"), qs("recoveryFactor"), "recoveryFactor") +
+      dualRow("Calmar", fmtNum(stats.calmar), sel ? fmtNum(sel.calmar) : dash, q("calmar"), qs("calmar"), "calmar"));
 
     fill("trade-quality-stats", headRow() +
       dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +
@@ -271,11 +357,11 @@
       dualRow("Losers", fmtNum(stats.losers, 0), sel ? fmtNum(sel.losers, 0) : dash) +
       dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash) +
       dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash,
-              q("profitFactor"), qs("profitFactor")) +
+              q("profitFactor"), qs("profitFactor"), "profitFactor") +
       dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
               signClass(stats.expectancy), sel ? signClass(sel.expectancy) : "") +
       dualRow("Avg R", fmtNum(stats.avgRMultiple), sel ? fmtNum(sel.avgRMultiple) : dash,
-              q("avgRMultiple"), qs("avgRMultiple")) +
+              q("avgRMultiple"), qs("avgRMultiple"), "avgRMultiple") +
       dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash) +
       dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash) +
       dualRow("Median trade", fmtMoney(stats.medianTrade), sel ? fmtMoney(sel.medianTrade) : dash));
