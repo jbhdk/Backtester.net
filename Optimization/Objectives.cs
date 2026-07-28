@@ -9,6 +9,9 @@ namespace Backtester.Optimization
         /// <summary>Maximizes the annualised Sharpe ratio. This is the Optimizer's default Objective.</summary>
         public static Objective Sharpe => Objective.Maximize(stats => stats.Sharpe);
 
+        /// <summary>Maximizes the annualised Sortino ratio.</summary>
+        public static Objective Sortino => Objective.Maximize(stats => stats.Sortino);
+
         /// <summary>Maximizes net profit after commissions and slippage.</summary>
         public static Objective NetProfit => Objective.Maximize(stats => stats.NetProfit);
 
