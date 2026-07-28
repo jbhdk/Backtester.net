@@ -20,5 +20,8 @@ namespace Backtester.Optimization
 
         /// <summary>Maximizes the profit factor (gross profit over absolute gross loss).</summary>
         public static Objective ProfitFactor => Objective.Maximize(stats => stats.ProfitFactor);
+
+        /// <summary>Maximizes the win rate.</summary>
+        public static Objective WinRate => Objective.Maximize(stats => stats.WinRate);
     }
 }
