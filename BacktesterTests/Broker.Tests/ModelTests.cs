@@ -170,5 +170,90 @@ namespace BacktesterTests.Broker.Tests
             Assert.True(portfolio.Cash < 0m);
             Assert.Equal(0, qty);
         }
+
+        // --- FixedRiskSizing ---
+
+        [Fact]
+        public void FixedRiskSizing_ReturnsExpectedShares()
+        {
+            // $100 fixed risk budget; stop distance = |$50 - $45| = $5 → floor($100/$5) = 20 shares
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_SizesFromStopOffset_WhenNoAbsoluteStop()
+        {
+            // A fill-relative bracket entry has no absolute Price/StopPrice at submit time; the per-share risk
+            // is the offset. $100 budget; offset $5 → floor($100/$5) = 20 shares.
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, StopOffset = 5m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_ReturnsZero_WhenNoStopDistanceAtAll()
+        {
+            // A plain market order carries neither an offset nor an absolute stop, so there is no risk to
+            // divide the budget by — the model declines rather than risking an unknown amount.
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(0, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_ReturnsZero_WhenRiskAmountNonPositive()
+        {
+            // A zero or negative risk budget must decline rather than emit a negative share count that would
+            // open the wrong side and corrupt Position/RoundTrip state.
+            FixedRiskSizing sizing = new() { RiskAmount = -100m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(0, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_PrefersStopOffset_OverAbsoluteStop()
+        {
+            // With both present the fill-relative offset wins: it is the risk the fill will actually realize
+            // (ADR 0025), so offset $5 → 20 shares, not the $10 absolute distance's 10.
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 40m, StopOffset = 5m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_ReturnsZero_WhenBudgetBelowOneShareOfRisk()
+        {
+            // A single share would already lose more than the budget: $3 budget, $5 stop distance →
+            // floor($3/$5) = 0. The model declines rather than over-risking on one share.
+            FixedRiskSizing sizing = new() { RiskAmount = 3m };
+            Portfolio portfolio = new(10_000m);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(0, qty);
+        }
     }
 }

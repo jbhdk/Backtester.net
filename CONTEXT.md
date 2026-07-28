@@ -213,8 +213,16 @@ _Avoid_: equity (unqualified), NAV.
 
 **Risk-per-trade sizing**:
 Position size chosen so a stop-out loses a fixed fraction of realized equity:
-`shares = floor(RiskFraction · Equity / StopDistance)`.
+`shares = floor(RiskFraction · Equity / StopDistance)`. Its risk scales with the account.
 _Avoid_: notional sizing, percent sizing.
+
+**Fixed-risk sizing**:
+Position size chosen so a stop-out loses a fixed **currency amount** that does **not** scale with the
+account: `shares = floor(RiskAmount / StopDistance)`. The sibling of Risk-per-trade sizing — same Stop
+distance denominator, but a constant numerator instead of `RiskFraction · Equity`, so it reads no
+equity. The .NET type is `FixedRiskSizing`, its amount `RiskAmount`.
+_Avoid_: fixed-dollar sizing (the language is currency-neutral), fixed-size (that is a fixed share
+count, `FixedSizeModel`), notional sizing.
 
 **Stop distance**:
 The per-share loss if the stop is hit: `|entry − stopPrice|`. A bracket can express it two ways: as

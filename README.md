@@ -283,7 +283,7 @@ are optional arguments to `BrokerSimulator`.
 |---|---|---|
 | Commission | `ICommissionModel` | `FixedCommission`, `PercentCommission`, `PerShareCommission` |
 | Slippage | `ISlippageModel` | `FixedSlippage`, `PercentSlippage` |
-| Sizing | `ISizingModel` | `FixedSizeModel`, `PercentNotionalSizing`, `RiskPerTradeSizing` |
+| Sizing | `ISizingModel` | `FixedSizeModel`, `PercentNotionalSizing`, `RiskPerTradeSizing`, `FixedRiskSizing` |
 
 Order acceptance against **Reg-T initial margin** (50% long, 150% short) is not a pluggable model — it
 is enforced intrinsically by the account, which rejects any opening order whose margin exceeds
@@ -296,6 +296,16 @@ Set both `Price` and `StopPrice` on the order so it can compute the stop distanc
 IBrokerSimulator broker = new BrokerSimulator(
     portfolio,
     sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });  // risk 1% per trade
+```
+
+**Fixed-risk sizing** is the sibling that risks a fixed **currency amount** per trade instead of a
+fraction of equity, so the risk does not scale with the account. It reads the same stop distance
+(`Price`/`StopPrice`, or a bracket's fill-relative offset) and sizes nothing when no stop is declared:
+
+```csharp
+IBrokerSimulator broker = new BrokerSimulator(
+    portfolio,
+    sizingModel: new FixedRiskSizing { RiskAmount = 500m });  // risk $500 per trade
 ```
 
 ---
