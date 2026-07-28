@@ -28,6 +28,10 @@
   .stat-group.dual .stat.head .value { color: var(--muted); font-weight: 600; font-size: 12px; }
   .pos { color: var(--green); }
   .neg { color: var(--red); }
+  /* Quality-graded stat values: a six-tier ramp from poor (q1, red) to excellent (q6, bright green).
+     Ratio/rate/return stats map into it by threshold; "lower is better" stats invert the mapping. */
+  .q1 { color: #e74c3c; } .q2 { color: #e8763a; } .q3 { color: #e0a33e; }
+  .q4 { color: #b7c93e; } .q5 { color: #2ecc71; } .q6 { color: #4de88a; }
   .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .badge-long { color: var(--accent); background: rgba(78, 161, 255, .14); }
   .badge-short { color: #e0a33e; background: rgba(224, 163, 62, .14); }
@@ -167,6 +171,57 @@
   // stop (no initial risk, so no R is defined).
   function fmtR(v) { return v == null ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "R"; }
 
+  // --- Stat-card quality colouring ---
+  // A graded stat maps its value to one of six ramp classes (q1 poor … q6 excellent) against five
+  // ascending boundaries; "lower is better" stats reuse the same table with the ramp reversed.
+  // Key: stat field name -> { t: five ascending boundaries, invert?: lower-is-better }.
+  var qualityThresholds = {
+    sharpe:         { t: [0.5, 1, 1.5, 2, 3] },
+    sortino:        { t: [0.75, 1.5, 2, 2.5, 3.5] },
+    calmar:         { t: [0.5, 1, 2, 3, 5] },
+    recoveryFactor: { t: [1, 2, 3, 5, 10] },
+    cagr:           { t: [0, 0.05, 0.10, 0.20, 0.35] },
+    profitFactor:   { t: [1, 1.25, 1.5, 2, 3] },
+    winRate:        { t: [0.30, 0.40, 0.50, 0.60, 0.70] },
+    longWinRate:    { t: [0.30, 0.40, 0.50, 0.60, 0.70] },
+    shortWinRate:   { t: [0.30, 0.40, 0.50, 0.60, 0.70] },
+    avgRMultiple:   { t: [0, 0.1, 0.25, 0.5, 1] },
+    maxDrawdown:    { t: [0.05, 0.10, 0.20, 0.30, 0.50], invert: true },
+    avgDrawdown:    { t: [0.02, 0.05, 0.10, 0.15, 0.25], invert: true }
+  };
+
+  // The tier (q1..q6) for a value against five ascending boundaries: below the first is q1, at or above
+  // the last is q6, lower-bound-inclusive between. Inverted stats count from the top so a small value
+  // earns the green end.
+  function qualityTier(value, spec) {
+    var i = 0;
+    while (i < spec.t.length && value >= spec.t[i]) { i++; }
+    var tier = i + 1;                       // 1..6 ascending
+    return spec.invert ? 7 - tier : tier;
+  }
+
+  // Round trips in a direction ("Long"/"Short"), optionally scoped to one symbol — used to tell a real
+  // 0% directional win rate (that direction lost every trade) from an undefined one (never traded).
+  function directionCount(direction, symbol) {
+    return (model.roundTrips || []).filter(function (t) {
+      return t.direction === direction && (!symbol || t.symbol === symbol);
+    }).length;
+  }
+
+  // The css class for a graded stat, or "" to leave it uncoloured. `s` is the stats object the value
+  // came from (portfolio or one symbol's) so a degenerate sentinel — a 0 that means "undefined", not
+  // "poor" — can be spotted from its siblings; `symbol` scopes the directional round-trip count.
+  function qualityClass(field, s, symbol) {
+    if (!s || s.trades === 0) { return ""; }                    // no trades: nothing to grade
+    var value = s[field];
+    if (value == null) { return ""; }                           // absent (e.g. null Avg R)
+    if ((field === "profitFactor" || field === "sharpe" || field === "sortino") && value === 0) { return ""; }
+    if ((field === "calmar" || field === "recoveryFactor") && s.maxDrawdown === 0) { return ""; }
+    if (field === "longWinRate" && directionCount("Long", symbol) === 0) { return ""; }
+    if (field === "shortWinRate" && directionCount("Short", symbol) === 0) { return ""; }
+    return "q" + qualityTier(value, qualityThresholds[field]);
+  }
+
   // value may carry an explicit css class for P&L colour-coding
   function row(label, value, cls) {
     return '<div class="stat"><span class="label">' + label + '</span>' +
@@ -195,54 +250,58 @@
     var sel = (selected && model.statsBySymbol) ? model.statsBySymbol[selected] : null;
     var dash = "–";
 
+    // Local shorthands: q() colours an all-symbols value, qs() the matching selected-symbol value.
+    function q(field) { return qualityClass(field, stats, null); }
+    function qs(field) { return sel ? qualityClass(field, sel, selected) : ""; }
+
+    // Net profit keeps a sign colour (made / lost money); Net profit % and Buy &amp; hold are left
+    // uncoloured (the % repeats Net profit's sign; Buy &amp; hold is the benchmark, not the strategy).
     fill("headline-stats", headRow() +
       dualRow("Net profit", fmtMoney(stats.netProfit), sel ? fmtMoney(sel.netProfit) : dash,
               signClass(stats.netProfit), sel ? signClass(sel.netProfit) : "") +
-      dualRow("Net profit %", fmtPct(stats.netProfitPercent), sel ? fmtPct(sel.netProfitPercent) : dash,
-              signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
-      dualRow("Buy &amp; hold", fmtPct(stats.buyHoldReturnPercent), sel ? fmtPct(sel.buyHoldReturnPercent) : dash,
-              signClass(stats.buyHoldReturnPercent), sel ? signClass(sel.buyHoldReturnPercent) : "") +
-      dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash,
-              signClass(stats.cagr), sel ? signClass(sel.cagr) : "") +
-      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash) +
-      dualRow("Sortino", fmtNum(stats.sortino), sel ? fmtNum(sel.sortino) : dash));
+      dualRow("Net profit %", fmtPct(stats.netProfitPercent), sel ? fmtPct(sel.netProfitPercent) : dash) +
+      dualRow("Buy &amp; hold", fmtPct(stats.buyHoldReturnPercent), sel ? fmtPct(sel.buyHoldReturnPercent) : dash) +
+      dualRow("CAGR", fmtPct(stats.cagr), sel ? fmtPct(sel.cagr) : dash, q("cagr"), qs("cagr")) +
+      dualRow("Sharpe", fmtNum(stats.sharpe), sel ? fmtNum(sel.sharpe) : dash, q("sharpe"), qs("sharpe")) +
+      dualRow("Sortino", fmtNum(stats.sortino), sel ? fmtNum(sel.sortino) : dash, q("sortino"), qs("sortino")));
 
     fill("drawdown-stats", headRow() +
       dualRow("Max drawdown", fmtPct(stats.maxDrawdown), sel ? fmtPct(sel.maxDrawdown) : dash,
-              stats.maxDrawdown > 0 ? "neg" : "", sel && sel.maxDrawdown > 0 ? "neg" : "") +
+              q("maxDrawdown"), qs("maxDrawdown")) +
       dualRow("Avg drawdown", fmtPct(stats.avgDrawdown), sel ? fmtPct(sel.avgDrawdown) : dash,
-              stats.avgDrawdown > 0 ? "neg" : "", sel && sel.avgDrawdown > 0 ? "neg" : "") +
+              q("avgDrawdown"), qs("avgDrawdown")) +
       dualRow("Drawdown length", fmtDur(stats.maxDrawdownDuration), sel ? fmtDur(sel.maxDrawdownDuration) : dash) +
       dualRow("Time to recover", fmtDur(stats.timeToRecover), sel ? fmtDur(sel.timeToRecover) : dash) +
-      dualRow("Recovery factor", fmtNum(stats.recoveryFactor), sel ? fmtNum(sel.recoveryFactor) : dash) +
-      dualRow("Calmar", fmtNum(stats.calmar), sel ? fmtNum(sel.calmar) : dash));
+      dualRow("Recovery factor", fmtNum(stats.recoveryFactor), sel ? fmtNum(sel.recoveryFactor) : dash,
+              q("recoveryFactor"), qs("recoveryFactor")) +
+      dualRow("Calmar", fmtNum(stats.calmar), sel ? fmtNum(sel.calmar) : dash, q("calmar"), qs("calmar")));
 
     fill("trade-quality-stats", headRow() +
       dualRow("Trades", fmtNum(stats.trades, 0), sel ? fmtNum(sel.trades, 0) : dash) +
-      dualRow("Winners", fmtNum(stats.winners, 0), sel ? fmtNum(sel.winners, 0) : dash, "pos", sel ? "pos" : "") +
+      dualRow("Winners", fmtNum(stats.winners, 0), sel ? fmtNum(sel.winners, 0) : dash) +
       dualRow("Break-even", fmtNum(stats.breakEven, 0), sel ? fmtNum(sel.breakEven, 0) : dash) +
-      dualRow("Losers", fmtNum(stats.losers, 0), sel ? fmtNum(sel.losers, 0) : dash,
-              stats.losers > 0 ? "neg" : "", sel && sel.losers > 0 ? "neg" : "") +
-      dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash) +
-      dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash) +
+      dualRow("Losers", fmtNum(stats.losers, 0), sel ? fmtNum(sel.losers, 0) : dash) +
+      dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash, q("winRate"), qs("winRate")) +
+      dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash,
+              q("profitFactor"), qs("profitFactor")) +
       dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
               signClass(stats.expectancy), sel ? signClass(sel.expectancy) : "") +
       dualRow("Avg R", fmtNum(stats.avgRMultiple), sel ? fmtNum(sel.avgRMultiple) : dash,
-              signClass(stats.avgRMultiple), sel ? signClass(sel.avgRMultiple) : "") +
-      dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash, "pos", sel ? "pos" : "") +
-      dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash,
-              stats.avgLoss < 0 ? "neg" : "", sel && sel.avgLoss < 0 ? "neg" : "") +
+              q("avgRMultiple"), qs("avgRMultiple")) +
+      dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash) +
+      dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash) +
       dualRow("Median trade", fmtMoney(stats.medianTrade), sel ? fmtMoney(sel.medianTrade) : dash,
               signClass(stats.medianTrade), sel ? signClass(sel.medianTrade) : ""));
 
     fill("win-loss-stats", headRow() +
-      dualRow("Largest win", fmtMoney(stats.largestWin), sel ? fmtMoney(sel.largestWin) : dash, "pos", sel ? "pos" : "") +
-      dualRow("Largest loss", fmtMoney(stats.largestLoss), sel ? fmtMoney(sel.largestLoss) : dash,
-              stats.largestLoss < 0 ? "neg" : "", sel && sel.largestLoss < 0 ? "neg" : "") +
+      dualRow("Largest win", fmtMoney(stats.largestWin), sel ? fmtMoney(sel.largestWin) : dash) +
+      dualRow("Largest loss", fmtMoney(stats.largestLoss), sel ? fmtMoney(sel.largestLoss) : dash) +
       dualRow("Max consec. wins", fmtNum(stats.maxConsecWins, 0), sel ? fmtNum(sel.maxConsecWins, 0) : dash) +
       dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash) +
-      dualRow("Profitable long", fmtPct(stats.longWinRate), sel ? fmtPct(sel.longWinRate) : dash) +
-      dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash));
+      dualRow("Profitable long", fmtPct(stats.longWinRate), sel ? fmtPct(sel.longWinRate) : dash,
+              q("longWinRate"), qs("longWinRate")) +
+      dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash,
+              q("shortWinRate"), qs("shortWinRate")));
 
     fill("duration-stats", headRow() +
       dualRow("Avg duration", fmtDur(stats.avgTradeDuration), sel ? fmtDur(sel.avgTradeDuration) : dash) +
