@@ -40,7 +40,7 @@ namespace Backtester.Report
             {
                 Stats = MapStats(stats, startingEquity, portfolioBuyHold),
                 StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity, buyHoldBySymbol),
-                RoundTrips = MapRoundTrips(stats.RoundTrips),
+                RoundTrips = MapRoundTrips(stats.RoundTrips, result.Portfolio.LongInitialMarginRate, result.Portfolio.ShortInitialMarginRate),
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
                 Indicators = MapIndicators(result.Indicators),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
@@ -58,19 +58,26 @@ namespace Backtester.Report
             };
         }
 
-        private static IReadOnlyList<ReportRoundTrip> MapRoundTrips(IReadOnlyList<RoundTrip> roundTrips)
+        private static IReadOnlyList<ReportRoundTrip> MapRoundTrips(
+            IReadOnlyList<RoundTrip> roundTrips,
+            decimal longMarginRate,
+            decimal shortMarginRate)
         {
             List<ReportRoundTrip> mapped = new(roundTrips.Count);
             for (int i = 0; i < roundTrips.Count; i++)
             {
                 RoundTrip trip = roundTrips[i];
+                bool isShort = trip.Direction == PositionDirection.Short;
                 // A short profits when the price falls, so its return is the raw price move negated.
-                decimal directionSign = trip.Direction == PositionDirection.Short ? -1m : 1m;
+                decimal directionSign = isShort ? -1m : 1m;
+                // The position put on at entry, and the margin it committed at its side's Reg-T rate.
+                decimal entryNotional = trip.EntryPrice * trip.Quantity;
+                decimal marginRate = isShort ? shortMarginRate : longMarginRate;
                 mapped.Add(new ReportRoundTrip
                 {
                     Number = i + 1,
                     Symbol = trip.Symbol,
-                    Direction = trip.Direction == PositionDirection.Short ? "Short" : "Long",
+                    Direction = isShort ? "Short" : "Long",
                     EntryTime = trip.EntryTime,
                     ExitTime = trip.ExitTime,
                     EntryPrice = trip.EntryPrice,
@@ -79,6 +86,10 @@ namespace Backtester.Report
                     EntryStopPrice = trip.EntryStopPrice,
                     EntryTargetPrice = trip.EntryTargetPrice,
                     Quantity = trip.Quantity,
+                    // Leverage divides the entry notional by the equity at entry; a dash when that equity was
+                    // non-positive. Margin is the committed initial margin at the side's rate.
+                    Leverage = trip.EntryEquity > 0m ? entryNotional / trip.EntryEquity : (decimal?)null,
+                    Margin = marginRate * entryNotional,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
                     // Realized profit in units of initial risk; undefined when the entry declared no stop.
@@ -464,6 +475,8 @@ namespace Backtester.Report
             {
                 NetProfit = stats.NetProfit,
                 NetProfitPercent = startingEquity != 0m ? stats.NetProfit / startingEquity : 0m,
+                NetProfitLong = stats.NetProfitLong,
+                NetProfitShort = stats.NetProfitShort,
                 Trades = stats.Trades,
                 Winners = stats.Winners,
                 Losers = stats.Losers,
@@ -494,6 +507,10 @@ namespace Backtester.Report
                 MarketExposure = stats.MarketExposure,
                 AvgCapitalInvested = stats.AvgCapitalInvested,
                 MaxCapitalInvested = stats.MaxCapitalInvested,
+                PeakLeverage = stats.PeakLeverage,
+                AvgLeverage = stats.AvgLeverage,
+                PeakMarginUtilization = stats.PeakMarginUtilization,
+                AvgMarginUtilization = stats.AvgMarginUtilization,
                 AvgTradeDuration = FormatTimeHeld(stats.AvgTradeDuration),
                 MedianTradeDuration = FormatTimeHeld(stats.MedianTradeDuration),
                 LongestTradeDuration = FormatTimeHeld(stats.LongestTradeDuration),

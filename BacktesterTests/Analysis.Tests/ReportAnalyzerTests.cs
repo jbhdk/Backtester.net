@@ -128,6 +128,19 @@ namespace BacktesterTests.Analysis.Tests
         }
 
         [Fact]
+        public async Task AnalyzeAsync_DigestCarriesLeverageMarginAndDirectionalNetProfit()
+        {
+            AnalysisRequest request = await CaptureRequestAsync(SampleReportModel.Build(), new AnalysisOptions());
+
+            Assert.Contains("| Net profit long | $10,000.00 |", request.UserPrompt);
+            Assert.Contains("| Net profit short | $2,345.68 |", request.UserPrompt);
+            Assert.Contains("| Peak leverage | 1.85x |", request.UserPrompt);
+            Assert.Contains("| Avg leverage | 1.55x |", request.UserPrompt);
+            Assert.Contains("| Peak margin | 92.50% |", request.UserPrompt);
+            Assert.Contains("| Avg margin | 61.34% |", request.UserPrompt);
+        }
+
+        [Fact]
         public async Task AnalyzeAsync_DigestRendersAvgRAsDashWhenNoTripHasDefinedRisk()
         {
             // A run whose trips never declared a stop has no defined R anywhere: "Avg R" is a dash, not 0.00.

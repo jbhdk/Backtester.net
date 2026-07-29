@@ -47,6 +47,13 @@ namespace Backtester.Core
         /// </summary>
         public decimal? EntryTargetPrice { get; set; }
 
+        /// <summary>
+        /// Gets or sets the account's marked equity on the bar this round trip's position opened from flat.
+        /// The denominator for the trip's leverage (its entry notional over this equity); preserved across
+        /// same-direction adds and partial exits so each slice divides by the opening bar's equity.
+        /// </summary>
+        public decimal EntryEquity { get; set; }
+
         /// <summary>Gets or sets the number of bars the position was held before exit.</summary>
         public int BarsHeld { get; set; }
 

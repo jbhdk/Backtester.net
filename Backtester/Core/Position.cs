@@ -33,6 +33,13 @@ namespace Backtester.Core
         public int EntryBarIndex { get; set; }
 
         /// <summary>
+        /// Gets or sets the account's marked equity captured when the current lot opened from flat.
+        /// Preserved across same-direction adds and partial reductions, so a round trip carries the equity
+        /// at the entry that opened it — the denominator for the trip's leverage.
+        /// </summary>
+        public decimal EntryEquity { get; set; }
+
+        /// <summary>
         /// Gets or sets the per-share stop distance frozen when the current lot opened from flat
         /// (<c>|openingFillPrice − entryStopPrice|</c>). Preserved across same-direction adds and partial
         /// reductions, so a round trip carries the risk of the entry that opened it. Null when the opening

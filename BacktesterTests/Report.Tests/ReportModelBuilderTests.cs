@@ -887,5 +887,55 @@ namespace BacktesterTests.Report.Tests
             Assert.Equal(expected.MaxCapitalInvested, model.Stats.MaxCapitalInvested);
             Assert.Equal(expected.LargestWin, model.Stats.LargestWin);
         }
+
+        [Fact]
+        public void Build_Stats_MapsLeverageMarginAndDirectionalNetProfit()
+        {
+            Portfolio portfolio = WinningPortfolio();
+            BacktestResult result = Result(NoCandles(), portfolio, NoIndicators());
+            PerformanceStats expected = portfolio.GetPerformanceStats();
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(expected.NetProfitLong, model.Stats.NetProfitLong);
+            Assert.Equal(expected.NetProfitShort, model.Stats.NetProfitShort);
+            Assert.Equal(expected.PeakLeverage, model.Stats.PeakLeverage);
+            Assert.Equal(expected.AvgLeverage, model.Stats.AvgLeverage);
+            Assert.Equal(expected.PeakMarginUtilization, model.Stats.PeakMarginUtilization);
+            Assert.Equal(expected.AvgMarginUtilization, model.Stats.AvgMarginUtilization);
+        }
+
+        [Fact]
+        public void Build_RoundTrip_DerivesLeverageFromEntryNotionalOverEntryEquity()
+        {
+            // Long 10@100 on $10,000 equity → entry notional $1,000, leverage 1,000/10,000 = 0.1.
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(0.1m, Assert.Single(model.RoundTrips).Leverage);
+        }
+
+        [Fact]
+        public void Build_RoundTrip_DerivesLongMarginAtHalfNotional()
+        {
+            // Long 10@100 → notional $1,000; Reg-T long rate 0.5 → margin $500.
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(500m, Assert.Single(model.RoundTrips).Margin);
+        }
+
+        [Fact]
+        public void Build_ShortRoundTrip_DerivesMarginAtShortRate()
+        {
+            // Short 10@150 → notional $1,500; Reg-T short rate 1.5 → margin $2,250.
+            BacktestResult result = ResultWithShortRoundTrip(T0, T0.AddDays(2), 150m, 140m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal(2_250m, Assert.Single(model.RoundTrips).Margin);
+        }
     }
 }

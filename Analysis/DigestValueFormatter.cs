@@ -28,6 +28,12 @@ namespace Backtester.Analysis
             return value.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>Formats a leverage ratio as the report does: two decimals with an <c>x</c> suffix, e.g. <c>"1.85x"</c>.</summary>
+        public static string Leverage(decimal value)
+        {
+            return value.ToString("0.00", CultureInfo.InvariantCulture) + "x";
+        }
+
         /// <summary>Formats an optional ratio as the report does: two decimals, or the report's en-dash when absent.</summary>
         public static string Number(decimal? value)
         {

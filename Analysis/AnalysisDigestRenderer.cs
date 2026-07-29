@@ -225,13 +225,19 @@ namespace Backtester.Analysis
                 new("Max consec. losses", stats => stats.MaxConsecLosses.ToString(CultureInfo.InvariantCulture)),
                 new("Profitable long", stats => DigestValueFormatter.Percent(stats.LongWinRate)),
                 new("Profitable short", stats => DigestValueFormatter.Percent(stats.ShortWinRate)),
+                new("Net profit long", stats => DigestValueFormatter.Money(stats.NetProfitLong)),
+                new("Net profit short", stats => DigestValueFormatter.Money(stats.NetProfitShort)),
                 new("Avg duration", stats => stats.AvgTradeDuration),
                 new("Median duration", stats => stats.MedianTradeDuration),
                 new("Longest trade", stats => stats.LongestTradeDuration),
                 new("Shortest trade", stats => stats.ShortestTradeDuration),
                 new("Market exposure", stats => DigestValueFormatter.Percent(stats.MarketExposure)),
                 new("Avg capital", stats => DigestValueFormatter.Money(stats.AvgCapitalInvested)),
-                new("Max capital", stats => DigestValueFormatter.Money(stats.MaxCapitalInvested))
+                new("Max capital", stats => DigestValueFormatter.Money(stats.MaxCapitalInvested)),
+                new("Avg leverage", stats => DigestValueFormatter.Leverage(stats.AvgLeverage)),
+                new("Peak leverage", stats => DigestValueFormatter.Leverage(stats.PeakLeverage)),
+                new("Avg margin", stats => DigestValueFormatter.Percent(stats.AvgMarginUtilization)),
+                new("Peak margin", stats => DigestValueFormatter.Percent(stats.PeakMarginUtilization))
             };
         }
     }

@@ -142,6 +142,8 @@
       <th data-key="entryTargetPrice" data-type="num">Initial target</th>
       <th data-key="exitReason" data-type="str">Exit reason</th>
       <th data-key="quantity" data-type="num">Qty</th>
+      <th data-key="leverage" data-type="num">Leverage</th>
+      <th data-key="margin" data-type="num">Margin</th>
       <th data-key="realizedPnL" data-type="num">P&amp;L</th>
       <th data-key="returnPercent" data-type="num">Return %</th>
       <th data-key="rMultiple" data-type="num">R</th>
@@ -167,6 +169,8 @@
   }
   function fmtPct(v) { return v == null ? "–" : (v * 100).toFixed(2) + "%"; }
   function fmtNum(v, d) { return v == null ? "–" : Number(v).toFixed(d == null ? 2 : d); }
+  // Leverage: a ratio of exposure to equity, shown with an "x" suffix (e.g. "1.85x"); a dash when absent.
+  function fmtLev(v) { return v == null ? "–" : Number(v).toFixed(2) + "x"; }
   function fmtDate(v) { return v == null ? "–" : new Date(v).toISOString().replace("T", " ").slice(0, 16) + "Z"; }
   // Pre-formatted duration strings (e.g. "3d 14h") pass straight through; absent values show a dash.
   function fmtDur(v) { return v == null ? "–" : v; }
@@ -246,6 +250,8 @@
     "Max consec. losses": "The longest unbroken streak of losing trades.",
     "Profitable long": "Win rate among long trades only.",
     "Profitable short": "Win rate among short trades only.",
+    "Net profit long": "Total profit or loss from long trades. With Net profit short it sums to Net profit.",
+    "Net profit short": "Total profit or loss from short trades. With Net profit long it sums to Net profit.",
     "Avg duration": "Average time a trade was held from entry to exit.",
     "Median duration": "The middle holding time — half of trades were held longer, half shorter.",
     "Longest trade": "The longest a single trade was held.",
@@ -253,6 +259,10 @@
     "Market exposure": "Share of the backtest period during which capital was deployed in the market.",
     "Avg capital": "Average capital invested while positions were open.",
     "Max capital": "The most capital deployed at any single moment.",
+    "Avg leverage": "Average gross exposure over equity while in the market — 1.0x is fully invested and unlevered.",
+    "Peak leverage": "The highest gross-exposure-over-equity ratio reached on any single bar.",
+    "Avg margin": "Average share of equity tied up as margin while in the market.",
+    "Peak margin": "The highest share of equity committed as margin on any single bar — near 100% means little buying power left.",
     "Symbols": "The instruments traded in this run.",
     "Interval": "The bar timeframe the backtest ran on.",
     "From": "Backtest start (UTC).",
@@ -372,7 +382,11 @@
       dualRow("Max consec. wins", fmtNum(stats.maxConsecWins, 0), sel ? fmtNum(sel.maxConsecWins, 0) : dash) +
       dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash) +
       dualRow("Profitable long", fmtPct(stats.longWinRate), sel ? fmtPct(sel.longWinRate) : dash) +
-      dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash));
+      dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash) +
+      dualRow("Net profit long", fmtMoney(stats.netProfitLong), sel ? fmtMoney(sel.netProfitLong) : dash,
+              signClass(stats.netProfitLong), sel ? signClass(sel.netProfitLong) : "") +
+      dualRow("Net profit short", fmtMoney(stats.netProfitShort), sel ? fmtMoney(sel.netProfitShort) : dash,
+              signClass(stats.netProfitShort), sel ? signClass(sel.netProfitShort) : ""));
 
     fill("duration-stats", headRow() +
       dualRow("Avg duration", fmtDur(stats.avgTradeDuration), sel ? fmtDur(sel.avgTradeDuration) : dash) +
@@ -383,7 +397,11 @@
     fill("exposure-stats", headRow() +
       dualRow("Market exposure", fmtPct(stats.marketExposure), sel ? fmtPct(sel.marketExposure) : dash) +
       dualRow("Avg capital", fmtMoney(stats.avgCapitalInvested), sel ? fmtMoney(sel.avgCapitalInvested) : dash) +
-      dualRow("Max capital", fmtMoney(stats.maxCapitalInvested), sel ? fmtMoney(sel.maxCapitalInvested) : dash));
+      dualRow("Max capital", fmtMoney(stats.maxCapitalInvested), sel ? fmtMoney(sel.maxCapitalInvested) : dash) +
+      dualRow("Avg leverage", fmtLev(stats.avgLeverage), sel ? fmtLev(sel.avgLeverage) : dash) +
+      dualRow("Peak leverage", fmtLev(stats.peakLeverage), sel ? fmtLev(sel.peakLeverage) : dash) +
+      dualRow("Avg margin", fmtPct(stats.avgMarginUtilization), sel ? fmtPct(sel.avgMarginUtilization) : dash) +
+      dualRow("Peak margin", fmtPct(stats.peakMarginUtilization), sel ? fmtPct(sel.peakMarginUtilization) : dash));
   }
 
   renderStats();
@@ -550,6 +568,7 @@
         return '<tr data-number="" class="rejected">' +
           cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
           cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell("–") + cell("–") + cell(t.quantity) +
+          cell("–") + cell("–") +
           cell(rejectedBadge(t.reason)) + cell("–") + cell("–") + cell("–") +
           "</tr>";
       }
@@ -558,6 +577,7 @@
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) +
         cell(fmtMoney(t.entryStopPrice)) + cell(fmtMoney(t.entryTargetPrice)) +
         cell(t.exitReason) + cell(t.quantity) +
+        cell(fmtLev(t.leverage)) + cell(fmtMoney(t.margin)) +
         cell(fmtMoney(t.realizedPnL), signClass(t.realizedPnL)) +
         cell(fmtPct(t.returnPercent), signClass(t.returnPercent)) +
         cell(fmtR(t.rMultiple), signClass(t.rMultiple)) +

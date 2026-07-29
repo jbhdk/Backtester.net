@@ -231,6 +231,22 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void ApplyTrade_RoundTrip_CarriesMarkedEquityAtEntry()
+        {
+            // First round trip opens with $10,000 equity and nets +$200. The second opens afterward, when
+            // equity has grown to $10,200 — so each round trip carries the marked equity at its own entry,
+            // not the run's starting cash.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));   // +$200 → cash $10,200
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0.AddDays(2)));    // opens with equity $10,200
+            portfolio.ApplyTrade(Sell("AAPL", 130m, 10, T0.AddDays(3)));
+
+            Assert.Equal(10_000m, portfolio.RoundTrips[0].EntryEquity);
+            Assert.Equal(10_200m, portfolio.RoundTrips[1].EntryEquity);
+        }
+
+        [Fact]
         public void ApplyTrade_EntryStopStamped_CarriesInitialRiskDistanceTimesQuantity()
         {
             // Buy 10 @ 100 with an entry stop at 90 → per-share distance 10, initial risk 10 * 10 = 100.
@@ -770,6 +786,26 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void GetPerformanceStats_DirectionalNetProfit_PartitionsNetProfitByDirection()
+        {
+            // Longs: win +$200 (buy 10@100, sell 10@120) and loss -$100 (buy 10@110, sell 10@100) → +$100.
+            // Short: win +$200 (sell 10@150, cover 10@130) → +$200. The two sum to NetProfit = $300.
+            Portfolio portfolio = new(50_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10, T0));
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10, T0.AddDays(1)));   // long win +200
+            portfolio.ApplyTrade(Buy("AAPL", 110m, 10, T0.AddDays(2)));
+            portfolio.ApplyTrade(Sell("AAPL", 100m, 10, T0.AddDays(3)));   // long loss -100
+            portfolio.ApplyTrade(Sell("MSFT", 150m, 10, T0.AddDays(4)));
+            portfolio.ApplyTrade(Buy("MSFT", 130m, 10, T0.AddDays(5)));    // short win +200
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(100m, stats.NetProfitLong);
+            Assert.Equal(200m, stats.NetProfitShort);
+            Assert.Equal(stats.NetProfit, stats.NetProfitLong + stats.NetProfitShort);
+        }
+
+        [Fact]
         public void GetPerformanceStats_TradeDurations_MeanMedianLongestShortest()
         {
             // Two round trips held 1 day and 3 days → avg 2d, median 2d, longest 3d, shortest 1d.
@@ -818,6 +854,48 @@ namespace BacktesterTests.Core.Tests
 
             Assert.Equal(700m, stats.AvgCapitalInvested);
             Assert.Equal(1_100m, stats.MaxCapitalInvested);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_Leverage_GrossExposureOverEquityPeakAndExposedAverage()
+        {
+            // Start $10,000; buy 150@100 (notional $15,000, cash −$5,000).
+            //   Bar @100: equity −5,000 + 15,000 = 10,000 → leverage 15,000/10,000 = 1.5x (peak).
+            //   Bar @200: equity −5,000 + 30,000 = 25,000 → leverage 30,000/25,000 = 1.2x.
+            //   Exit bar (flat): leverage 0, excluded from the average.
+            // Avg over the two exposed bars = (1.5 + 1.2)/2 = 1.35; peak = 1.5.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 150, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 200m, 150, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(2)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(1.5m, stats.PeakLeverage);
+            Assert.Equal(1.35m, stats.AvgLeverage);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_MarginUtilization_CommittedMarginOverEquityPeakAndExposedAverage()
+        {
+            // Start $10,000; buy 150@100 long (initial-margin rate 0.5).
+            //   Bar @100: committed margin 0.5*15,000 = 7,500, equity 10,000 → 0.75 (peak).
+            //   Bar @200: committed margin 0.5*30,000 = 15,000, equity 25,000 → 0.60.
+            //   Exit bar (flat): 0, excluded from the average.
+            // Avg over exposed bars = (0.75 + 0.60)/2 = 0.675; peak = 0.75.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 150, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 200m, 150, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(2)));
+
+            PerformanceStats stats = portfolio.GetPerformanceStats();
+
+            Assert.Equal(0.75m, stats.PeakMarginUtilization);
+            Assert.Equal(0.675m, stats.AvgMarginUtilization);
         }
 
         [Fact]
@@ -900,6 +978,28 @@ namespace BacktesterTests.Core.Tests
 
             Assert.NotEqual(0m, portfolioStats.Sortino);
             Assert.Equal(portfolioStats.Sortino, symbolStats.Sortino);
+        }
+
+        [Fact]
+        public void GetPerformanceStatsBySymbol_SingleSymbol_LeverageAndMarginMatchPortfolio()
+        {
+            // With one symbol, its isolated equity curve equals the portfolio's, so its per-symbol leverage
+            // and margin utilization must match the whole-portfolio figures.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 150, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 100m, T0));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("AAPL", 200m, 150, T0.AddDays(2)));
+            portfolio.RecordEquitySnapshot(Slice("AAPL", 200m, T0.AddDays(2)));
+
+            PerformanceStats portfolioStats = portfolio.GetPerformanceStats();
+            PerformanceStats symbolStats = portfolio.GetPerformanceStatsBySymbol()["AAPL"];
+
+            Assert.NotEqual(0m, portfolioStats.PeakLeverage);
+            Assert.Equal(portfolioStats.PeakLeverage, symbolStats.PeakLeverage);
+            Assert.Equal(portfolioStats.AvgLeverage, symbolStats.AvgLeverage);
+            Assert.Equal(portfolioStats.PeakMarginUtilization, symbolStats.PeakMarginUtilization);
+            Assert.Equal(portfolioStats.AvgMarginUtilization, symbolStats.AvgMarginUtilization);
         }
 
         [Fact]

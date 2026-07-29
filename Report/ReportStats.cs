@@ -12,6 +12,12 @@ namespace Backtester.Report
         /// <summary>Gets or sets the net profit as a fraction of starting equity.</summary>
         public decimal NetProfitPercent { get; set; }
 
+        /// <summary>Gets or sets the realized net profit of the run's long round trips, in currency.</summary>
+        public decimal NetProfitLong { get; set; }
+
+        /// <summary>Gets or sets the realized net profit of the run's short round trips, in currency.</summary>
+        public decimal NetProfitShort { get; set; }
+
         /// <summary>Gets or sets the number of completed round trips.</summary>
         public int Trades { get; set; }
 
@@ -103,6 +109,18 @@ namespace Backtester.Report
 
         /// <summary>Gets or sets the peak gross capital deployed in open positions on any single bar, in currency.</summary>
         public decimal MaxCapitalInvested { get; set; }
+
+        /// <summary>Gets or sets the highest single-bar leverage (gross exposure over marked equity).</summary>
+        public decimal PeakLeverage { get; set; }
+
+        /// <summary>Gets or sets the average leverage over bars that held a position (flat bars excluded).</summary>
+        public decimal AvgLeverage { get; set; }
+
+        /// <summary>Gets or sets the highest single-bar margin utilization (committed margin over marked equity), a fraction.</summary>
+        public decimal PeakMarginUtilization { get; set; }
+
+        /// <summary>Gets or sets the average margin utilization over bars that held a position (flat bars excluded), a fraction.</summary>
+        public decimal AvgMarginUtilization { get; set; }
 
         /// <summary>Gets or sets the mean round-trip holding time, pre-formatted (e.g. "3d 14h").</summary>
         public string AvgTradeDuration { get; set; }

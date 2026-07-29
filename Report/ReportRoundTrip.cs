@@ -45,6 +45,19 @@ namespace Backtester.Report
         /// <summary>Gets or sets the number of shares exited.</summary>
         public int Quantity { get; set; }
 
+        /// <summary>
+        /// Gets or sets the trip's leverage at entry: its entry notional (<c>EntryPrice · Quantity</c>) over
+        /// the marked equity when it opened. Null when the entry equity was non-positive (no meaningful
+        /// ratio), in which case the report shows a dash.
+        /// </summary>
+        public decimal? Leverage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Reg-T initial margin the trip committed at entry, in currency: its side's rate
+        /// (0.5 long / 1.5 short) times its entry notional.
+        /// </summary>
+        public decimal Margin { get; set; }
+
         /// <summary>Gets or sets the realized profit/loss for this round trip.</summary>
         public decimal RealizedPnL { get; set; }
 

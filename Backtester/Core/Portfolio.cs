@@ -245,6 +245,8 @@ namespace Backtester.Core
                     EntryStopPrice   = position.EntryStopPrice,
                     EntryTargetPrice = position.EntryTargetPrice,
                     BarsHeld    = Math.Max(0, _equityHistory.Count - position.EntryBarIndex),
+                    // The marked equity captured when this lot opened, the denominator for the trip's leverage.
+                    EntryEquity = position.EntryEquity,
                     EntryTime   = position.EntryTime,
                     ExitTime    = effective.Timestamp,
                     ExitReason  = ExitReasonFor(effective.Leg)
@@ -276,6 +278,13 @@ namespace Backtester.Core
 
             position.AddTrade(effective);
             _trades.Add(effective);
+
+            // Capture the marked equity at the opening bar once the fill is applied (so the new position is
+            // included in the mark). A partial exit never reaches here, so the remainder keeps this value.
+            if (currentQty == 0)
+            {
+                position.EntryEquity = MarkedEquity;
+            }
         }
 
         /// <summary>
@@ -310,12 +319,15 @@ namespace Backtester.Core
 
             // Key: symbol/ticker -> the signed market value of its open position at this slice.
             Dictionary<string, decimal> positionValueBySymbol = new(Positions.Count);
+            // Key: symbol/ticker -> the initial margin its open position commits at this slice (gross).
+            Dictionary<string, decimal> heldMarginBySymbol = new(Positions.Count);
             decimal unrealized = 0m;
             foreach (Position position in Positions)
             {
                 decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
                 decimal value = markPrice * position.Quantity;
                 positionValueBySymbol[position.Symbol] = value;
+                heldMarginBySymbol[position.Symbol] = MarginRate(position.Quantity) * Math.Abs(value);
                 unrealized += value;
             }
 
@@ -326,8 +338,10 @@ namespace Backtester.Core
                 UnrealizedPnL = unrealized,
                 RealizedPnL = RealizedPnL,
                 MarkedEquity = Cash + unrealized,
+                HeldInitialMargin = CommittedMargin,
                 EquityBySymbol = MarkEquityBySymbol(slice),
-                PositionValueBySymbol = positionValueBySymbol
+                PositionValueBySymbol = positionValueBySymbol,
+                HeldMarginBySymbol = heldMarginBySymbol
             });
         }
 

@@ -267,6 +267,28 @@ Marked equity above the initial margin already committed by open positions
 exceed buying power. Always enforced by the account — it is **not** a pluggable execution model.
 _Avoid_: margin (unqualified), excess equity.
 
+**Leverage**:
+The ratio of gross market exposure to marked equity — how much position the account carries per unit of
+its own capital, gross value so a short counts positive (`Σ|position value| / marked equity`). Aggregated
+over a run as **Peak leverage** (the highest single-bar value) and **Avg leverage** (the mean over bars
+that held a position; flat bars are excluded, so the figure is not diluted by time out of the market —
+that dilution is **Market exposure**'s job). Per **Round trip** it is that trip's entry notional
+(`EntryPrice·Quantity`) over marked equity on its entry bar. 1.0 is fully invested and unlevered; above
+1.0 the account carries exposure beyond its own equity (borrowing long, or short proceeds).
+_Avoid_: gearing, exposure (unqualified — that is Market exposure, a time fraction), margin (leverage is
+notional-to-equity, not the committed requirement).
+
+**Margin utilization**:
+The fraction of marked equity tied up as committed initial margin: `Σ committed margin / marked equity`.
+Aggregated as **Peak margin** and **Avg margin** (the latter over exposed bars only, as with **Leverage**).
+It climbs toward and past 100% as open positions consume the account; its currency complement — the
+head-room left — is **Buying power**. Reads the same committed margin the account holds to gate buying
+power: the initial-margin rate applied to each position's *current* marked value (the engine models no
+separate maintenance margin). Its per-**Round trip** sibling column instead freezes the margin at the
+entry notional — the margin the trade committed when it opened.
+_Avoid_: margin (unqualified), leverage (that is notional-to-equity), buying power (the currency head-room,
+not the used fraction).
+
 ### Execution models
 
 **Execution model**:
@@ -311,6 +333,13 @@ _Avoid_: results, report.
 **Max drawdown**:
 The largest peak-to-trough decline in marked equity over the run.
 _Avoid_: loss, drop.
+
+**Net profit long / Net profit short**:
+The realized PnL of a run's long **Round trips** and of its short round trips, taken separately, in
+currency. Because every round trip is one direction or the other, the two partition **Net profit**
+exactly — they sum to it with nothing left over. A directional attribution of the same realized result,
+not a new measure.
+_Avoid_: long/short PnL (unqualified), directional return (these are currency, not a ratio).
 
 **Per-symbol stats**:
 Performance stats computed for a single symbol in isolation, for the report's per-symbol column.

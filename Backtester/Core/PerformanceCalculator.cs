@@ -29,6 +29,11 @@ namespace Backtester.Core
             decimal grossLoss   = losses.Sum(r => r.RealizedPnL);    // negative
             decimal netProfit   = grossProfit + grossLoss;
 
+            // Directional net profit: the two partition net profit exactly, since every round trip is
+            // either long or short.
+            decimal netProfitLong  = roundTrips.Where(r => r.Direction == PositionDirection.Long).Sum(r => r.RealizedPnL);
+            decimal netProfitShort = roundTrips.Where(r => r.Direction == PositionDirection.Short).Sum(r => r.RealizedPnL);
+
             decimal winRate      = trades > 0 ? (decimal)wins.Count / trades : 0m;
             decimal profitFactor = grossLoss != 0m ? grossProfit / Math.Abs(grossLoss) : 0m;
             decimal avgWin       = wins.Count   > 0 ? grossProfit / wins.Count   : 0m;
@@ -69,6 +74,9 @@ namespace Backtester.Core
             (decimal marketExposure, decimal avgCapitalInvested, decimal maxCapitalInvested) =
                 ComputeExposure(equityHistory);
 
+            (decimal avgLeverage, decimal peakLeverage, decimal avgMarginUtilization, decimal peakMarginUtilization) =
+                ComputeLeverageAndMargin(equityHistory);
+
             (TimeSpan avgDuration, TimeSpan medianDuration, TimeSpan longestDuration, TimeSpan shortestDuration) =
                 ComputeTradeDurations(roundTrips);
 
@@ -76,6 +84,8 @@ namespace Backtester.Core
             {
                 RoundTrips          = roundTrips,
                 NetProfit           = netProfit,
+                NetProfitLong       = netProfitLong,
+                NetProfitShort      = netProfitShort,
                 GrossProfit         = grossProfit,
                 GrossLoss           = grossLoss,
                 Trades              = trades,
@@ -107,6 +117,10 @@ namespace Backtester.Core
                 MarketExposure      = marketExposure,
                 AvgCapitalInvested  = avgCapitalInvested,
                 MaxCapitalInvested  = maxCapitalInvested,
+                PeakLeverage          = peakLeverage,
+                AvgLeverage           = avgLeverage,
+                PeakMarginUtilization = peakMarginUtilization,
+                AvgMarginUtilization  = avgMarginUtilization,
                 AvgTradeDuration    = avgDuration,
                 MedianTradeDuration = medianDuration,
                 LongestTradeDuration = longestDuration,
@@ -161,10 +175,17 @@ namespace Backtester.Core
                         ? new Dictionary<string, decimal> { [symbol] = posValue }
                         : new Dictionary<string, decimal>();
 
+                // Carry this symbol's committed margin so per-symbol margin utilization measures it against
+                // the symbol's isolated equity; zero when the symbol is flat on this bar.
+                decimal heldMargin = snapshot.HeldMarginBySymbol != null && snapshot.HeldMarginBySymbol.TryGetValue(symbol, out decimal symbolMargin)
+                    ? symbolMargin
+                    : 0m;
+
                 isolated.Add(new EquitySnapshot
                 {
                     Timestamp = snapshot.Timestamp,
                     MarkedEquity = equity,
+                    HeldInitialMargin = heldMargin,
                     PositionValueBySymbol = positionValue
                 });
             }
@@ -490,6 +511,60 @@ namespace Backtester.Core
             }
 
             return ((decimal)exposedBars / history.Count, sumCapital / history.Count, maxCapital);
+        }
+
+        /// <summary>
+        /// Computes the leverage and margin utilization the run carried. Leverage is each bar's gross
+        /// market exposure (the sum of absolute open-position values) over its marked equity; margin
+        /// utilization is each bar's committed initial margin over its marked equity. Each peak is the
+        /// highest single-bar ratio; each average is taken over exposed bars only (a bar with no open
+        /// position, or with non-positive equity that cannot yield a meaningful ratio, is skipped), so it
+        /// reads "when in the market" rather than blending with time out of the market. All zero when never
+        /// exposed.
+        /// </summary>
+        private static (decimal avgLeverage, decimal peakLeverage, decimal avgMarginUtilization, decimal peakMarginUtilization) ComputeLeverageAndMargin(
+            IReadOnlyList<EquitySnapshot> history)
+        {
+            decimal sumLeverage = 0m;
+            decimal peakLeverage = 0m;
+            decimal sumMargin = 0m;
+            decimal peakMargin = 0m;
+            int exposedBars = 0;
+            foreach (EquitySnapshot snap in history)
+            {
+                decimal gross = 0m;
+                if (snap.PositionValueBySymbol != null)
+                {
+                    foreach (KeyValuePair<string, decimal> position in snap.PositionValueBySymbol)
+                    {
+                        gross += Math.Abs(position.Value);
+                    }
+                }
+
+                if (gross <= 0m || snap.MarkedEquity <= 0m)
+                {
+                    continue;
+                }
+
+                decimal leverage = gross / snap.MarkedEquity;
+                decimal marginUtilization = snap.HeldInitialMargin / snap.MarkedEquity;
+                sumLeverage += leverage;
+                sumMargin += marginUtilization;
+                exposedBars++;
+                if (leverage > peakLeverage)
+                {
+                    peakLeverage = leverage;
+                }
+
+                if (marginUtilization > peakMargin)
+                {
+                    peakMargin = marginUtilization;
+                }
+            }
+
+            return exposedBars > 0
+                ? (sumLeverage / exposedBars, peakLeverage, sumMargin / exposedBars, peakMargin)
+                : (0m, 0m, 0m, 0m);
         }
 
         /// <summary>

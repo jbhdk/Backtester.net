@@ -14,6 +14,19 @@ namespace Backtester.Core
         /// <summary>Gets or sets the net profit after commissions and slippage.</summary>
         public decimal NetProfit { get; set; }
 
+        /// <summary>
+        /// Gets or sets the realized net profit of the run's long round trips, in currency. With
+        /// <see cref="NetProfitShort"/> it partitions <see cref="NetProfit"/> exactly (every round trip is
+        /// one direction or the other).
+        /// </summary>
+        public decimal NetProfitLong { get; set; }
+
+        /// <summary>
+        /// Gets or sets the realized net profit of the run's short round trips, in currency. With
+        /// <see cref="NetProfitLong"/> it partitions <see cref="NetProfit"/> exactly.
+        /// </summary>
+        public decimal NetProfitShort { get; set; }
+
         /// <summary>Gets or sets the sum of profits from all winning round trips.</summary>
         public decimal GrossProfit { get; set; }
 
@@ -128,6 +141,31 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets the peak gross capital deployed in open positions on any single bar, in currency.</summary>
         public decimal MaxCapitalInvested { get; set; }
+
+        /// <summary>
+        /// Gets or sets the highest single-bar leverage over the run: gross market exposure
+        /// (<c>Σ|position value|</c>) divided by marked equity. 1.0 is fully invested and unlevered.
+        /// </summary>
+        public decimal PeakLeverage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the average leverage over bars that held a position (flat bars excluded, so the
+        /// figure is not diluted by time out of the market — that is <see cref="MarketExposure"/>'s role).
+        /// </summary>
+        public decimal AvgLeverage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the highest single-bar margin utilization over the run: committed initial margin
+        /// divided by marked equity, a fraction. Approaches (and past) 1.0 as open positions exhaust
+        /// buying power.
+        /// </summary>
+        public decimal PeakMarginUtilization { get; set; }
+
+        /// <summary>
+        /// Gets or sets the average margin utilization over bars that held a position (flat bars excluded,
+        /// as with <see cref="AvgLeverage"/>).
+        /// </summary>
+        public decimal AvgMarginUtilization { get; set; }
 
         /// <summary>Gets or sets the mean holding time across all round trips.</summary>
         public TimeSpan AvgTradeDuration { get; set; }
