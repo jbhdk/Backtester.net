@@ -332,7 +332,10 @@ namespace Backtester.Optimization
 
         /// <summary>
         /// Fetches the bars once, evaluates every Parameter set as a Trial in parallel, and returns the Trials
-        /// ranked by Score (best first) together with the best one. Progress is reported once per completed
+        /// ranked by Score (best first) together with the best one. A Parameter set whose configuration the
+        /// code under test refuses (an argument rejection from the Trial factory or the backtest) becomes a
+        /// Rejected trial — ranked below every scored Trial with its reason, never Best — while any other
+        /// exception propagates and stops the sweep (ADR 0027). Progress is reported once per completed
         /// Trial through <paramref name="progress"/>; <paramref name="ct"/> stops the sweep and propagates
         /// cancellation.
         /// </summary>
@@ -343,11 +346,12 @@ namespace Backtester.Optimization
             IReadOnlyList<ParameterSet> parameterSets = _space.Expand();
             int total = parameterSets.Count;
 
-            // Each evaluated Parameter set with the stats, score, and full result its backtest produced, held
-            // at its Parameter-space (Expand) index so the collected order is independent of which Trial
-            // finishes first — parallel results then rank identically to a sequential sweep, ties included.
-            (ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)[] evaluated =
-                new (ParameterSet, PerformanceStats, decimal, BacktestResult)[total];
+            // Each evaluated Parameter set with the stats, score, and full result its backtest produced — or
+            // the rejection reason when its configuration was refused — held at its Parameter-space (Expand)
+            // index so the collected order is independent of which Trial finishes first — parallel results
+            // then rank identically to a sequential sweep, ties included.
+            (ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result, string RejectionReason)[] evaluated =
+                new (ParameterSet, PerformanceStats, decimal, BacktestResult, string)[total];
             int completed = 0;
 
             ParallelOptions options = new() { CancellationToken = ct };
@@ -355,27 +359,42 @@ namespace Backtester.Optimization
             {
                 ParameterSet parameters = parameterSets[index];
 
-                // A fresh Portfolio, strategy, and broker per Trial keep Trials independent; the shared fetcher
-                // is read-only, so parallel Trials over it are safe and see identical bars.
-                Portfolio portfolio = _portfolioFactory();
-                (IStrategy strategy, IBrokerSimulator broker) = _trialFactory(parameters, portfolio);
+                try
+                {
+                    // A fresh Portfolio, strategy, and broker per Trial keep Trials independent; the shared fetcher
+                    // is read-only, so parallel Trials over it are safe and see identical bars.
+                    Portfolio portfolio = _portfolioFactory();
+                    (IStrategy strategy, IBrokerSimulator broker) = _trialFactory(parameters, portfolio);
 
-                // The shared fetcher already holds the Data-range bars (warmup lead-in included), so a plain
-                // Test-range engine warms OnStart on the full series yet loops and measures only the Test range.
-                BacktestEngine engine = new(sharedFetcher, _symbols, _testFromUtc, _testToUtc, _interval, strategy, broker, portfolio);
-                BacktestResult result = await engine.StartAsync(token).ConfigureAwait(false);
+                    // The shared fetcher already holds the Data-range bars (warmup lead-in included), so a plain
+                    // Test-range engine warms OnStart on the full series yet loops and measures only the Test range.
+                    BacktestEngine engine = new(sharedFetcher, _symbols, _testFromUtc, _testToUtc, _interval, strategy, broker, portfolio);
+                    BacktestResult result = await engine.StartAsync(token).ConfigureAwait(false);
 
-                PerformanceStats stats = portfolio.GetPerformanceStats();
-                evaluated[index] = (parameters, stats, _objective.Score(stats), result);
+                    PerformanceStats stats = portfolio.GetPerformanceStats();
+                    evaluated[index] = (parameters, stats, _objective.Score(stats), result, null);
+                }
+                catch (ArgumentException rejection)
+                {
+                    // A configuration rejection — the strategy, broker, or one of their components refused this
+                    // Parameter set — becomes a Rejected trial rather than killing the sweep (ADR 0027). Only
+                    // argument rejections are contained: any other exception, and cancellation, still propagates
+                    // so genuine defects stay loud.
+                    evaluated[index] = (parameters, null, 0m, null, rejection.Message);
+                }
 
                 int done = Interlocked.Increment(ref completed);
                 progress?.Report(new OptimizationProgress(done, total));
             }).ConfigureAwait(false);
 
-            List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result)> ranked =
+            // Rejected trials carry no Score, so only scored Trials are ranked by it; the rejected ones follow
+            // below every scored Trial, in Parameter-space order, each shown with its reason (ADR 0027).
+            List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result, string RejectionReason)> scored =
+                evaluated.Where(trial => trial.RejectionReason == null).ToList();
+            List<(ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result, string RejectionReason)> ranked =
                 (_objective.Direction == OptimizationDirection.Maximize
-                    ? evaluated.OrderByDescending(trial => trial.Score)
-                    : evaluated.OrderBy(trial => trial.Score)).ToList();
+                    ? scored.OrderByDescending(trial => trial.Score)
+                    : scored.OrderBy(trial => trial.Score)).ToList();
 
             // Best is the highest-scoring eligible Trial: ranked is score-ordered, so the first eligible one
             // wins. A higher-scoring ineligible Trial stays in the list, flagged, but never becomes Best.
@@ -384,12 +403,18 @@ namespace Backtester.Optimization
             List<Trial> trials = new();
             for (int index = 0; index < ranked.Count; index++)
             {
-                (ParameterSet parameters, PerformanceStats stats, decimal score, BacktestResult result) = ranked[index];
+                (ParameterSet parameters, PerformanceStats stats, decimal score, BacktestResult result, _) = ranked[index];
                 bool eligible = stats.Trades >= _minimumTrades;
                 // Retain the full result for the winning Trial (so Best.BacktestResult is populated even when
                 // a higher-scoring Trial is ineligible) and for every Trial when the caller opted in.
                 bool keepResult = _retainAllBacktestResults || index == bestIndex;
                 trials.Add(new Trial(parameters, stats, score, eligible, keepResult ? result : null));
+            }
+
+            foreach ((ParameterSet Parameters, PerformanceStats Stats, decimal Score, BacktestResult Result, string RejectionReason) rejected
+                in evaluated.Where(trial => trial.RejectionReason != null))
+            {
+                trials.Add(Trial.Rejected(rejected.Parameters, rejected.RejectionReason));
             }
 
             Trial best = bestIndex >= 0 ? trials[bestIndex] : null;

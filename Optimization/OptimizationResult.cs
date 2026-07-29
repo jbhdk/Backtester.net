@@ -16,7 +16,10 @@ namespace Backtester.Optimization
             Best = best;
         }
 
-        /// <summary>Gets every Trial that was evaluated, ranked by Score with the best first.</summary>
+        /// <summary>
+        /// Gets every Trial that was evaluated: scored Trials ranked by Score with the best first, followed
+        /// by any Rejected trials in Parameter-space order (they carry no Score to rank by).
+        /// </summary>
         public IReadOnlyList<Trial> Trials { get; }
 
         /// <summary>Gets the best Trial, or null when no Trials were evaluated.</summary>

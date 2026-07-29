@@ -26,8 +26,7 @@ namespace Backtester.Optimization
             for (int index = 0; index < result.Trials.Count; index++)
             {
                 Trial trial = result.Trials[index];
-                PerformanceStats stats = trial.Stats;
-                rows.Add(new OptimizationTrialRow
+                OptimizationTrialRow row = new()
                 {
                     Rank = index + 1,
                     ParameterValues = ParameterValues(trial.Parameters, parameterNames),
@@ -36,18 +35,29 @@ namespace Backtester.Optimization
                     // Best is identified by reference: it is one of the ranked Trials (or null when no Trial
                     // is eligible), so exactly the winning row is flagged.
                     IsBest = ReferenceEquals(trial, result.Best),
+                    Rejected = trial.IsRejected,
+                    RejectionReason = trial.RejectionReason
+                };
+
+                // A Rejected trial produced no backtest, so its row carries only the Parameter values and the
+                // reason; the stat fields stay at their zero defaults and the page renders them as absent.
+                if (!trial.IsRejected)
+                {
+                    PerformanceStats stats = trial.Stats;
                     // The compact risk-adjusted set the leaderboard compares Trials by. Net profit is carried
                     // in currency (not as a percentage): every Trial in a sweep shares one capital base, so
                     // currency ranks identically to a percentage and needs no starting-equity input here.
-                    Trades = stats.Trades,
-                    NetProfit = stats.NetProfit,
-                    MaxDrawdown = stats.MaxDrawdown,
-                    Sharpe = stats.Sharpe,
-                    Sortino = stats.Sortino,
-                    Calmar = stats.Calmar,
-                    ProfitFactor = stats.ProfitFactor,
-                    WinRate = stats.WinRate
-                });
+                    row.Trades = stats.Trades;
+                    row.NetProfit = stats.NetProfit;
+                    row.MaxDrawdown = stats.MaxDrawdown;
+                    row.Sharpe = stats.Sharpe;
+                    row.Sortino = stats.Sortino;
+                    row.Calmar = stats.Calmar;
+                    row.ProfitFactor = stats.ProfitFactor;
+                    row.WinRate = stats.WinRate;
+                }
+
+                rows.Add(row);
             }
 
             // Only Parameters that actually take more than one value shape the Score surface. Exactly two
@@ -100,6 +110,13 @@ namespace Backtester.Optimization
             List<OptimizationHeatmapCell> cells = new(trials.Count);
             foreach (Trial trial in trials)
             {
+                // A Rejected trial has no Score to colour a cell by; emitting no cell leaves a visible hole
+                // at its grid point, which the page renders as an empty cell.
+                if (trial.IsRejected)
+                {
+                    continue;
+                }
+
                 cells.Add(new OptimizationHeatmapCell
                 {
                     XIndex = xValues.IndexOf(trial.Parameters.Values[xName]),
@@ -155,7 +172,8 @@ namespace Backtester.Optimization
 
         /// <summary>
         /// A single Parameter's marginal: for each distinct value (ascending), the best and mean Score over
-        /// the Trials that share it.
+        /// the scored Trials that share it. Rejected trials carry no Score, so they feed no aggregate; a
+        /// value whose every Trial was rejected yields no point at all.
         /// </summary>
         private static OptimizationParameterMarginal BuildMarginal(IReadOnlyList<Trial> trials, string name)
         {
@@ -167,12 +185,17 @@ namespace Backtester.Optimization
                 int count = 0;
                 foreach (Trial trial in trials)
                 {
-                    if (Equals(trial.Parameters.Values[name], value))
+                    if (!trial.IsRejected && Equals(trial.Parameters.Values[name], value))
                     {
                         max = trial.Score > max ? trial.Score : max;
                         sum += trial.Score;
                         count++;
                     }
+                }
+
+                if (count == 0)
+                {
+                    continue;
                 }
 
                 points.Add(new OptimizationMarginalPoint

@@ -1,3 +1,4 @@
+using System;
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Stops;
@@ -289,6 +290,37 @@ namespace BacktesterTests.Stops.Tests
             manager.OnBar(inPosition: true, close: 80m, averagePrice: 100m, atr: 5.0, broker); // trail
 
             A.CallTo(() => broker.Modify("stop-1", 98.5m)).MustHaveHappenedOnceExactly();
+        }
+
+        /// <summary>
+        /// An inverted trail configuration — the maximum distance below the minimum — would make the trail
+        /// widen as profit grows instead of tightening, so the constructor rejects it outright.
+        /// </summary>
+        [Fact]
+        public void Constructor_TrailDistanceBelowMinDistance_Throws()
+        {
+            BracketHandle handle = new() { StopOrderId = "stop-1" };
+
+            ArgumentOutOfRangeException rejection = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailDistance: 2.0m, trailMinDistance: 3.0m));
+
+            Assert.Equal("trailDistanceAtrMultiple", rejection.ParamName);
+        }
+
+        /// <summary>Equal trail distances are a legal constant-distance trail, not an inversion.</summary>
+        [Fact]
+        public void Constructor_TrailDistanceEqualToMinDistance_IsAccepted()
+        {
+            IBroker broker = A.Fake<IBroker>();
+            BracketHandle handle = new() { StopOrderId = "stop-1" };
+            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m, trailDistance: 3.0m, trailMinDistance: 3.0m);
+            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+
+            // Entry 100, ATR 5: break-even at 110, then the trail holds a constant 3 ATR = 15 behind the close.
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, atr: 5.0, broker); // trail: 120 - 15
+
+            A.CallTo(() => broker.Modify("stop-1", 105m)).MustHaveHappenedOnceExactly();
         }
     }
 }

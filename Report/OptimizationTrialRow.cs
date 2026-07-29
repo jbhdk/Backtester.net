@@ -34,6 +34,16 @@ namespace Backtester.Report
         /// </summary>
         public bool Eligible { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether this is a Rejected trial: its configuration was refused by the code under
+        /// test, so it carries no Score and no stats. The page renders its stat cells as absent and flags
+        /// the row with <see cref="RejectionReason"/>.
+        /// </summary>
+        public bool Rejected { get; set; }
+
+        /// <summary>Gets or sets the reason a Rejected trial's configuration was refused; null for a scored Trial.</summary>
+        public string RejectionReason { get; set; }
+
         /// <summary>Gets or sets the number of completed Round trips this Trial's backtest produced.</summary>
         public int Trades { get; set; }
 

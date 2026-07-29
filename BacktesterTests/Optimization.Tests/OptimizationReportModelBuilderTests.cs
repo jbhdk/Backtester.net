@@ -280,6 +280,67 @@ namespace BacktesterTests.Optimization.Tests
         }
 
         [Fact]
+        public void Build_RejectedTrial_ProjectsAFlaggedRowCarryingItsReason()
+        {
+            Trial scored = Trial(score: 1m, parameters: Params(("fast", 10)));
+            Trial rejected = Backtester.Optimization.Trial.Rejected(Params(("fast", 12)), "fast must be at most 10.");
+            OptimizationResult result = new(new[] { scored, rejected }, scored);
+
+            OptimizationReportModel model = new OptimizationReportModelBuilder().Build(result);
+
+            OptimizationTrialRow row = model.Trials[1];
+            Assert.True(row.Rejected);
+            Assert.Equal("fast must be at most 10.", row.RejectionReason);
+            Assert.Equal(new[] { "12" }, row.ParameterValues);
+            Assert.False(model.Trials[0].Rejected);
+            Assert.Null(model.Trials[0].RejectionReason);
+        }
+
+        [Fact]
+        public void Build_RejectedTrial_ContributesNoHeatmapCellButItsAxisValuesRemain()
+        {
+            // A 2x2 grid with one rejected corner: the axes stay complete (both values on each), but the
+            // rejected point emits no cell, so the page renders a hole there.
+            Trial t1 = Trial(score: 1.0m, parameters: Params(("fast", 10), ("slow", 30)));
+            Trial t2 = Trial(score: 2.0m, parameters: Params(("fast", 10), ("slow", 50)));
+            Trial t3 = Trial(score: 3.0m, parameters: Params(("fast", 12), ("slow", 30)));
+            Trial rejected = Backtester.Optimization.Trial.Rejected(Params(("fast", 12), ("slow", 50)), "refused");
+            OptimizationResult result = new(new[] { t3, t2, t1, rejected }, t3);
+
+            OptimizationScoreHeatmap heatmap = new OptimizationReportModelBuilder().Build(result).Heatmap;
+
+            Assert.Equal(new[] { "10", "12" }, heatmap.XValues);
+            Assert.Equal(new[] { "30", "50" }, heatmap.YValues);
+            Assert.Equal(3, heatmap.Cells.Count);
+            Assert.DoesNotContain(heatmap.Cells, cell => cell.XIndex == 1 && cell.YIndex == 1);
+        }
+
+        [Fact]
+        public void Build_Marginal_ExcludesRejectedTrialsAndDropsValuesWithNoScoredTrial()
+        {
+            // Three varying axes trigger marginals. Every fast=12 Trial is rejected, so the fast marginal
+            // keeps only the fast=10 point, aggregated over scored Trials alone.
+            List<Trial> trials = new();
+            foreach (int slow in new[] { 30, 50 })
+            {
+                foreach (int stop in new[] { 1, 2 })
+                {
+                    trials.Add(Trial(score: slow + stop, parameters: Params(("fast", 10), ("slow", slow), ("stop", stop))));
+                    trials.Add(Backtester.Optimization.Trial.Rejected(Params(("fast", 12), ("slow", slow), ("stop", stop)), "refused"));
+                }
+            }
+            OptimizationResult result = new(trials, trials[0]);
+
+            OptimizationParameterMarginal fast = new OptimizationReportModelBuilder().Build(result)
+                .Marginals.Single(marginal => marginal.ParameterName == "fast");
+
+            OptimizationMarginalPoint point = Assert.Single(fast.Points);
+            Assert.Equal("10", point.Value);
+            Assert.Equal(52m, point.MaxScore);   // slow 50 + stop 2
+            Assert.Equal(41.5m, point.MeanScore); // (31 + 32 + 51 + 52) / 4
+        }
+
+        [Fact]
         public void Build_Model_SerializesWithSystemTextJson()
         {
             Trial trial = Trial(score: 1.5m, parameters: Params(("fast", 10)));

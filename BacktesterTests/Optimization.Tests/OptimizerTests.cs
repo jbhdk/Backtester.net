@@ -366,6 +366,138 @@ namespace BacktesterTests.Optimization.Tests
             Assert.Equal(expected, second.Trials.Select(trial => trial.Parameters.Int("qty")));
         }
 
+        /// <summary>
+        /// Builds an Optimizer over qty 1..3 whose factory refuses even quantities with an argument
+        /// rejection, so qty 2 becomes a Rejected trial while 1 and 3 score normally.
+        /// </summary>
+        private static Optimizer RejectingEvenQtyOptimizer(IHistoricalDataFetcher fetcher)
+        {
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+            return new Optimizer(
+                fetcher,
+                new[] { "AAPL" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                () => new Portfolio(100_000m),
+                space,
+                (parameters, portfolio) =>
+                {
+                    int qty = parameters.Int("qty");
+                    if (qty % 2 == 0)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(parameters), qty, "Even quantities are not supported.");
+                    }
+
+                    return (new BuySellQtyStrategy(qty), new BrokerSimulator(portfolio));
+                },
+                objective: Objectives.NetProfit,
+                minimumTrades: 0);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenAConfigurationIsRefused_CompletesTheSweepWithARejectedTrial()
+        {
+            OptimizationResult result = await RejectingEvenQtyOptimizer(RisingAaplFetcher()).RunAsync();
+
+            // The sweep survives the refusal: all three Parameter sets are accounted for, one as rejected.
+            Assert.Equal(3, result.Trials.Count);
+            Trial rejected = Assert.Single(result.Trials, trial => trial.IsRejected);
+            Assert.Equal(2, rejected.Parameters.Int("qty"));
+        }
+
+        [Fact]
+        public async Task RunAsync_RejectedTrialCarriesTheReasonAndNoStatsOrScore()
+        {
+            OptimizationResult result = await RejectingEvenQtyOptimizer(RisingAaplFetcher()).RunAsync();
+
+            Trial rejected = result.Trials.Single(trial => trial.IsRejected);
+            Assert.Contains("Even quantities are not supported.", rejected.RejectionReason);
+            Assert.Null(rejected.Stats);
+            Assert.Equal(0m, rejected.Score);
+            Assert.False(rejected.Eligible);
+            Assert.Null(rejected.BacktestResult);
+        }
+
+        [Fact]
+        public async Task RunAsync_RanksRejectedTrialsBelowEveryScoredTrial()
+        {
+            OptimizationResult result = await RejectingEvenQtyOptimizer(RisingAaplFetcher()).RunAsync();
+
+            // Scored trials first (qty 3 nets 30, qty 1 nets 10), the rejected one last despite qty order.
+            Assert.Equal(new[] { 3, 1, 2 }, result.Trials.Select(trial => trial.Parameters.Int("qty")));
+        }
+
+        [Fact]
+        public async Task RunAsync_RejectedTrialIsNeverBest()
+        {
+            OptimizationResult result = await RejectingEvenQtyOptimizer(RisingAaplFetcher()).RunAsync();
+
+            Assert.False(result.Best.IsRejected);
+            Assert.Equal(3, result.Best.Parameters.Int("qty"));
+        }
+
+        [Fact]
+        public async Task RunAsync_ReportsProgressForRejectedTrialsToo()
+        {
+            RecordingProgress progress = new();
+
+            await RejectingEvenQtyOptimizer(RisingAaplFetcher()).RunAsync(progress);
+
+            // A rejected Trial is still a completed Trial: the sweep reports all three.
+            Assert.Equal(3, progress.Reports.Count);
+            Assert.Equal(3, progress.Reports.Max(report => report.Completed));
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenTheStrategyRefusesAConfigurationMidRun_RecordsARejectedTrial()
+        {
+            // The refusal fires inside OnBar — as a per-trade component constructor would — not in the factory.
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 2, step: 1);
+            Optimizer optimizer = new Optimizer(
+                RisingAaplFetcher(),
+                new[] { "AAPL" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                () => new Portfolio(100_000m),
+                space,
+                (parameters, portfolio) => (new MidRunRejectingStrategy(rejectQty: parameters.Int("qty") == 2), new BrokerSimulator(portfolio)),
+                objective: Objectives.NetProfit,
+                minimumTrades: 0);
+
+            OptimizationResult result = await optimizer.RunAsync();
+
+            Trial rejected = Assert.Single(result.Trials, trial => trial.IsRejected);
+            Assert.Equal(2, rejected.Parameters.Int("qty"));
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenATrialThrowsANonConfigurationException_PropagatesAndStopsTheSweep()
+        {
+            // Only configuration rejections are contained (ADR 0027); any other exception is a defect and stays loud.
+            ParameterSpace space = new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1);
+            Optimizer optimizer = new Optimizer(
+                RisingAaplFetcher(),
+                new[] { "AAPL" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                () => new Portfolio(100_000m),
+                space,
+                (parameters, portfolio) =>
+                {
+                    if (parameters.Int("qty") == 2)
+                    {
+                        throw new InvalidOperationException("An engine defect, not a configuration rejection.");
+                    }
+
+                    return (new BuySellQtyStrategy(parameters.Int("qty")), new BrokerSimulator(portfolio));
+                });
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => optimizer.RunAsync());
+        }
+
         [Fact]
         public async Task RunAsync_WithCancelledToken_PropagatesCancellation()
         {
@@ -429,6 +561,36 @@ namespace BacktesterTests.Optimization.Tests
                 {
                     _sold = true;
                     broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Sell, Type = OrderType.Market, Quantity = _quantity });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Refuses its configuration from inside <c>OnBar</c> when told to — modelling a per-trade component
+        /// (like a stop manager) whose constructor rejects an invalid Parameter combination mid-run — and
+        /// otherwise completes one buy-sell round trip.
+        /// </summary>
+        private class MidRunRejectingStrategy : StrategyBase
+        {
+            private readonly bool _rejectQty;
+            private bool _acted;
+
+            public MidRunRejectingStrategy(bool rejectQty)
+            {
+                _rejectQty = rejectQty;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (_rejectQty)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(symbol), "This configuration is refused mid-run.");
+                }
+
+                if (!_acted)
+                {
+                    _acted = true;
+                    broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
                 }
             }
         }

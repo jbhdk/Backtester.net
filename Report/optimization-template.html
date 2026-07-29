@@ -49,12 +49,16 @@
   tbody tr.best td { background: rgba(46, 204, 113, .10); }
   tbody tr.best td:first-child { box-shadow: inset 3px 0 0 var(--green); }
   tbody tr.ineligible td { color: var(--muted); }
+  tbody tr.rejected td { color: var(--muted); }
+  /* The refusal's reason, printed under the rejected row's Parameter chips so it reads without hovering. */
+  .reject-reason { color: var(--muted); font-size: 11px; margin-top: 2px; }
 
   .pos { color: var(--green); }
   .neg { color: var(--red); }
   .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .badge-best { color: var(--green); background: rgba(46, 204, 113, .14); text-transform: uppercase; letter-spacing: .04em; }
   .badge-ineligible { color: var(--gold); background: rgba(224, 163, 62, .14); }
+  .badge-rejected { color: var(--red); background: rgba(231, 76, 60, .14); }
   .legend { color: var(--muted); font-size: 12px; margin-top: 12px; }
   .legend .badge { margin-right: 6px; }
 
@@ -121,7 +125,8 @@
     </div>
     <p class="legend">
       <span class="badge badge-best">Best</span> highest-scoring eligible Trial &nbsp;·&nbsp;
-      <span class="badge badge-ineligible">Ineligible</span> too few Round trips to win
+      <span class="badge badge-ineligible">Ineligible</span> too few Round trips to win &nbsp;·&nbsp;
+      <span class="badge badge-rejected">Rejected</span> configuration refused by the code under test
     </p>
   </section>
 
@@ -153,8 +158,10 @@
       var trials = model.trials || [];
       var paramNames = model.parameterNames || [];
 
+      var rejectedCount = trials.filter(function (r) { return r.rejected; }).length;
       document.getElementById("summary").textContent =
-        trials.length + " Trials · " + paramNames.length + " Parameters swept";
+        trials.length + " Trials · " + paramNames.length + " Parameters swept" +
+        (rejectedCount ? " · " + rejectedCount + " rejected" : "");
 
       // Each column: its header label, whether it is textual (left-aligned, string sort), whether it can be
       // sorted, and how to read and render its cell from a row. Every swept axis is collapsed into a single
@@ -163,16 +170,18 @@
         { label: "Rank", text: false, get: function (r) { return r.rank; }, cell: rankCell },
         { label: "Parameters", text: true, sortable: false, cls: "params", cell: paramsCell }
       ];
+      // A Rejected trial produced no backtest, so every stat cell renders as absent rather than a
+      // misleading zero; orDash routes a scored row to its normal renderer.
       columns.push(
-        { label: "Score", text: false, get: function (r) { return r.score; }, cell: function (r) { return numCell(r.score, 4); } },
-        { label: "Trades", text: false, get: function (r) { return r.trades; }, cell: function (r) { return numCell(r.trades, 0); } },
-        { label: "Net Profit", text: false, get: function (r) { return r.netProfit; }, cell: moneyCell },
-        { label: "Max DD", text: false, get: function (r) { return r.maxDrawdown; }, cell: function (r) { return pctCell(r.maxDrawdown); } },
-        { label: "Sharpe", text: false, get: function (r) { return r.sharpe; }, cell: function (r) { return numCell(r.sharpe, 2); } },
-        { label: "Sortino", text: false, get: function (r) { return r.sortino; }, cell: function (r) { return numCell(r.sortino, 2); } },
-        { label: "Calmar", text: false, get: function (r) { return r.calmar; }, cell: function (r) { return numCell(r.calmar, 2); } },
-        { label: "Profit Factor", text: false, get: function (r) { return r.profitFactor; }, cell: function (r) { return numCell(r.profitFactor, 2); } },
-        { label: "Win Rate", text: false, get: function (r) { return r.winRate; }, cell: function (r) { return pctCell(r.winRate); } },
+        { label: "Score", text: false, get: function (r) { return r.score; }, cell: orDash(function (r) { return numCell(r.score, 4); }) },
+        { label: "Trades", text: false, get: function (r) { return r.trades; }, cell: orDash(function (r) { return numCell(r.trades, 0); }) },
+        { label: "Net Profit", text: false, get: function (r) { return r.netProfit; }, cell: orDash(moneyCell) },
+        { label: "Max DD", text: false, get: function (r) { return r.maxDrawdown; }, cell: orDash(function (r) { return pctCell(r.maxDrawdown); }) },
+        { label: "Sharpe", text: false, get: function (r) { return r.sharpe; }, cell: orDash(function (r) { return numCell(r.sharpe, 2); }) },
+        { label: "Sortino", text: false, get: function (r) { return r.sortino; }, cell: orDash(function (r) { return numCell(r.sortino, 2); }) },
+        { label: "Calmar", text: false, get: function (r) { return r.calmar; }, cell: orDash(function (r) { return numCell(r.calmar, 2); }) },
+        { label: "Profit Factor", text: false, get: function (r) { return r.profitFactor; }, cell: orDash(function (r) { return numCell(r.profitFactor, 2); }) },
+        { label: "Win Rate", text: false, get: function (r) { return r.winRate; }, cell: orDash(function (r) { return pctCell(r.winRate); }) },
         { label: "Status", text: true, get: function (r) { return statusRank(r); }, cell: statusCell }
       );
 
@@ -215,6 +224,9 @@
       function renderBody() {
         var col = columns[sortIndex];
         var rows = trials.slice().sort(function (a, b) {
+          // A Rejected trial has no stats to sort by, so it stays below every scored row whatever
+          // column or direction is chosen.
+          if (!a.rejected !== !b.rejected) { return a.rejected ? 1 : -1; }
           var x = col.get(a), y = col.get(b);
           var cmp = col.text ? String(x).localeCompare(String(y)) : (x - y);
           return sortAsc ? cmp : -cmp;
@@ -224,7 +236,7 @@
         body.innerHTML = "";
         rows.forEach(function (r) {
           var tr = document.createElement("tr");
-          tr.className = (r.isBest ? "best " : "") + (r.eligible ? "" : "ineligible");
+          tr.className = (r.isBest ? "best " : "") + (r.rejected ? "rejected" : (r.eligible ? "" : "ineligible"));
           columns.forEach(function (c) {
             var td = document.createElement("td");
             var classes = [];
@@ -247,7 +259,15 @@
             '<span class="param"><span class="pk">' + escapeHtml(paramNames[i]) +
             '</span><span class="pv">' + escapeHtml(String(r.parameterValues[i])) + "</span></span>");
         }
+        // A rejected row prints the refusal's reason under its chips: the reason names the Parameters at
+        // fault, so it belongs with them and stays readable without hovering anything.
+        if (r.rejected && r.rejectionReason) {
+          chips.push('<div class="reject-reason">' + escapeHtml(r.rejectionReason) + "</div>");
+        }
         return chips.join("");
+      }
+      function orDash(render) {
+        return function (r) { return r.rejected ? "—" : render(r); };
       }
       function numCell(v, dp) { return Number(v).toFixed(dp); }
       function moneyCell(r) {
@@ -256,9 +276,10 @@
         return '<span class="' + (v >= 0 ? "pos" : "neg") + '">' + s + "</span>";
       }
       function pctCell(v) { return (Number(v) * 100).toFixed(1) + "%"; }
-      function statusRank(r) { return r.isBest ? "0" : (r.eligible ? "1" : "2"); }
+      function statusRank(r) { return r.isBest ? "0" : (r.rejected ? "3" : (r.eligible ? "1" : "2")); }
       function statusCell(r) {
         if (r.isBest) { return '<span class="badge badge-best">Best</span>'; }
+        if (r.rejected) { return '<span class="badge badge-rejected">Rejected</span>'; }
         if (!r.eligible) { return '<span class="badge badge-ineligible">Ineligible</span>'; }
         return "";
       }

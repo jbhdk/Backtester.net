@@ -13,7 +13,10 @@ bracket and hand off exit management instead of re-implementing it. Driven one b
    the re-anchored initial risk (entry fill to initial stop).
 3. Ratchets a **trailing stop** once price has run `trailActivationAtrMultiple x ATR` past entry. Its
    distance interpolates from `trailDistanceAtrMultiple` (wide) down to `trailMinDistanceAtrMultiple`
-   (tight) as the close advances toward the tightening reference, and **never loosens**.
+   (tight) as the close advances toward the tightening reference, and **never loosens**. The constructor
+   therefore rejects `trailDistanceAtrMultiple < trailMinDistanceAtrMultiple` — an inverted pair would
+   widen the trail as profit grows instead of tightening it. Equal values are legal (a constant-distance
+   trail).
 
 ## The tightening reference is in R, not the target
 

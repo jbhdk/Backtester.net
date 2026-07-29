@@ -452,6 +452,16 @@ The single number an Objective assigns to a Trial — the value Trials are ranke
 the Objective maximizes, lower when it minimizes.
 _Avoid_: fitness, objective value, rank, result.
 
+**Rejected trial**:
+A Trial whose configuration the code under test refused to run: building or running its backtest raised a
+configuration rejection, so the Trial carries no Performance stats and no Score — only its Parameter set
+and the rejection's reason. It is still shown on the leaderboard as a full row, ranked below every scored
+Trial, and can never be the winner. Distinct from **Eligibility**: an ineligible Trial ran and was scored
+but closed too few round trips; a Rejected trial never produced a result at all. Only configuration
+rejections are captured this way — any other failure stops the sweep rather than becoming a row.
+_Avoid_: failed trial, faulted trial, invalid combination (the Parameter space still contains the set;
+the code under test rejects it), error.
+
 **Eligibility**:
 Whether a Trial is allowed to be the winner. A Trial is **eligible** only if it meets the
 Optimization's minimum round-trip count; a Trial below it is **ineligible** and can never be the best,
