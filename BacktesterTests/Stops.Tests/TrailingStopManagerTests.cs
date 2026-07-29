@@ -9,16 +9,16 @@ namespace BacktesterTests.Stops.Tests
 {
     /// <summary>
     /// Unit tests for <see cref="TrailingStopManager"/>: the re-anchoring of both protective legs onto the
-    /// entry fill price the first bar the position is open, the once-only move of the stop to break-even, and
-    /// the subsequent ratcheting trailing stop whose distance tightens as price approaches the
-    /// <c>trailTightenR x R</c> reference.
+    /// entry fill price the first bar the position is open, and the single R-based management rule — once
+    /// profit reaches <c>triggerR x R</c> the stop moves to break-even and the trail arms, thereafter
+    /// ratcheting a stop whose distance (in R) tightens as price approaches the <c>trailTightenR x R</c>
+    /// reference, with break-even as a floor.
     /// </summary>
     public sealed class TrailingStopManagerTests
     {
-        // Trail parameters chosen so the trail phase is inert for the break-even tests (they pass atr: null).
-        private const decimal Activation = 2.0m;
-        private const decimal TrailDistance = 4.0m;
-        private const decimal TrailMinDistance = 2.5m;
+        // Default trail distances in R: from 2 R (far from the tightening reference) down to 1.25 R (at it).
+        private const decimal TrailDistance = 2.0m;
+        private const decimal TrailMinDistance = 1.25m;
 
         /// <summary>Builds a manager with the supplied break-even inputs and default trail parameters.</summary>
         private static TrailingStopManager CreateManager(
@@ -29,8 +29,8 @@ namespace BacktesterTests.Stops.Tests
             decimal stopDistance = 10m,
             decimal targetDistance = 0m,
             decimal trailTightenR = 10m,
-            decimal trailDistance = TrailDistance,
-            decimal trailMinDistance = TrailMinDistance,
+            decimal trailDistanceR = TrailDistance,
+            decimal trailMinDistanceR = TrailMinDistance,
             bool enableManagement = true)
         {
             return new TrailingStopManager(
@@ -41,9 +41,8 @@ namespace BacktesterTests.Stops.Tests
                 stopDistance,
                 targetDistance,
                 trailTightenR,
-                Activation,
-                trailDistance,
-                trailMinDistance,
+                trailDistanceR,
+                trailMinDistanceR,
                 enableManagement);
         }
 
@@ -52,9 +51,9 @@ namespace BacktesterTests.Stops.Tests
         /// clears the recorded re-anchor calls so a test can assert only the break-even/trail behaviour that
         /// follows on later bars.
         /// </summary>
-        private static void OpenAndReanchor(TrailingStopManager manager, IBroker broker, decimal fillPrice, double? atr)
+        private static void OpenAndReanchor(TrailingStopManager manager, IBroker broker, decimal fillPrice)
         {
-            manager.OnBar(inPosition: true, close: fillPrice, averagePrice: fillPrice, atr, broker);
+            manager.OnBar(inPosition: true, close: fillPrice, averagePrice: fillPrice, broker);
             Fake.ClearRecordedCalls(broker);
         }
 
@@ -67,7 +66,7 @@ namespace BacktesterTests.Stops.Tests
             // Submission levels (trigger-close anchored) differ from the fill; re-anchor uses fill 100 +/- distances.
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 95m, PositionDirection.Long, triggerR: 1.0m, stopDistance: 10m, targetDistance: 30m);
 
-            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify("stop-1", 90m)).MustHaveHappenedOnceExactly();
             A.CallTo(() => broker.Modify("target-1", 130m)).MustHaveHappenedOnceExactly();
@@ -81,7 +80,7 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = "stop-1", TargetOrderId = "target-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 105m, PositionDirection.Short, triggerR: 1.0m, stopDistance: 10m, targetDistance: 30m);
 
-            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify("stop-1", 110m)).MustHaveHappenedOnceExactly();
             A.CallTo(() => broker.Modify("target-1", 70m)).MustHaveHappenedOnceExactly();
@@ -95,8 +94,8 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = "stop-1", TargetOrderId = "target-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 95m, PositionDirection.Long, triggerR: 1.0m, stopDistance: 10m, targetDistance: 30m);
 
-            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, atr: null, broker); // re-anchors to 90 / 130
-            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, atr: null, broker); // no profit yet; nothing to do
+            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, broker); // re-anchors to 90 / 130
+            manager.OnBar(inPosition: true, close: 100m, averagePrice: 100m, broker); // no profit yet; nothing to do
 
             A.CallTo(() => broker.Modify("stop-1", 90m)).MustHaveHappenedOnceExactly();
             A.CallTo(() => broker.Modify("target-1", 130m)).MustHaveHappenedOnceExactly();
@@ -110,12 +109,15 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = null, TargetOrderId = null };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m);
 
-            manager.OnBar(inPosition: true, close: 1000m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 1000m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify(A<string>._, A<decimal>._)).MustNotHaveHappened();
         }
 
-        /// <summary>A long whose close reaches exactly the configured profit in R moves the stop to the entry price once.</summary>
+        /// <summary>
+        /// A long whose close reaches exactly the configured profit in R moves the stop to the entry price:
+        /// break-even fires, and the freshly armed trail (still far below entry) cannot better it.
+        /// </summary>
         [Fact]
         public void OnBar_LongReachesTriggerExactly_MovesStopToEntryOnce()
         {
@@ -123,9 +125,9 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             // Fill 100, stopDistance 10 => re-anchored stop 90 => R = 10; triggerR = 1 => break-even at +10 (close 110).
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: null);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify("stop-1", 100m)).MustHaveHappenedOnceExactly();
         }
@@ -137,27 +139,12 @@ namespace BacktesterTests.Stops.Tests
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: null);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
             // Profit of 9 against R = 10 has not reached the +10 trigger.
-            manager.OnBar(inPosition: true, close: 109m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 109m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify(A<string>._, A<decimal>._)).MustNotHaveHappened();
-        }
-
-        /// <summary>Once break-even is applied, a further-in-profit bar with no ATR does not move the stop again.</summary>
-        [Fact]
-        public void OnBar_AlreadyAtBreakEvenWithoutAtr_DoesNotMoveStopAgain()
-        {
-            IBroker broker = A.Fake<IBroker>();
-            BracketHandle handle = new() { StopOrderId = "stop-1" };
-            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: null);
-
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: null, broker);
-            manager.OnBar(inPosition: true, close: 130m, averagePrice: 100m, atr: null, broker);
-
-            A.CallTo(() => broker.Modify(A<string>._, A<decimal>._)).MustHaveHappenedOnceExactly();
         }
 
         /// <summary>A short whose close falls the configured profit in R moves the stop to the entry price.</summary>
@@ -168,9 +155,9 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             // Fill 100, stopDistance 10 => re-anchored stop 110 => R = 10; a fall to 90 is +10 profit for a short.
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 110m, PositionDirection.Short, triggerR: 1.0m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: null);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 90m, averagePrice: 100m, atr: null, broker);
+            manager.OnBar(inPosition: true, close: 90m, averagePrice: 100m, broker);
 
             A.CallTo(() => broker.Modify("stop-1", 100m)).MustHaveHappenedOnceExactly();
         }
@@ -186,53 +173,30 @@ namespace BacktesterTests.Stops.Tests
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, stopDistance: 14m);
-            OpenAndReanchor(manager, broker, fillPrice: 104m, atr: null);
+            OpenAndReanchor(manager, broker, fillPrice: 104m);
 
-            manager.OnBar(inPosition: true, close: 114m, averagePrice: 104m, atr: null, broker); // profit 10 < R (14)
+            manager.OnBar(inPosition: true, close: 114m, averagePrice: 104m, broker); // profit 10 < R (14)
             A.CallTo(() => broker.Modify(A<string>._, A<decimal>._)).MustNotHaveHappened();
 
-            manager.OnBar(inPosition: true, close: 118m, averagePrice: 104m, atr: null, broker); // profit 14 == R
+            manager.OnBar(inPosition: true, close: 118m, averagePrice: 104m, broker); // profit 14 == R
             A.CallTo(() => broker.Modify("stop-1", 104m)).MustHaveHappenedOnceExactly();
         }
 
         /// <summary>
-        /// Before price has run the activation distance past entry, the trail does not move the stop — even
-        /// once break-even has been applied on an earlier bar.
+        /// Once armed, the long trail sets the stop the (far-from-reference) trail distance below the close.
+        /// Entry 100, R 10, trailTightenR 10 => reference span 100: at close 120 progress is 0.2,
+        /// distance = 2 - 0.2 x (2 - 1.25) = 1.85 R => stop 120 - 18.5 = 101.5.
         /// </summary>
         [Fact]
-        public void OnBar_LongBeforeTrailActivation_DoesNotTrail()
-        {
-            IBroker broker = A.Fake<IBroker>();
-            BracketHandle handle = new() { StopOrderId = "stop-1" };
-            // Fill 100, stop 90 => R = 10. trailTightenR 10 => reference span 100, so progress stays near 0.
-            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
-
-            // Bar 1 reaches break-even (profit 10 == R) and moves the stop to entry (100).
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker);
-            // Bar 2: close 109 is below the activation threshold (entry 100 + 2 x ATR(5) = 110), so no trail.
-            manager.OnBar(inPosition: true, close: 109m, averagePrice: 100m, atr: 5.0, broker);
-
-            // Only the single break-even modify to 100 happened; no trailed stop.
-            A.CallTo(() => broker.Modify("stop-1", 100m)).MustHaveHappenedOnceExactly();
-            A.CallTo(() => broker.Modify(A<string>._, A<decimal>.That.Not.IsEqualTo(100m))).MustNotHaveHappened();
-        }
-
-        /// <summary>
-        /// Once activated, the long trail sets the stop the (far-from-reference) trail distance below the close.
-        /// Entry 100, ATR 5, R 10, trailTightenR 10 => reference span 100: at close 120 progress is 0.2,
-        /// distance = 4 - 0.2 x (4 - 2.5) = 3.7 ATR => stop 120 - 3.7 x 5 = 101.5.
-        /// </summary>
-        [Fact]
-        public void OnBar_LongAfterActivation_TrailsStopBelowCloseByInterpolatedDistance()
+        public void OnBar_LongAfterTrigger_TrailsStopBelowCloseByInterpolatedDistance()
         {
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
-            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, atr: 5.0, broker); // trail
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, broker); // trail
 
             A.CallTo(() => broker.Modify("stop-1", 101.5m)).MustHaveHappenedOnceExactly();
         }
@@ -244,11 +208,11 @@ namespace BacktesterTests.Stops.Tests
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
-            manager.OnBar(inPosition: true, close: 130m, averagePrice: 100m, atr: 5.0, broker); // trail up
-            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, atr: 5.0, broker); // would be lower; ignored
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 130m, averagePrice: 100m, broker); // trail up
+            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, broker); // would be lower; ignored
 
             // The lower close would imply a stop of 101.5, below the prior trailed stop, so no further modify.
             A.CallTo(() => broker.Modify("stop-1", 101.5m)).MustNotHaveHappened();
@@ -256,8 +220,8 @@ namespace BacktesterTests.Stops.Tests
 
         /// <summary>
         /// The trail tightens as price nears the reference: at the reference (progress 1) the distance is the
-        /// minimum multiple. Entry 100, ATR 5, R 10, trailTightenR 2 => reference span 20, so close 120 is at
-        /// the reference => stop 120 - 2.5 x 5 = 107.5.
+        /// minimum multiple. Entry 100, R 10, trailTightenR 2 => reference span 20, so close 120 is at
+        /// the reference => stop 120 - 1.25 x 10 = 107.5.
         /// </summary>
         [Fact]
         public void OnBar_LongAtTightenReference_UsesMinimumTrailDistance()
@@ -265,31 +229,68 @@ namespace BacktesterTests.Stops.Tests
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 2m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
-            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, atr: 5.0, broker); // at reference
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, broker); // at reference
 
             A.CallTo(() => broker.Modify("stop-1", 107.5m)).MustHaveHappenedOnceExactly();
         }
 
         /// <summary>
-        /// The short trail mirrors the long: once activated it sets the stop the interpolated distance above
-        /// the close and only ever ratchets down. Entry 100, ATR 5, R 10, trailTightenR 10 => reference span
-        /// 100: at close 80 progress is 0.2, distance = 3.7 ATR => stop 80 + 3.7 x 5 = 98.5.
+        /// The short trail mirrors the long: once armed it sets the stop the interpolated distance above
+        /// the close and only ever ratchets down. Entry 100, R 10, trailTightenR 10 => reference span
+        /// 100: at close 80 progress is 0.2, distance = 1.85 R => stop 80 + 18.5 = 98.5.
         /// </summary>
         [Fact]
-        public void OnBar_ShortAfterActivation_TrailsStopAboveCloseByInterpolatedDistance()
+        public void OnBar_ShortAfterTrigger_TrailsStopAboveCloseByInterpolatedDistance()
         {
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
             TrailingStopManager manager = CreateManager(handle, initialStopPrice: 110m, PositionDirection.Short, triggerR: 1.0m, trailTightenR: 10m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            manager.OnBar(inPosition: true, close: 90m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
-            manager.OnBar(inPosition: true, close: 80m, averagePrice: 100m, atr: 5.0, broker); // trail
+            manager.OnBar(inPosition: true, close: 90m, averagePrice: 100m, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 80m, averagePrice: 100m, broker); // trail
 
             A.CallTo(() => broker.Modify("stop-1", 98.5m)).MustHaveHappenedOnceExactly();
+        }
+
+        /// <summary>
+        /// On the arming bar itself the trail already competes with break-even: a thrust bar whose trail stop
+        /// sits above entry gets that trail stop, not break-even, in a single modify. Entry 100, R 10, a
+        /// constant 0.5 R trail: close 110 arms and trails to 110 - 5 = 105 > entry 100.
+        /// </summary>
+        [Fact]
+        public void OnBar_LongTrailBeatsBreakEvenOnArmingBar_UsesTrailStop()
+        {
+            IBroker broker = A.Fake<IBroker>();
+            BracketHandle handle = new() { StopOrderId = "stop-1" };
+            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m, trailDistanceR: 0.5m, trailMinDistanceR: 0.5m);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
+
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker);
+
+            A.CallTo(() => broker.Modify("stop-1", 105m)).MustHaveHappenedOnceExactly();
+            A.CallTo(() => broker.Modify(A<string>._, A<decimal>.That.Not.IsEqualTo(105m))).MustNotHaveHappened();
+        }
+
+        /// <summary>
+        /// The arming-bar floor mirrors for a short: a downward thrust whose trail stop sits below entry gets
+        /// that trail stop. Entry 100, R 10, constant 0.5 R trail: close 90 arms and trails to 90 + 5 = 95.
+        /// </summary>
+        [Fact]
+        public void OnBar_ShortTrailBeatsBreakEvenOnArmingBar_UsesTrailStop()
+        {
+            IBroker broker = A.Fake<IBroker>();
+            BracketHandle handle = new() { StopOrderId = "stop-1" };
+            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 110m, PositionDirection.Short, triggerR: 1.0m, trailTightenR: 10m, trailDistanceR: 0.5m, trailMinDistanceR: 0.5m);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
+
+            manager.OnBar(inPosition: true, close: 90m, averagePrice: 100m, broker);
+
+            A.CallTo(() => broker.Modify("stop-1", 95m)).MustHaveHappenedOnceExactly();
+            A.CallTo(() => broker.Modify(A<string>._, A<decimal>.That.Not.IsEqualTo(95m))).MustNotHaveHappened();
         }
 
         /// <summary>
@@ -302,9 +303,9 @@ namespace BacktesterTests.Stops.Tests
             BracketHandle handle = new() { StopOrderId = "stop-1" };
 
             ArgumentOutOfRangeException rejection = Assert.Throws<ArgumentOutOfRangeException>(() =>
-                CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailDistance: 2.0m, trailMinDistance: 3.0m));
+                CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailDistanceR: 1.0m, trailMinDistanceR: 1.5m));
 
-            Assert.Equal("trailDistanceAtrMultiple", rejection.ParamName);
+            Assert.Equal("trailDistanceR", rejection.ParamName);
         }
 
         /// <summary>Equal trail distances are a legal constant-distance trail, not an inversion.</summary>
@@ -313,12 +314,12 @@ namespace BacktesterTests.Stops.Tests
         {
             IBroker broker = A.Fake<IBroker>();
             BracketHandle handle = new() { StopOrderId = "stop-1" };
-            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m, trailDistance: 3.0m, trailMinDistance: 3.0m);
-            OpenAndReanchor(manager, broker, fillPrice: 100m, atr: 5.0);
+            TrailingStopManager manager = CreateManager(handle, initialStopPrice: 90m, PositionDirection.Long, triggerR: 1.0m, trailTightenR: 10m, trailDistanceR: 1.5m, trailMinDistanceR: 1.5m);
+            OpenAndReanchor(manager, broker, fillPrice: 100m);
 
-            // Entry 100, ATR 5: break-even at 110, then the trail holds a constant 3 ATR = 15 behind the close.
-            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, atr: 5.0, broker); // break-even to 100
-            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, atr: 5.0, broker); // trail: 120 - 15
+            // Entry 100, R 10: break-even at 110, then the trail holds a constant 1.5 R = 15 behind the close.
+            manager.OnBar(inPosition: true, close: 110m, averagePrice: 100m, broker); // break-even to 100
+            manager.OnBar(inPosition: true, close: 120m, averagePrice: 100m, broker); // trail: 120 - 15
 
             A.CallTo(() => broker.Modify("stop-1", 105m)).MustHaveHappenedOnceExactly();
         }

@@ -10,7 +10,7 @@
 
     <PackageId>backtester.net.stops</PackageId>
     <Authors>Jesper Baagøe Hansen</Authors>
-    <Description>Reusable protective-stop management for the backtester.net engine: a TrailingStopManager that re-anchors a bracket's legs onto the entry fill, moves the stop to break-even once profit reaches a configured R multiple, and ratchets a trailing stop whose distance tightens as price runs toward a separate R-multiple reference (never loosening).</Description>
+    <Description>Reusable protective-stop management for the backtester.net engine: a TrailingStopManager that re-anchors a bracket's legs onto the entry fill, and — once profit reaches a configured R multiple — moves the stop to break-even and arms a ratcheting trailing stop whose R-denominated distance tightens as price runs toward a separate R-multiple reference (never loosening), with break-even as a floor.</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
@@ -64,7 +64,7 @@
 
     <PropertyGroup>
       <CurrentBuildNumber Condition="'$(CurrentBuildNumber)' == ''">0</CurrentBuildNumber>
-      <Version>1.0.$(CurrentBuildNumber)</Version>
+      <Version>2.0.$(CurrentBuildNumber)</Version>
       <PackageVersion>$(Version)</PackageVersion>
       <AssemblyVersion>$(Version).0</AssemblyVersion>
       <FileVersion>$(Version).0</FileVersion>

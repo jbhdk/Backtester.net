@@ -9,21 +9,30 @@ bracket and hand off exit management instead of re-implementing it. Driven one b
 1. **Re-anchors** both protective legs onto the actual entry **fill** price the first bar the position is
    open — keeping the configured stop and target *distances* — so realized risk/reward matches the intended
    multiples even when the entry is a market order that fills at the next bar's open.
-2. Moves the stop to **break-even** exactly once, as soon as profit reaches `triggerR x R`, where `1 R` is
-   the re-anchored initial risk (entry fill to initial stop).
-3. Ratchets a **trailing stop** once price has run `trailActivationAtrMultiple x ATR` past entry. Its
-   distance interpolates from `trailDistanceAtrMultiple` (wide) down to `trailMinDistanceAtrMultiple`
-   (tight) as the close advances toward the tightening reference, and **never loosens**. The constructor
-   therefore rejects `trailDistanceAtrMultiple < trailMinDistanceAtrMultiple` — an inverted pair would
-   widen the trail as profit grows instead of tightening it. Equal values are legal (a constant-distance
-   trail).
+2. Applies a single R-based rule the first close whose profit reaches `triggerR x R`, where `1 R` is the
+   re-anchored initial risk (entry fill to initial stop): the stop moves to **break-even** and the
+   **trailing stop arms** in the same step — one modify, placing the stop at the better of break-even and
+   the trail stop.
+3. The armed trail ratchets a stop whose distance — in multiples of R — interpolates from `trailDistanceR`
+   (wide) down to `trailMinDistanceR` (tight) as the close advances toward the tightening reference, and
+   **never loosens**; break-even remains a floor beneath it. The constructor rejects
+   `trailDistanceR < trailMinDistanceR` — an inverted pair would widen the trail as profit grows instead of
+   tightening it. Equal values are legal (a constant-distance trail).
+
+## Everything is in R
+
+Break-even (`triggerR`), the tightening reference (`trailTightenR`), and both trail distances
+(`trailDistanceR`, `trailMinDistanceR`) all speak the same risk currency: multiples of the re-anchored
+initial risk. The manager reads no ATR — every distance is frozen at entry in units of R, so the trail does
+not adapt to later volatility (the volatility view lives in R itself when the caller derives the stop
+distance from ATR at signal time).
 
 ## The tightening reference is in R, not the target
 
-The trail tightens over a reference expressed as `trailTightenR x R` — the same risk currency the
-break-even rule uses. It is **independent of the take-profit target**: a trade can be told to reach full
-stop-tightness before its target (`trailTightenR` < the target's R multiple), at it, or beyond it. The
-target is still re-anchored as the take-profit leg; it simply no longer dictates how the stop tightens.
+The trail tightens over a reference expressed as `trailTightenR x R`. It is **independent of the
+take-profit target**: a trade can be told to reach full stop-tightness before its target
+(`trailTightenR` < the target's R multiple), at it, or beyond it. The target is still re-anchored as the
+take-profit leg; it simply does not dictate how the stop tightens.
 
 ```csharp
 using Backtester.Broker;
@@ -38,17 +47,16 @@ TrailingStopManager manager = new TrailingStopManager(
     handle,
     initialStopPrice: stopPrice,
     direction: PositionDirection.Long,
-    triggerR: 1.0m,            // break-even at +1R
+    triggerR: 1.0m,            // break-even and trail arm at +1R
     stopDistance,
     targetDistance,
     trailTightenR: 3.0m,       // fully tightened by +3R, wherever the target sits
-    trailActivationAtrMultiple: 2.0m,
-    trailDistanceAtrMultiple: 4.0m,
-    trailMinDistanceAtrMultiple: 2.5m,
+    trailDistanceR: 2.0m,      // trail 2R behind the close when far from the reference
+    trailMinDistanceR: 1.25m,  // trail 1.25R behind the close at the reference
     enableManagement: true);
 
 // Each bar, for the managed symbol:
-manager.OnBar(inPosition, bar.Close, averageEntryPrice, atr, broker);
+manager.OnBar(inPosition, bar.Close, averageEntryPrice, broker);
 if (manager.IsFinished)
 {
     // The trade opened and has closed; drop the manager and become eligible to re-enter.
@@ -57,6 +65,14 @@ if (manager.IsFinished)
 
 `enableManagement: false` keeps the bracket fully **static** after re-anchoring — no break-even, no trail —
 so an entry signal's edge can be measured against an unmanaged exit.
+
+## Upgrading from 1.x
+
+Version 2 is a clean break: `trailActivationAtrMultiple` is gone (`triggerR` arms the trail),
+`trailDistanceAtrMultiple`/`trailMinDistanceAtrMultiple` are now `trailDistanceR`/`trailMinDistanceR` in
+multiples of R rather than ATR, and `OnBar` no longer takes an `atr` argument. There is no faithful
+ATR-to-R translation for an existing configuration — re-derive the multiples against your stop distance
+(e.g. with a 2-ATR stop, an old 4-ATR trail distance is `trailDistanceR: 2.0m`).
 
 This package references `backtester.net` and nothing else: it modifies a submitted bracket's resting legs
 through `IBroker`/`BracketHandle` and speaks the engine's `PositionDirection` vocabulary.
