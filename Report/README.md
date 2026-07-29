@@ -10,9 +10,11 @@ Kept in its own package so the core engine takes on no reporting or web-asset de
 `ReportModel`. It performs no I/O, and every value the page renders — including the run inputs,
 which the `BacktestResult` now carries — is derived from the result alone:
 
-- **Stats** — net profit (currency and percent), CAGR, max drawdown, Sharpe, trades, win rate,
-  profit factor, expectancy, average win/loss, max consecutive losses.
-- **Round trips** — number, symbol, entry/exit time and price, quantity, P&L, plus derived
+- **Stats** — net profit (currency and percent), net profit split by direction, CAGR, max drawdown,
+  Sharpe, trades, win rate, profit factor, expectancy, average win/loss, max consecutive losses, and
+  the leverage and margin utilization the run carried.
+- **Round trips** — number, symbol, entry/exit time and price, quantity, the trip's **Leverage** and
+  **Margin** (see below), P&L, plus derived
   **Return %** `(Exit − Entry) / Entry`, the **Initial stop** and **Initial target** (the entry-time
   stop-loss and take-profit levels, frozen at entry and unaffected by later trailing; a dash when the
   entry declared no such leg — Initial stop shows exactly when **R** does, Initial target only when a
@@ -101,6 +103,8 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 - **Max consec. losses** — longest consecutive run of losing round trips.
 - **Profitable long** — fraction of long round trips that were profitable.
 - **Profitable short** — fraction of short round trips that were profitable.
+- **Net profit long** — realized net profit of the long round trips, in currency.
+- **Net profit short** — realized net profit of the short round trips, in currency. With **Net profit long** it partitions **Net profit** exactly (every round trip is one direction or the other).
 
 ### Trade duration
 
@@ -114,6 +118,17 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 - **Market exposure** — fraction of bars on which at least one position was open.
 - **Avg capital** — time-weighted average gross capital deployed in open positions across all bars (flat bars count as zero), in currency.
 - **Max capital** — peak gross capital deployed in open positions on any single bar, in currency.
+- **Avg leverage** — average leverage (gross exposure `Σ|position value|` over marked equity) across bars that held a position; flat bars are excluded, so the figure reads "how levered when in the market" rather than blending with time out of it (that is **Market exposure**). `1.0x` is fully invested and unlevered.
+- **Peak leverage** — the highest single-bar leverage reached over the run.
+- **Avg margin** — average margin utilization (committed Reg-T initial margin over marked equity) across bars that held a position, as a fraction. This is the same committed margin that gates buying power, re-marked each bar.
+- **Peak margin** — the highest single-bar margin utilization; near 100% means open positions had nearly exhausted buying power.
+
+> **Per-symbol leverage and margin are understated.** The per-symbol column measures each symbol against its **isolated equity**, which assumes that symbol alone traded the *full* starting capital. A symbol that in reality shared the account's capital therefore shows lower leverage and margin utilization in its own column than it actually contributed to the portfolio — the same caveat that already applies to per-symbol drawdown and CAGR. The **All symbols** column is the true portfolio figure.
+
+The per-round-trip table also carries two entry-time columns derived from the same idea:
+
+- **Leverage** (round-trip column) — the trip's entry notional (`EntryPrice × Quantity`) over the marked equity when it opened; a dash when that equity was non-positive.
+- **Margin** (round-trip column) — the Reg-T initial margin the trip committed at entry: its side's rate (0.5 long / 1.5 short) times its entry notional, in currency. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at the entry notional rather than re-marked.
 
 ### Run context
 
