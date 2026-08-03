@@ -60,6 +60,19 @@ namespace BacktesterTests.Data.Tests
 }";
 
         [Theory]
+        [InlineData(OandaEnvironment.Practice, "https://api-fxpractice.oanda.com")]
+        [InlineData(OandaEnvironment.Live, "https://api-fxtrade.oanda.com")]
+        public async Task FetchAsync_Environment_RequestsMatchingHost(OandaEnvironment environment, string expectedHost)
+        {
+            StubHttpHandler stub = new(EmptyCandlesJson);
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token", environment: environment);
+
+            await provider.FetchAsync("EUR_USD", From, To, "1h");
+
+            Assert.StartsWith($"{expectedHost}/v3/instruments/", stub.LastRequestUri);
+        }
+
+        [Theory]
         [InlineData(PriceComponent.Bid, "B", 1.19900)]
         [InlineData(PriceComponent.Ask, "A", 1.20100)]
         public async Task FetchAsync_NonDefaultPriceComponent_RequestsMatchingParamAndReadsMatchingSubObject(

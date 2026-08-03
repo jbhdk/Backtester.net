@@ -13,15 +13,16 @@ namespace Backtester.Data.Oanda
 {
     /// <summary>
     /// Fetches historical OHLCV candle data for forex instruments from Oanda's v20 REST API.
-    /// This tracer-bullet implementation always targets the Practice environment and requests
-    /// Mid-price candles by default, overridable via <see cref="PriceComponent"/>. Wide date ranges
-    /// are chunked to Oanda's 5000-candle-per-response cap and walked until the full range is
-    /// covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick count, not consolidated
+    /// Targets the Practice environment and requests Mid-price candles by default, both
+    /// overridable via <see cref="OandaEnvironment"/> and <see cref="PriceComponent"/>. Wide date
+    /// ranges are chunked to Oanda's 5000-candle-per-response cap and walked until the full range
+    /// is covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick count, not consolidated
     /// traded volume — forex spot is decentralized, so no such figure exists.
     /// </summary>
     public class OandaHistoricalDataProvider : IHistoricalDataProvider
     {
         private const string PracticeBaseUrl = "https://api-fxpractice.oanda.com";
+        private const string LiveBaseUrl = "https://api-fxtrade.oanda.com";
 
         /// <summary>The maximum number of candles Oanda's v20 candles endpoint returns in a single response.</summary>
         private const int MaxCandlesPerRequest = 5000;
@@ -29,33 +30,55 @@ namespace Backtester.Data.Oanda
         private readonly HttpClient _http;
         private readonly string _apiToken;
         private readonly PriceComponent _priceComponent;
+        private readonly string _baseUrl;
 
         /// <summary>
         /// Initializes a new provider using the given <see cref="HttpClient"/> and Oanda API bearer token.
         /// The <paramref name="priceComponent"/> selects which side of the spread candles are read from
-        /// and defaults to <see cref="PriceComponent.Mid"/>.
+        /// and defaults to <see cref="PriceComponent.Mid"/>. The <paramref name="environment"/> selects
+        /// the Oanda host and defaults to <see cref="OandaEnvironment.Practice"/>.
         /// </summary>
-        public OandaHistoricalDataProvider(HttpClient http, string apiToken, PriceComponent priceComponent = PriceComponent.Mid)
+        public OandaHistoricalDataProvider(
+            HttpClient http,
+            string apiToken,
+            PriceComponent priceComponent = PriceComponent.Mid,
+            OandaEnvironment environment = OandaEnvironment.Practice)
         {
             _http = http ?? throw new ArgumentNullException(nameof(http));
             _apiToken = apiToken ?? throw new ArgumentNullException(nameof(apiToken));
             _priceComponent = priceComponent;
+            _baseUrl = BaseUrl(environment);
         }
 
         /// <summary>
         /// Initializes a new provider from an Oanda API bearer token, building a default <see cref="HttpClient"/>.
         /// The <paramref name="priceComponent"/> selects which side of the spread candles are read from
-        /// and defaults to <see cref="PriceComponent.Mid"/>.
+        /// and defaults to <see cref="PriceComponent.Mid"/>. The <paramref name="environment"/> selects
+        /// the Oanda host and defaults to <see cref="OandaEnvironment.Practice"/>.
         /// </summary>
-        public OandaHistoricalDataProvider(string apiToken, PriceComponent priceComponent = PriceComponent.Mid)
-            : this(new HttpClient(), apiToken, priceComponent)
+        public OandaHistoricalDataProvider(
+            string apiToken,
+            PriceComponent priceComponent = PriceComponent.Mid,
+            OandaEnvironment environment = OandaEnvironment.Practice)
+            : this(new HttpClient(), apiToken, priceComponent, environment)
         {
         }
 
+        /// <summary>Maps an <see cref="OandaEnvironment"/> to its Oanda v20 REST host.</summary>
+        private static string BaseUrl(OandaEnvironment environment)
+        {
+            return environment switch
+            {
+                OandaEnvironment.Practice => PracticeBaseUrl,
+                OandaEnvironment.Live => LiveBaseUrl,
+                _ => throw new ArgumentOutOfRangeException(nameof(environment), environment, "Unknown Oanda environment.")
+            };
+        }
+
         /// <summary>
-        /// Fetches Mid-price candles for the instrument from Oanda's v20 candles endpoint against the
-        /// Practice host and maps them to <see cref="Candle"/>. The <paramref name="symbol"/> is used
-        /// verbatim as Oanda's instrument name (e.g. <c>EUR_USD</c>). Oanda caps each response at
+        /// Fetches candles for the instrument from Oanda's v20 candles endpoint and maps them to
+        /// <see cref="Candle"/>. The <paramref name="symbol"/> is used verbatim as Oanda's instrument
+        /// name (e.g. <c>EUR_USD</c>). Oanda caps each response at
         /// <see cref="MaxCandlesPerRequest"/> candles and offers no page-token concept, so a full
         /// response is treated as a signal that more candles remain: <paramref name="fromUtc"/> is
         /// advanced to just after the last returned candle's timestamp and the chunk is re-requested,
@@ -93,7 +116,7 @@ namespace Backtester.Data.Oanda
             string from = Uri.EscapeDataString(FormatTimestamp(fromUtc));
             string to = Uri.EscapeDataString(FormatTimestamp(toUtc));
             string priceParam = PriceQueryParam(_priceComponent);
-            string url = $"{PracticeBaseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price={priceParam}&granularity={granularity}&from={from}&to={to}";
+            string url = $"{_baseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price={priceParam}&granularity={granularity}&from={from}&to={to}";
 
             using HttpRequestMessage request = new(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
