@@ -39,6 +39,22 @@ namespace BacktesterTests.Core.Tests
 
 
         [Fact]
+        public void Constructor_NoAccountCurrencyGiven_DefaultsToUsd()
+        {
+            Portfolio portfolio = new(10_000m);
+
+            Assert.Equal("USD", portfolio.AccountCurrency);
+        }
+
+        [Fact]
+        public void Constructor_AccountCurrencyGiven_SetsAccountCurrency()
+        {
+            Portfolio portfolio = new(10_000m, "JPY");
+
+            Assert.Equal("JPY", portfolio.AccountCurrency);
+        }
+
+        [Fact]
         public void SnapshotAt_FreshPortfolio_ReturnsCashAndTimestamp()
         {
             Portfolio portfolio = new(10_000m);

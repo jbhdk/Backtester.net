@@ -23,6 +23,12 @@ namespace Backtester.Core
         /// <summary>Gets the cash balance the portfolio started with (its starting equity).</summary>
         public decimal StartingCash { get; }
 
+        /// <summary>
+        /// Gets the ISO currency code the portfolio's cash and equity are denominated in. A position whose
+        /// Instrument quotes in a different currency is converted into this currency for reporting.
+        /// </summary>
+        public string AccountCurrency { get; }
+
         /// <summary>Gets the current available cash balance.</summary>
         public decimal Cash { get; private set; }
 
@@ -165,11 +171,16 @@ namespace Backtester.Core
         /// </summary>
         public IReadOnlyList<RoundTrip> RoundTrips => _roundTrips;
 
-        /// <summary>Initializes a new portfolio with the given starting cash balance.</summary>
-        public Portfolio(decimal startingCash)
+        /// <summary>
+        /// Initializes a new portfolio with the given starting cash balance, denominated in
+        /// <paramref name="accountCurrency"/> (defaulting to <c>"USD"</c> so every existing call site is
+        /// unaffected).
+        /// </summary>
+        public Portfolio(decimal startingCash, string accountCurrency = "USD")
         {
             StartingCash = startingCash;
             Cash = startingCash;
+            AccountCurrency = accountCurrency;
         }
 
         /// <summary>

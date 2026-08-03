@@ -50,6 +50,32 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
+        public async Task StartAsync_InstrumentArrayConstructor_SameCurrencyProducesIdenticalResultToStringArrayConstructor()
+        {
+            Candle[] bars = { Bar(T0, 100m), Bar(T0.AddDays(1), 101m), Bar(T0.AddDays(2), 102m) };
+            IHistoricalDataFetcher fetcherForStrings = FetcherReturning(("AAPL", bars));
+            IHistoricalDataFetcher fetcherForInstruments = FetcherReturning(("AAPL", bars));
+
+            Portfolio stringPortfolio = new(10_000m);
+            BrokerSimulator stringBroker = new(stringPortfolio);
+            BacktestEngine stringEngine = new(fetcherForStrings, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), stringBroker, stringPortfolio);
+
+            Portfolio instrumentPortfolio = new(10_000m);
+            BrokerSimulator instrumentBroker = new(instrumentPortfolio);
+            Instrument[] instruments = { new() { Symbol = "AAPL", QuoteCurrency = instrumentPortfolio.AccountCurrency, ConversionSymbol = null, MarginRate = null } };
+            BacktestEngine instrumentEngine = new(fetcherForInstruments, instruments, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), instrumentBroker, instrumentPortfolio);
+
+            Backtester.Engine.BacktestResult stringResult = await stringEngine.StartAsync();
+            Backtester.Engine.BacktestResult instrumentResult = await instrumentEngine.StartAsync();
+
+            Assert.Equal(stringResult.Symbols, instrumentResult.Symbols);
+            Assert.Equal(stringPortfolio.Cash, instrumentPortfolio.Cash);
+            Assert.Equal(stringPortfolio.RealizedPnL, instrumentPortfolio.RealizedPnL);
+            Assert.Equal(stringPortfolio.Positions.Single().Quantity, instrumentPortfolio.Positions.Single().Quantity);
+            Assert.Equal(stringPortfolio.EquityHistory.Count, instrumentPortfolio.EquityHistory.Count);
+        }
+
+        [Fact]
         public async Task StartAsync_Result_CarriesExactCandleSeriesRunOn()
         {
             Candle[] bars = { Bar(T0, 100m), Bar(T0.AddDays(1), 101m) };
