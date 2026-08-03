@@ -288,7 +288,9 @@ are optional arguments to `BrokerSimulator`.
 
 Order acceptance against **Reg-T initial margin** (50% long, 150% short) is not a pluggable model — it
 is enforced intrinsically by the account, which rejects any opening order whose margin exceeds
-`Portfolio.BuyingPower`.
+`Portfolio.BuyingPower`. An `Instrument`'s `MarginRate`, when set, overrides the Reg-T split with one
+symmetric rate for both long and short on that symbol (e.g. 2% for 50:1 forex leverage); an Instrument
+without one falls back to the Reg-T default unchanged (see [ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md)).
 
 **Risk-per-trade sizing** sizes a position so a stop-out loses a fixed fraction of realized equity.
 Set both `Price` and `StopPrice` on the order so it can compute the stop distance:
@@ -308,6 +310,42 @@ IBrokerSimulator broker = new BrokerSimulator(
     portfolio,
     sizingModel: new FixedRiskSizing { RiskAmount = 500m });  // risk $500 per trade
 ```
+
+Both risk-based models convert the stop distance through the instrument's conversion rate before
+dividing, so a cross-currency instrument (e.g. a JPY-quoted pair in a USD account) still sizes
+correctly instead of silently mixing units (see [ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md)).
+
+---
+
+## Multi-currency & forex accounting
+
+Every traded symbol is described by an `Instrument` — its `QuoteCurrency` and, when that differs from
+the account's own currency, a `ConversionSymbol` naming the exact series to fetch for converting it
+(e.g. an Instrument quoted in JPY names `USD_JPY` when the account is USD). A stock/ETF Instrument
+simply sets `QuoteCurrency` equal to the account's currency and leaves `ConversionSymbol` null, so no
+conversion machinery runs at all — every existing single-currency backtest is unaffected.
+
+```csharp
+Instrument[] instruments =
+{
+    new() { Symbol = "EUR_USD", QuoteCurrency = "USD" },                                    // no conversion needed
+    new() { Symbol = "USD_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m }  // 50:1
+};
+
+Portfolio portfolio = new Portfolio(startingCash: 100_000m, accountCurrency: "USD", instruments);
+IEngine engine = new Engine(fetcher, instruments, testFrom, testTo, interval: "1h", strategy, broker, portfolio);
+```
+
+`Engine` fetches a declared `ConversionSymbol` through the same `IHistoricalDataFetcher` seam as any
+tradable symbol — the conversion series never triggers `OnBar` and never appears in a
+`BacktestResult`'s symbol list or any `RoundTrip`; it is plumbing a strategy trading `EUR_USD` in a JPY
+account never needs to know exists. Only the account-currency-denominated aggregates —
+`Portfolio.Cash`, `RealizedPnL`, `MarkedEquity`, and isolated equity — pass through the conversion
+rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
+quote currency, the real price a chart would show. See
+[ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) (currency conversion) and
+[ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md) (per-instrument margin) for the
+full design.
 
 ---
 

@@ -88,6 +88,24 @@ continuing until a short response is seen or the requested `to` is reached. All 
 concatenated and returned sorted ascending — the caller sees one seamless range regardless of how
 many requests it took, matching `AlpacaHistoricalDataProvider`'s existing page-walking behavior.
 
+## Currency conversion
+
+This provider is pure acquisition — it has no concept of the engine's account currency and does not
+build `Instrument`s for you. A pair whose quote currency differs from your account's own currency
+(e.g. `USD_JPY` in a USD account is fine as-is, but a JPY account holding `EUR_USD` needs converting)
+needs its `Instrument` declared with a `ConversionSymbol` naming the exact Oanda pair to fetch for the
+conversion rate — you state it explicitly, since only you reliably know which direction Oanda lists a
+given pair:
+
+```csharp
+Instrument[] instruments = { new() { Symbol = "EUR_USD", QuoteCurrency = "USD", ConversionSymbol = "USD_JPY" } };
+Portfolio portfolio = new Portfolio(startingCash: 1_000_000m, accountCurrency: "JPY", instruments);
+```
+
+See the root [README](../README.md#multi-currency--forex-accounting) and
+[ADR 0029](../docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) for how `Engine` fetches
+and `Portfolio` applies the conversion.
+
 ## Behavior notes
 
 - **`Volume` is a tick count, not traded volume.** Forex spot is decentralized, so there is no
