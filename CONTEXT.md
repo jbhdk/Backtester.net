@@ -209,6 +209,30 @@ short's value falls as price rises); includes unrealized PnL. The basis of the e
 buying power.
 _Avoid_: equity (unqualified), NAV.
 
+### Instruments & currency
+
+**Instrument**:
+Caller-supplied per-symbol metadata: its quote currency and, when that differs from the account's
+currency, the Conversion symbol needed to translate it. Required for every traded symbol, not just
+forex — a stock/ETF Instrument simply has no conversion to do. Deliberately left room to carry other
+per-symbol execution config later (e.g. per-instrument spread/commission), but today it holds only
+currency information.
+_Avoid_: symbol (a symbol is `Instrument.Symbol`, a bare identifier), ticker.
+
+**Account currency**:
+The single currency Portfolio's cash and equity are denominated in, set once at construction. Every
+Instrument's quote currency is compared against it to decide whether conversion applies.
+_Avoid_: base currency (a currency-pair term, not the account's), currency (unqualified).
+
+**Conversion symbol**:
+The exact symbol an Instrument declares for fetching the historical rate that converts its quote
+currency into the Account currency (e.g. an Instrument quoted in JPY names `USD_JPY` when the account
+is USD). Null when the Instrument's quote currency already equals the Account currency. Provider
+symbol-naming is the caller's concern — the engine fetches whatever string it is given and stays
+ignorant of any provider's naming convention.
+_Avoid_: cross rate, conversion pair (that names the currency pair conceptually; Conversion symbol is
+the concrete fetch key).
+
 ### Risk & sizing
 
 **Risk-per-trade sizing**:
