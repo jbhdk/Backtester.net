@@ -25,6 +25,11 @@ namespace Backtester.Core
         // from AccountCurrency; a symbol absent here already quotes in AccountCurrency.
         private readonly Dictionary<string, string> _conversionSymbolBySymbol = new();
 
+        // Key: symbol/ticker -> a symmetric long/short initial-margin rate overriding the Reg-T split
+        // (ADR 0030). Entries exist only for instruments that declare MarginRate; a symbol absent here
+        // falls back to LongInitialMarginRate/ShortInitialMarginRate.
+        private readonly Dictionary<string, decimal> _marginRateBySymbol = new();
+
         /// <summary>Gets the cash balance the portfolio started with (its starting equity).</summary>
         public decimal StartingCash { get; }
 
@@ -62,7 +67,7 @@ namespace Backtester.Core
         /// amount.
         /// </summary>
         public decimal CommittedMargin =>
-            Positions.Sum(p => MarginRate(p.Quantity) * Math.Abs(ConvertedMarketValue(p)));
+            Positions.Sum(p => MarginRate(p.Symbol, p.Quantity) * Math.Abs(ConvertedMarketValue(p)));
 
         /// <summary>
         /// Gets the marked equity available above the initial margin already committed by open positions.
@@ -91,7 +96,7 @@ namespace Backtester.Core
                 return 0m;
             }
 
-            decimal rate = request.Side == OrderSide.Buy ? LongInitialMarginRate : ShortInitialMarginRate;
+            decimal rate = MarginRate(request.Symbol, request.Side == OrderSide.Buy ? 1 : -1);
             return rate * ToAccountCurrency(request.Symbol, price * request.Quantity);
         }
 
@@ -142,8 +147,18 @@ namespace Backtester.Core
             return ToAccountCurrency(position.Symbol, MarkPrice(position) * position.Quantity);
         }
 
-        private decimal MarginRate(int quantity)
+        /// <summary>
+        /// Returns the initial-margin rate for a symbol and side: the Instrument's own MarginRate,
+        /// applied symmetrically to both long and short, when declared (ADR 0030); otherwise the
+        /// Reg-T LongInitialMarginRate/ShortInitialMarginRate split.
+        /// </summary>
+        private decimal MarginRate(string symbol, int quantity)
         {
+            if (_marginRateBySymbol.TryGetValue(symbol, out decimal rate))
+            {
+                return rate;
+            }
+
             return quantity >= 0 ? LongInitialMarginRate : ShortInitialMarginRate;
         }
 
@@ -208,6 +223,11 @@ namespace Backtester.Core
                     if (instrument.ConversionSymbol != null)
                     {
                         _conversionSymbolBySymbol[instrument.Symbol] = instrument.ConversionSymbol;
+                    }
+
+                    if (instrument.MarginRate.HasValue)
+                    {
+                        _marginRateBySymbol[instrument.Symbol] = instrument.MarginRate.Value;
                     }
                 }
             }
@@ -397,7 +417,7 @@ namespace Backtester.Core
                 decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
                 decimal value = ToAccountCurrency(position.Symbol, markPrice * position.Quantity);
                 positionValueBySymbol[position.Symbol] = value;
-                heldMarginBySymbol[position.Symbol] = MarginRate(position.Quantity) * Math.Abs(value);
+                heldMarginBySymbol[position.Symbol] = MarginRate(position.Symbol, position.Quantity) * Math.Abs(value);
                 unrealized += value;
             }
 
