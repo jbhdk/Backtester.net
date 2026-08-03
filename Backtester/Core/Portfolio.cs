@@ -240,8 +240,11 @@ namespace Backtester.Core
         /// unit (e.g. <c>USD_JPY</c> for a JPY-quoted symbol in a USD account). Returns the amount
         /// unchanged when the symbol declares no conversion or no rate has been observed yet, so an
         /// Instrument already quoting in the account's currency needs no conversion machinery at all.
+        /// A public seam for callers outside Portfolio (e.g. risk-based sizing models) that must convert
+        /// a quote-currency-denominated amount, such as a stop distance, into the same units as an
+        /// account-currency-denominated budget before dividing (ADR 0029).
         /// </summary>
-        private decimal ToAccountCurrency(string symbol, decimal nativeAmount)
+        public decimal ToAccountCurrency(string symbol, decimal nativeAmount)
         {
             if (_conversionSymbolBySymbol.TryGetValue(symbol, out string conversionSymbol)
                 && _lastCloseBySymbol.TryGetValue(conversionSymbol, out decimal rate)

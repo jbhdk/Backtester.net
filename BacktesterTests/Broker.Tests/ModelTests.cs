@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Backtester.Core;
 using Backtester.ExecutionModels.Sizing;
 using Xunit;
@@ -18,6 +19,18 @@ namespace BacktesterTests.Broker.Tests
                 Type = OrderType.Market,
                 Price = price,
                 Quantity = qty
+            };
+        }
+
+        private static MarketSlice SliceWithBar(string symbol, decimal close, DateTime ts)
+        {
+            return new()
+            {
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbol] = new Candle { Timestamp = ts, Open = close, High = close, Low = close, Close = close, Volume = 1000 }
+                }
             };
         }
 
@@ -106,6 +119,40 @@ namespace BacktesterTests.Broker.Tests
             int qty = sizing.Size(request, portfolio);
 
             Assert.Equal(0, qty);
+        }
+
+        [Fact]
+        public void RiskPerTradeSizing_ConvertsStopDistance_ForCrossCurrencyInstrument()
+        {
+            // EUR_JPY quotes in JPY; account is USD, rate 150 JPY-per-USD (seeded via USD_JPY close).
+            // 1% of $10,000 = $100 budget. Native stop distance = |15,000-14,250| = 750 JPY, converted
+            // through the 150 rate = 5 USD -> floor($100/$5) = 20 shares. Left unconverted (750 JPY)
+            // this would floor($100/$750) = 0.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            OrderRequest request = new() { Symbol = "EUR_JPY", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 15_000m, StopPrice = 14_250m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void RiskPerTradeSizing_UnaffectedBySameCurrencyInstrument()
+        {
+            // AAPL's Instrument declares QuoteCurrency == AccountCurrency (no ConversionSymbol), so
+            // ToAccountCurrency is an identity conversion (effectively 1:1) — same inputs as
+            // RiskPerTradeSizing_ReturnsExpectedShares must yield the same 20 shares.
+            Instrument[] instruments = { new() { Symbol = "AAPL", QuoteCurrency = "USD" } };
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
         }
 
         // --- PercentNotionalSizing ---
@@ -236,6 +283,40 @@ namespace BacktesterTests.Broker.Tests
             FixedRiskSizing sizing = new() { RiskAmount = 100m };
             Portfolio portfolio = new(10_000m);
             OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 40m, StopOffset = 5m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_ConvertsStopDistance_ForCrossCurrencyInstrument()
+        {
+            // EUR_JPY quotes in JPY; account is USD, rate 150 JPY-per-USD (seeded via USD_JPY close).
+            // $100 fixed budget. Native stop distance = |15,000-14,250| = 750 JPY, converted through the
+            // 150 rate = 5 USD -> floor($100/$5) = 20 shares. Left unconverted (750 JPY) this would
+            // floor($100/$750) = 0.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            OrderRequest request = new() { Symbol = "EUR_JPY", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 15_000m, StopPrice = 14_250m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
+        [Fact]
+        public void FixedRiskSizing_UnaffectedBySameCurrencyInstrument()
+        {
+            // AAPL's Instrument declares QuoteCurrency == AccountCurrency (no ConversionSymbol), so
+            // ToAccountCurrency is an identity conversion (effectively 1:1) — same inputs as
+            // FixedRiskSizing_ReturnsExpectedShares must yield the same 20 shares.
+            Instrument[] instruments = { new() { Symbol = "AAPL", QuoteCurrency = "USD" } };
+            FixedRiskSizing sizing = new() { RiskAmount = 100m };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
 
             int qty = sizing.Size(request, portfolio);
 

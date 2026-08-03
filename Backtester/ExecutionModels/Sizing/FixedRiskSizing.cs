@@ -4,7 +4,9 @@ namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Sizes positions so that a stop-out loses a fixed currency amount that does not scale with the
-    /// account. Formula: shares = floor(RiskAmount / stopDistance).
+    /// account. Formula: shares = floor(RiskAmount / stopDistance), where stopDistance is converted into
+    /// the portfolio's account currency (ADR 0029) so a cross-currency instrument's stop distance shares
+    /// units with RiskAmount before dividing.
     /// </summary>
     public class FixedRiskSizing : ISizingModel
     {
@@ -27,7 +29,8 @@ namespace Backtester.ExecutionModels.Sizing
                 return 0;
             }
 
-            return (int)(RiskAmount / stopDistance);
+            decimal convertedStopDistance = portfolio.ToAccountCurrency(request.Symbol, stopDistance);
+            return (int)(RiskAmount / convertedStopDistance);
         }
     }
 }
