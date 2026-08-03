@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Report.Toolkit\Report.Toolkit.csproj" />
     <ProjectReference Include="..\Data.Alpaca\Data.Alpaca.csproj" />
     <ProjectReference Include="..\Data.Yahoo\Data.Yahoo.csproj" />
+    <ProjectReference Include="..\Data.Oanda\Data.Oanda.csproj" />
     <ProjectReference Include="..\Analysis\Analysis.csproj" />
     <ProjectReference Include="..\Analysis.Claude\Analysis.Claude.csproj" />
     <ProjectReference Include="..\Optimization\Optimization.csproj" />
