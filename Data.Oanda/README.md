@@ -13,10 +13,6 @@ candles from Oanda's v20 `/v3/instruments/{instrument}/candles` endpoint and map
 engine's `Candle` type. Like every provider it is **pure acquisition** — no caching, no disk — so it
 slots in wherever the Alpaca or Yahoo providers do and lets `HistoricalDataFetcher` handle the cache.
 
-This first cut is a tracer bullet: it targets the Practice environment, requests Mid-price candles,
-and fetches a single page (up to 5000 candles). Pagination, price-component switching, and
-environment switching arrive in later issues.
-
 ## Quick start
 
 ```csharp
@@ -42,27 +38,62 @@ The `symbol` parameter is passed through verbatim as Oanda's `{instrument}` path
 
 ## Intervals
 
-Pass the shared `m`/`h`/`d`/`wk`/`mo` interval vocabulary used by the Yahoo and Alpaca providers; it
-is parsed into Oanda's fixed granularity codes:
+Pass the shared `m`/`h`/`d`/`wk`/`mo` interval vocabulary used by the Yahoo and Alpaca providers, plus
+an Oanda-specific `s` (seconds) unit. It is parsed into Oanda's fixed granularity codes:
 
+- Seconds: `5s`, `10s`, `15s`, `30s`
 - Minutes: `1m`, `2m`, `4m`, `5m`, `10m`, `15m`, `30m`
 - Hours: `1h`, `2h`, `3h`, `4h`, `6h`, `8h`, `12h`
 - `1d`, `1wk`, `1mo`
 
 Oanda's daily/weekly/monthly granularities have no multiplier, so only `1d`, `1wk`, and `1mo` are
-valid — `7d` throws just like `7m` or `5h` would. An unsupported interval throws
+valid — `7d` throws just like `7m`, `5h`, or `20s` would. An unsupported interval throws
 `NotSupportedException` naming the valid set, before any network call.
+
+## Price component (Mid / Bid / Ask)
+
+The constructor's `priceComponent` parameter selects which side of the spread candles are read from,
+via `PriceComponent.Mid` (default), `.Bid`, or `.Ask`. It maps to Oanda's `price` query parameter
+(`M`/`B`/`A`) and the response sub-object OHLC values are read from (`mid`/`bid`/`ask`):
+
+```csharp
+IHistoricalDataProvider askSide = new OandaHistoricalDataProvider(apiToken, priceComponent: PriceComponent.Ask);
+```
+
+`Mid` defaults so a forex backtest behaves like a single-price-series backtest, comparable to how the
+equity providers report a single price. See [ADR 0028](../docs/adr/0028-oanda-provider-defaults.md)
+for why this is the default rather than `Bid`/`Ask`.
+
+## Environment (Practice / Live)
+
+The constructor's `environment` parameter selects the Oanda host, via `OandaEnvironment.Practice`
+(default) or `.Live`:
+
+```csharp
+IHistoricalDataProvider live = new OandaHistoricalDataProvider(apiToken, environment: OandaEnvironment.Live);
+```
+
+`Practice` resolves to `https://api-fxpractice.oanda.com`, `Live` to
+`https://api-fxtrade.oanda.com`. Both serve identical real market candles — Oanda's Practice
+environment is not simulated data — so `Practice` is the free, no-funding-required default; a user
+with an existing live account's token opts into `Live` explicitly. See
+[ADR 0028](../docs/adr/0028-oanda-provider-defaults.md).
+
+## Pagination
+
+Oanda's candles endpoint caps each response at 5000 candles and offers no page-token concept. A
+range wider than that is walked automatically: the provider requests a chunk, and if the response is
+full it advances `from` to just after the last returned candle's timestamp and requests again,
+continuing until a short response is seen or the requested `to` is reached. All chunks are
+concatenated and returned sorted ascending — the caller sees one seamless range regardless of how
+many requests it took, matching `AlpacaHistoricalDataProvider`'s existing page-walking behavior.
 
 ## Behavior notes
 
-- **Practice environment, Mid price.** This provider always targets
-  `https://api-fxpractice.oanda.com` and always requests `price=M` (Mid) candles.
 - **`Volume` is a tick count, not traded volume.** Forex spot is decentralized, so there is no
   consolidated traded-volume figure; Oanda's `volume` field counts price ticks observed during the
   candle, and that count is mapped directly into `Candle.Volume`. Treat it as an activity proxy, not
-  a trade size.
-- **Single page only.** This issue does not walk pagination; requests beyond Oanda's 5000-candle page
-  limit are a separate issue.
+  a trade size. See [ADR 0028](../docs/adr/0028-oanda-provider-defaults.md).
 - **Bars are returned sorted ascending by timestamp.**
 - **Transport errors surface** as `InvalidOperationException` carrying the HTTP status and body,
   unwrapped, with no retry/backoff.

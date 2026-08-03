@@ -14,7 +14,7 @@ brings its own library, computes its series, and acts on them.
 
 ## Packages
 
-The repository builds nine NuGet packages. Use the engine on its own, and add a data source,
+The repository builds ten NuGet packages. Use the engine on its own, and add a data source,
 reporting, analysis, or optimization when you want them. The core makes no outbound network call on its own — every live data
 provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)).
 
@@ -23,6 +23,7 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | [`backtester.net`](Backtester/README.md) | The backtesting engine: the data seams, the cache-aware fetcher, the offline CSV provider, broker, portfolio, strategies, execution models. | — |
 | [`backtester.net.data.yahoo`](Data.Yahoo/README.md) | Opt-in Yahoo Finance data provider. BCL-only. | `backtester.net` |
 | [`backtester.net.data.alpaca`](Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
+| [`backtester.net.data.oanda`](Data.Oanda/README.md) | Opt-in Oanda v20 forex data provider (Mid/Bid/Ask, Practice/Live, seconds-to-monthly granularity). BCL-only. | `backtester.net` |
 | [`backtester.net.report`](Report/README.md) | Opt-in HTML reporting built from a run's `BacktestResult`. Kept separate so the engine takes on no web-asset dependencies. | `backtester.net` |
 | [`backtester.net.report.toolkit`](Report.Toolkit/README.md) | Opt-in report-side helper that reflects an attributed settings object into configuration cards, so a strategy's parameters render at the top of the report. | `backtester.net.report` |
 | [`backtester.net.analysis`](Analysis/README.md) | Opt-in, AI-agnostic Analysis: reduces a report model to an Analysis digest, asks an Analysis client, and enforces the Analysis contract. Makes no outbound call. | `backtester.net.report` |
@@ -321,6 +322,10 @@ Data flows through two seams (see [`CONTEXT.md`](CONTEXT.md) for the distinction
     (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1wk`, `1mo`, …); raw, unadjusted prices.
   - [`backtester.net.data.alpaca`](Data.Alpaca/README.md) — Alpaca (US equities, consolidated
     SIP, split-adjusted by default).
+  - [`backtester.net.data.oanda`](Data.Oanda/README.md) — Oanda v20 forex candles (`EUR_USD`,
+    `XAU_USD`, …); Mid price by default, Bid/Ask opt-in; Practice environment by default, Live
+    opt-in; adds a seconds-granularity interval unit (`5s`, `10s`, `15s`, `30s`) beyond the shared
+    vocabulary.
 - **Fetcher** (`IHistoricalDataFetcher`) — the cache-aware orchestrator the engine talks to. The
   fetchers and the offline CSV provider live in the core package.
 
@@ -566,6 +571,7 @@ Backtester/            The engine (backtester.net)
   ExecutionModels/     Commission, Slippage, Sizing, Risk models
 Data.Yahoo/            Yahoo Finance provider (backtester.net.data.yahoo)
 Data.Alpaca/           Alpaca provider (backtester.net.data.alpaca)
+Data.Oanda/            Oanda v20 forex provider (backtester.net.data.oanda)
 Report/                HTML reporting (backtester.net.report)
 Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
 Analysis/              AI-agnostic Analysis (backtester.net.analysis)
@@ -582,6 +588,7 @@ CONTEXT.md             The engine's ubiquitous language (glossary)
 Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md),
 [`Data.Yahoo/README.md`](Data.Yahoo/README.md),
 [`Data.Alpaca/README.md`](Data.Alpaca/README.md),
+[`Data.Oanda/README.md`](Data.Oanda/README.md),
 [`Report/README.md`](Report/README.md),
 [`Report.Toolkit/README.md`](Report.Toolkit/README.md),
 [`Analysis/README.md`](Analysis/README.md),
