@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Backtester.Core;
@@ -158,6 +160,26 @@ namespace BacktesterTests.Data.Tests
             Assert.Contains("Invalid token", ex.Message);
         }
 
+        [Fact]
+        public async Task FetchAsync_FirstChunkReturnsFull5000Candles_RequestsAndReturnsFollowUpChunkToo()
+        {
+            DateTime baseTime = new(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            string firstChunkJson = BuildCandlesJson(baseTime, count: 5000, stepMinutes: 1);
+            DateTime secondChunkStart = baseTime.AddMinutes(5000);
+            string secondChunkJson = BuildCandlesJson(secondChunkStart, count: 1, stepMinutes: 1);
+
+            SequencedStubHttpHandler stub = new(firstChunkJson, secondChunkJson);
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
+
+            List<Candle> candles = new(await provider.FetchAsync("EUR_USD", baseTime, baseTime.AddYears(1), "1m"));
+
+            Assert.Equal(2, stub.RequestUris.Count);
+            Assert.Equal(5001, candles.Count);
+            Assert.Equal(5001, candles.Select(c => c.Timestamp).Distinct().Count());
+            Assert.Equal(baseTime, candles[0].Timestamp);
+            Assert.Equal(secondChunkStart, candles[^1].Timestamp);
+        }
+
         [Fact(Skip = "Requires network and a valid Oanda Practice API token — run manually to smoke-test the live v20 endpoint")]
         public async Task FetchAsync_LiveEurUsd1h_ReturnsCandles()
         {
@@ -170,6 +192,27 @@ namespace BacktesterTests.Data.Tests
 
             Assert.NotEmpty(candles);
             Assert.All(candles, c => Assert.True(c.Close > 0m));
+        }
+
+        /// <summary>Builds a candles JSON payload with <paramref name="count"/> candles, one-minute-granularity metadata, starting at <paramref name="start"/> and stepping by <paramref name="stepMinutes"/> minutes.</summary>
+        private static string BuildCandlesJson(DateTime start, int count, int stepMinutes)
+        {
+            StringBuilder sb = new();
+            sb.Append(@"{ ""candles"": [");
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(',');
+                }
+
+                string time = start.AddMinutes(i * stepMinutes).ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ");
+                sb.Append(@"{ ""complete"": true, ""volume"": 1, ""time"": """).Append(time)
+                  .Append(@""", ""mid"": { ""o"": ""1.0"", ""h"": ""1.0"", ""l"": ""1.0"", ""c"": ""1.0"" } }");
+            }
+
+            sb.Append(@"], ""granularity"": ""M1"", ""instrument"": ""EUR_USD"" }");
+            return sb.ToString();
         }
 
         /// <summary>Returns a fixed response body for every HTTP request; records the last request URI.</summary>
@@ -193,6 +236,32 @@ namespace BacktesterTests.Data.Tests
                 return Task.FromResult(new HttpResponseMessage(_status)
                 {
                     Content = new StringContent(_body)
+                });
+            }
+        }
+
+        /// <summary>Returns each given response body in order on successive requests, repeating the last body for any extra calls; records every request URI.</summary>
+        private class SequencedStubHttpHandler : HttpMessageHandler
+        {
+            private readonly string[] _bodies;
+            private int _index;
+
+            /// <summary>Gets the URI strings of every request sent through this handler, in order.</summary>
+            public List<string> RequestUris { get; } = new();
+
+            public SequencedStubHttpHandler(params string[] bodies)
+            {
+                _bodies = bodies;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            {
+                RequestUris.Add(request.RequestUri?.ToString());
+                string body = _bodies[Math.Min(_index, _bodies.Length - 1)];
+                _index++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body)
                 });
             }
         }

@@ -13,14 +13,17 @@ namespace Backtester.Data.Oanda
 {
     /// <summary>
     /// Fetches historical OHLCV candle data for forex instruments from Oanda's v20 REST API.
-    /// This tracer-bullet implementation always targets the Practice environment, always requests
-    /// Mid-price candles, and fetches a single page (no pagination). <see cref="Candle.Volume"/> is
-    /// Oanda's per-candle tick count, not consolidated traded volume — forex spot is decentralized,
-    /// so no such figure exists.
+    /// This tracer-bullet implementation always targets the Practice environment and always requests
+    /// Mid-price candles. Wide date ranges are chunked to Oanda's 5000-candle-per-response cap and
+    /// walked until the full range is covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick
+    /// count, not consolidated traded volume — forex spot is decentralized, so no such figure exists.
     /// </summary>
     public class OandaHistoricalDataProvider : IHistoricalDataProvider
     {
         private const string PracticeBaseUrl = "https://api-fxpractice.oanda.com";
+
+        /// <summary>The maximum number of candles Oanda's v20 candles endpoint returns in a single response.</summary>
+        private const int MaxCandlesPerRequest = 5000;
 
         private readonly HttpClient _http;
         private readonly string _apiToken;
@@ -45,11 +48,41 @@ namespace Backtester.Data.Oanda
         /// <summary>
         /// Fetches Mid-price candles for the instrument from Oanda's v20 candles endpoint against the
         /// Practice host and maps them to <see cref="Candle"/>. The <paramref name="symbol"/> is used
-        /// verbatim as Oanda's instrument name (e.g. <c>EUR_USD</c>).
+        /// verbatim as Oanda's instrument name (e.g. <c>EUR_USD</c>). Oanda caps each response at
+        /// <see cref="MaxCandlesPerRequest"/> candles and offers no page-token concept, so a full
+        /// response is treated as a signal that more candles remain: <paramref name="fromUtc"/> is
+        /// advanced to just after the last returned candle's timestamp and the chunk is re-requested,
+        /// continuing until a short response is seen or <paramref name="toUtc"/> is reached.
         /// </summary>
         public async Task<IEnumerable<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
             string granularity = ParseGranularity(interval);
+
+            List<Candle> candles = new();
+            DateTime chunkFrom = fromUtc;
+            while (chunkFrom < toUtc)
+            {
+                List<Candle> chunk = await FetchChunkAsync(symbol, granularity, chunkFrom, toUtc, ct).ConfigureAwait(false);
+                if (chunk.Count == 0)
+                {
+                    break;
+                }
+
+                candles.AddRange(chunk);
+                if (chunk.Count < MaxCandlesPerRequest)
+                {
+                    break;
+                }
+
+                chunkFrom = chunk[^1].Timestamp.AddTicks(1);
+            }
+
+            return candles;
+        }
+
+        /// <summary>Requests a single chunk of candles covering at most <see cref="MaxCandlesPerRequest"/> candles.</summary>
+        private async Task<List<Candle>> FetchChunkAsync(string symbol, string granularity, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+        {
             string from = Uri.EscapeDataString(FormatTimestamp(fromUtc));
             string to = Uri.EscapeDataString(FormatTimestamp(toUtc));
             string url = $"{PracticeBaseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price=M&granularity={granularity}&from={from}&to={to}";
@@ -72,7 +105,7 @@ namespace Backtester.Data.Oanda
         /// Parses an Oanda v20 candles JSON payload into candles, reading OHLC from the Mid sub-object
         /// and mapping the per-candle tick-count <c>volume</c> field into <see cref="Candle.Volume"/>.
         /// </summary>
-        private static IEnumerable<Candle> ParseCandles(string json)
+        private static List<Candle> ParseCandles(string json)
         {
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement candlesElement = doc.RootElement.GetProperty("candles");
