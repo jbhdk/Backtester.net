@@ -20,6 +20,11 @@ namespace Backtester.Engine
         private readonly IHistoricalDataFetcher _fetcher;
         private readonly Instrument[] _instruments;
         private readonly string[] _symbols;
+        private readonly HashSet<string> _tradableSymbols;
+        // The tradable symbols plus every declared ConversionSymbol, deduplicated: the full set Engine
+        // fetches and slices on. A ConversionSymbol never reaches _symbols/_tradableSymbols, so it never
+        // triggers strategy.OnBar and never surfaces in BacktestResult's symbol list or candle history.
+        private readonly string[] _fetchSymbols;
         private readonly DateTime _testFromUtc;
         private readonly DateTime _testToUtc;
         private readonly Warmup _warmup;
@@ -206,6 +211,11 @@ namespace Backtester.Engine
             _fetcher = fetcher;
             _instruments = instruments;
             _symbols = instruments.Select(instrument => instrument.Symbol).ToArray();
+            _tradableSymbols = new HashSet<string>(_symbols);
+            _fetchSymbols = _symbols
+                .Concat(instruments.Where(instrument => instrument.ConversionSymbol != null).Select(instrument => instrument.ConversionSymbol))
+                .Distinct()
+                .ToArray();
             _testFromUtc = testFrom;
             _testToUtc = testTo;
             _warmup = warmup;
@@ -240,7 +250,7 @@ namespace Backtester.Engine
             // precompute, but only the Test-range slice is looped and measured (ADR 0022).
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> dataSeries = await FetchSeriesAsync(ct).ConfigureAwait(false);
 
-            _strategy.OnStart(dataSeries);
+            _strategy.OnStart(TradableOnly(dataSeries));
 
             IReadOnlyDictionary<string, IReadOnlyList<Candle>> testSeries = ClipSeriesToTestRange(dataSeries);
 
@@ -262,7 +272,7 @@ namespace Backtester.Engine
                 ? ClipIndicatorsToTestRange(source.Indicators)
                 : Array.Empty<Indicator>();
 
-            return new BacktestResult(testSeries, _portfolio, indicators, _symbols, _interval, _testFromUtc, _testToUtc, _broker.RejectedOrders, _broker.BracketLevelChanges);
+            return new BacktestResult(TradableOnly(testSeries), _portfolio, indicators, _symbols, _interval, _testFromUtc, _testToUtc, _broker.RejectedOrders, _broker.BracketLevelChanges);
         }
 
         /// <summary>Signals the engine to halt after completing the current bar.</summary>
@@ -278,7 +288,7 @@ namespace Backtester.Engine
         /// </summary>
         private async Task<IReadOnlyDictionary<string, IReadOnlyList<Candle>>> FetchSeriesAsync(CancellationToken ct)
         {
-            Task<IReadOnlyList<Candle>>[] fetches = _symbols
+            Task<IReadOnlyList<Candle>>[] fetches = _fetchSymbols
                 .Select(symbol => FetchSymbolSeriesAsync(symbol, ct))
                 .ToArray();
 
@@ -286,12 +296,39 @@ namespace Backtester.Engine
 
             // Key: symbol/ticker (string) -> fetched candle series for that symbol
             Dictionary<string, IReadOnlyList<Candle>> series = new();
-            for (int i = 0; i < _symbols.Length; i++)
+            for (int i = 0; i < _fetchSymbols.Length; i++)
             {
-                series[_symbols[i]] = results[i];
+                series[_fetchSymbols[i]] = results[i];
             }
 
             return series;
+        }
+
+        /// <summary>
+        /// Returns <paramref name="series"/> restricted to the tradable symbols, dropping any
+        /// ConversionSymbol entries so they never reach the strategy's <c>OnStart</c> history or
+        /// <see cref="BacktestResult.CandleHistory"/>. Returns the original reference unchanged when there
+        /// are no ConversionSymbols to drop, so the common (non-forex) path allocates nothing.
+        /// </summary>
+        private IReadOnlyDictionary<string, IReadOnlyList<Candle>> TradableOnly(
+            IReadOnlyDictionary<string, IReadOnlyList<Candle>> series)
+        {
+            if (_fetchSymbols.Length == _symbols.Length)
+            {
+                return series;
+            }
+
+            // Key: symbol/ticker (string) -> that symbol's candle series, tradable symbols only
+            Dictionary<string, IReadOnlyList<Candle>> tradable = new(_symbols.Length);
+            foreach (string symbol in _symbols)
+            {
+                if (series.TryGetValue(symbol, out IReadOnlyList<Candle> candles))
+                {
+                    tradable[symbol] = candles;
+                }
+            }
+
+            return tradable;
         }
 
         /// <summary>
@@ -315,6 +352,10 @@ namespace Backtester.Engine
         /// would let the strategy act on a symbol whose orders are frozen — most damagingly, re-submit an
         /// entry whose prior submission is still pending, stacking the position. Gating on the real bar keeps
         /// each symbol's decision cadence aligned with its fill cadence.
+        ///
+        /// A ConversionSymbol riding along in the slice solely to convert another Instrument's currency
+        /// (ADR 0029) never reaches this dispatch, even on its own real bar — it is plumbing the strategy
+        /// never declared as tradable.
         /// </summary>
         private void RunOnce(MarketSlice slice)
         {
@@ -325,7 +366,7 @@ namespace Backtester.Engine
             PortfolioSnapshot snapshot = _portfolio.SnapshotAt(slice.Timestamp);
             foreach ((string symbol, Candle bar) in slice.BarsBySymbol)
             {
-                if (slice.HasRealBar(symbol))
+                if (_tradableSymbols.Contains(symbol) && slice.HasRealBar(symbol))
                 {
                     _strategy.OnBar(symbol, bar, snapshot, _broker);
                 }

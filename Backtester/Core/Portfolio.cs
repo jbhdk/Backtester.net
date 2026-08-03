@@ -20,6 +20,11 @@ namespace Backtester.Core
         // and value new orders for the Reg-T margin gate.
         private readonly Dictionary<string, decimal> _lastCloseBySymbol = new();
 
+        // Key: symbol/ticker -> the exact provider symbol whose price converts that symbol's quote
+        // currency into AccountCurrency. Entries exist only for instruments whose QuoteCurrency differs
+        // from AccountCurrency; a symbol absent here already quotes in AccountCurrency.
+        private readonly Dictionary<string, string> _conversionSymbolBySymbol = new();
+
         /// <summary>Gets the cash balance the portfolio started with (its starting equity).</summary>
         public decimal StartingCash { get; }
 
@@ -46,16 +51,18 @@ namespace Backtester.Core
 
         /// <summary>
         /// Gets the account's marked-to-market equity: cash plus open positions valued at their latest
-        /// close (falling back to average entry price for symbols not yet marked).
+        /// close (falling back to average entry price for symbols not yet marked), converted into
+        /// AccountCurrency for any position whose Instrument quotes in a different currency (ADR 0029).
         /// </summary>
-        public decimal MarkedEquity => Cash + Positions.Sum(p => MarkPrice(p) * p.Quantity);
+        public decimal MarkedEquity => Cash + Positions.Sum(ConvertedMarketValue);
 
         /// <summary>
-        /// Gets the initial margin committed by open positions: each position's latest market value times
-        /// its side's initial-margin rate, always a non-negative (gross) amount.
+        /// Gets the initial margin committed by open positions, in AccountCurrency: each position's latest
+        /// market value (converted) times its side's initial-margin rate, always a non-negative (gross)
+        /// amount.
         /// </summary>
         public decimal CommittedMargin =>
-            Positions.Sum(p => MarginRate(p.Quantity) * Math.Abs(MarkPrice(p) * p.Quantity));
+            Positions.Sum(p => MarginRate(p.Quantity) * Math.Abs(ConvertedMarketValue(p)));
 
         /// <summary>
         /// Gets the marked equity available above the initial margin already committed by open positions.
@@ -85,7 +92,7 @@ namespace Backtester.Core
             }
 
             decimal rate = request.Side == OrderSide.Buy ? LongInitialMarginRate : ShortInitialMarginRate;
-            return rate * price * request.Quantity;
+            return rate * ToAccountCurrency(request.Symbol, price * request.Quantity);
         }
 
         /// <summary>
@@ -123,6 +130,16 @@ namespace Backtester.Core
         private decimal MarkPrice(Position position)
         {
             return _lastCloseBySymbol.TryGetValue(position.Symbol, out decimal close) ? close : position.AveragePrice;
+        }
+
+        /// <summary>
+        /// Returns a position's signed market value (latest mark price times quantity) converted into
+        /// AccountCurrency, the shared basis for MarkedEquity and CommittedMargin so both stay denominated
+        /// in the same currency for a cross-currency Instrument.
+        /// </summary>
+        private decimal ConvertedMarketValue(Position position)
+        {
+            return ToAccountCurrency(position.Symbol, MarkPrice(position) * position.Quantity);
         }
 
         private decimal MarginRate(int quantity)
@@ -174,13 +191,46 @@ namespace Backtester.Core
         /// <summary>
         /// Initializes a new portfolio with the given starting cash balance, denominated in
         /// <paramref name="accountCurrency"/> (defaulting to <c>"USD"</c> so every existing call site is
-        /// unaffected).
+        /// unaffected). <paramref name="instruments"/> declares, for any symbol quoted in a currency other
+        /// than <paramref name="accountCurrency"/>, which series to convert it through (ADR 0029); null or
+        /// omitted when every traded symbol already quotes in the account's own currency.
         /// </summary>
-        public Portfolio(decimal startingCash, string accountCurrency = "USD")
+        public Portfolio(decimal startingCash, string accountCurrency = "USD", Instrument[] instruments = null)
         {
             StartingCash = startingCash;
             Cash = startingCash;
             AccountCurrency = accountCurrency;
+
+            if (instruments != null)
+            {
+                foreach (Instrument instrument in instruments)
+                {
+                    if (instrument.ConversionSymbol != null)
+                    {
+                        _conversionSymbolBySymbol[instrument.Symbol] = instrument.ConversionSymbol;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns <paramref name="nativeAmount"/> (denominated in <paramref name="symbol"/>'s own quote
+        /// currency) converted into <see cref="AccountCurrency"/>: divided by the latest observed close of
+        /// the symbol's declared ConversionSymbol, quoted as quote-currency units per 1 account-currency
+        /// unit (e.g. <c>USD_JPY</c> for a JPY-quoted symbol in a USD account). Returns the amount
+        /// unchanged when the symbol declares no conversion or no rate has been observed yet, so an
+        /// Instrument already quoting in the account's currency needs no conversion machinery at all.
+        /// </summary>
+        private decimal ToAccountCurrency(string symbol, decimal nativeAmount)
+        {
+            if (_conversionSymbolBySymbol.TryGetValue(symbol, out string conversionSymbol)
+                && _lastCloseBySymbol.TryGetValue(conversionSymbol, out decimal rate)
+                && rate != 0m)
+            {
+                return nativeAmount / rate;
+            }
+
+            return nativeAmount;
         }
 
         /// <summary>
@@ -229,13 +279,20 @@ namespace Backtester.Core
                 Timestamp = trade.Timestamp
             };
 
-            // A Buy spends cash, a Sell receives it; commission is always a cost.
+            // A Buy spends cash, a Sell receives it; commission is always a cost. The notional is native to
+            // the symbol's quote currency and converted into AccountCurrency before touching Cash; commission
+            // is already account-currency-denominated and never converted (ADR 0029).
             decimal cashDirection = trade.Side == OrderSide.Sell ? 1m : -1m;
-            Cash += cashDirection * effective.Price * executedQty - effective.Commission;
+            decimal notionalAccountCurrency = ToAccountCurrency(effective.Symbol, effective.Price * executedQty);
+            Cash += cashDirection * notionalAccountCurrency - effective.Commission;
 
             if (isReducing)
             {
-                decimal tradeRealized = (effective.Price - position.AveragePrice) * Math.Sign(currentQty) * executedQty;
+                // Native (quote-currency) gain/loss, converted into AccountCurrency: a live trading platform
+                // shows the native entry/exit price alongside account-currency PnL (ADR 0029), so RealizedPnL
+                // here and on the RoundTrip below is converted while EntryPrice/ExitPrice stay native.
+                decimal tradeRealizedNative = (effective.Price - position.AveragePrice) * Math.Sign(currentQty) * executedQty;
+                decimal tradeRealized = ToAccountCurrency(effective.Symbol, tradeRealizedNative);
                 RealizedPnL += tradeRealized;
                 _realizedPnLBySymbol[effective.Symbol] =
                     (_realizedPnLBySymbol.TryGetValue(effective.Symbol, out decimal prior) ? prior : 0m) + tradeRealized;
@@ -328,15 +385,17 @@ namespace Backtester.Core
                 }
             }
 
-            // Key: symbol/ticker -> the signed market value of its open position at this slice.
+            // Key: symbol/ticker -> the signed market value of its open position at this slice, converted
+            // into AccountCurrency for a cross-currency Instrument (ADR 0029).
             Dictionary<string, decimal> positionValueBySymbol = new(Positions.Count);
-            // Key: symbol/ticker -> the initial margin its open position commits at this slice (gross).
+            // Key: symbol/ticker -> the initial margin its open position commits at this slice (gross),
+            // in AccountCurrency.
             Dictionary<string, decimal> heldMarginBySymbol = new(Positions.Count);
             decimal unrealized = 0m;
             foreach (Position position in Positions)
             {
                 decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
-                decimal value = markPrice * position.Quantity;
+                decimal value = ToAccountCurrency(position.Symbol, markPrice * position.Quantity);
                 positionValueBySymbol[position.Symbol] = value;
                 heldMarginBySymbol[position.Symbol] = MarginRate(position.Quantity) * Math.Abs(value);
                 unrealized += value;
@@ -375,7 +434,8 @@ namespace Backtester.Core
             foreach (Position position in Positions)
             {
                 decimal markPrice = slice.HasBar(position.Symbol) ? slice.BarsBySymbol[position.Symbol].Close : position.AveragePrice;
-                decimal unrealizedPnL = (markPrice - position.AveragePrice) * position.Quantity;
+                decimal unrealizedPnLNative = (markPrice - position.AveragePrice) * position.Quantity;
+                decimal unrealizedPnL = ToAccountCurrency(position.Symbol, unrealizedPnLNative);
                 decimal realized = _realizedPnLBySymbol.TryGetValue(position.Symbol, out decimal value) ? value : 0m;
                 equityBySymbol[position.Symbol] = StartingCash + realized + unrealizedPnL;
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Backtester.Core;
 using Xunit;
 
@@ -369,6 +370,19 @@ namespace BacktesterTests.Core.Tests
             };
         }
 
+        private static MarketSlice SliceWithTwoBars(string symbolA, decimal closeA, string symbolB, decimal closeB, DateTime ts)
+        {
+            return new()
+            {
+                Timestamp = ts,
+                BarsBySymbol = new Dictionary<string, Candle>
+                {
+                    [symbolA] = new Candle { Timestamp = ts, Open = closeA, High = closeA, Low = closeA, Close = closeA, Volume = 1000 },
+                    [symbolB] = new Candle { Timestamp = ts, Open = closeB, High = closeB, Low = closeB, Close = closeB, Volume = 1000 }
+                }
+            };
+        }
+
 
         [Fact]
         public void EquityHistory_IsEmptyOnConstruction()
@@ -444,6 +458,130 @@ namespace BacktesterTests.Core.Tests
         }
 
         // --- RealizedPnL ---
+
+        // --- Multi-currency conversion (ADR 0029) ---
+
+        [Fact]
+        public void ApplyTrade_Buy_CrossCurrencyInstrument_ConvertsCashThroughConversionRate()
+        {
+            // EUR_JPY quotes in JPY; the account is USD. USD_JPY's last observed close (150) is the
+            // conversion rate: JPY units per 1 USD. Buying 1 unit at 15,000 JPY costs 15,000/150 = 100 USD.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            Assert.Equal(9_900m, portfolio.Cash);
+        }
+
+        [Fact]
+        public void ApplyTrade_Buy_CrossCurrencyInstrument_PositionAveragePriceStaysNative()
+        {
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            Assert.Equal(15_000m, portfolio.Positions.Single().AveragePrice);
+        }
+
+        [Fact]
+        public void ApplyTrade_SellClosingCrossCurrencyPosition_ConvertsRealizedPnL_ButKeepsRoundTripPricesNative()
+        {
+            // Buy 10 @ 15,000 JPY, sell 10 @ 15,300 JPY at a constant 150 JPY-per-USD rate: native gain =
+            // (15,300-15,000)*10 = 3,000 JPY -> converted = 3,000/150 = 20 USD.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_300m, 10));
+
+            Assert.Equal(20m, portfolio.RealizedPnL);
+            RoundTrip roundTrip = portfolio.RoundTrips.Single();
+            Assert.Equal(20m, roundTrip.RealizedPnL);
+            Assert.Equal(15_000m, roundTrip.EntryPrice);
+            Assert.Equal(15_300m, roundTrip.ExitPrice);
+        }
+
+        [Fact]
+        public void RecordEquitySnapshot_CrossCurrencyInstrument_MarkedEquityReflectsConvertedMarketValue()
+        {
+            // Buy 10 @ 15,000 JPY (rate 150) -> Cash = 10,000 - 1,000 = 9,000. Mark at 15,300 (still rate
+            // 150): native market value = 15,300*10 = 153,000 JPY -> converted = 1,020 USD.
+            // MarkedEquity = Cash(9,000) + convertedValue(1,020) = 10,020.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            portfolio.RecordEquitySnapshot(SliceWithTwoBars("EUR_JPY", 15_300m, "USD_JPY", 150m, T0.AddDays(1)));
+
+            Assert.Equal(10_020m, portfolio.EquityHistory.Last().MarkedEquity);
+        }
+
+        [Fact]
+        public void MarkedEquity_CrossCurrencyInstrument_AtBreakeven_EqualsStartingCash()
+        {
+            // Same scenario, but read via the live MarkedEquity property (no RecordEquitySnapshot for the
+            // mark) - MarkPrice falls back to AveragePrice (15,000, unchanged from entry), so the position's
+            // converted value exactly offsets the converted cash debit: MarkedEquity == StartingCash.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            Assert.Equal(10_000m, portfolio.MarkedEquity);
+        }
+
+        [Fact]
+        public void BuyingPower_CrossCurrencyInstrument_CommittedMarginConvertedToSameCurrencyAsMarkedEquity()
+        {
+            // Buy 10 @ 15,000 JPY (rate 150): converted notional = 1,000 USD. CommittedMargin =
+            // 0.5 * 1,000 = 500. MarkedEquity at breakeven == StartingCash (10,000) per the test above, so
+            // BuyingPower = 10,000 - 500 = 9,500.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            Assert.Equal(9_500m, portfolio.BuyingPower);
+        }
+
+        [Fact]
+        public void InitialMarginForOrder_CrossCurrencyInstrument_ConvertsNotionalBeforeApplyingRate()
+        {
+            // A 10-unit buy priced at 15,000 JPY with rate 150: converted notional = 1,000 USD, so initial
+            // margin at the 0.5 long rate is 500 USD - not 7,500 (0.5 * 15,000) if conversion were skipped.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            OrderRequest request = new() { Symbol = "EUR_JPY", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, Price = 15_000m };
+
+            decimal margin = portfolio.InitialMarginForOrder(request);
+
+            Assert.Equal(500m, margin);
+        }
+
+        [Fact]
+        public void RecordEquitySnapshot_CrossCurrencyInstrument_IsolatedEquityBySymbolReflectsConvertedUnrealizedPnL()
+        {
+            // Buy 10 @ 15,000 JPY (rate 150), mark at 15,300 (still rate 150): native unrealized =
+            // (15,300-15,000)*10 = 3,000 JPY -> converted = 20 USD. Isolated equity = StartingCash(10,000)
+            // + realized(0) + convertedUnrealized(20) = 10,020.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            portfolio.RecordEquitySnapshot(SliceWithTwoBars("EUR_JPY", 15_300m, "USD_JPY", 150m, T0.AddDays(1)));
+
+            Assert.Equal(10_020m, portfolio.EquityHistory.Last().EquityBySymbol["EUR_JPY"]);
+        }
 
         [Fact]
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()

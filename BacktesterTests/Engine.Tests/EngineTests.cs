@@ -505,6 +505,90 @@ namespace BacktesterTests.Engine.Tests
             Assert.Equal(100m, closed.RealizedPnL);
         }
 
+        // --- Multi-currency conversion (ADR 0029) ---
+
+        [Fact]
+        public async Task StartAsync_ConversionSymbolDeclared_FetchesItAlongsideTradableSymbols()
+        {
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("EUR_JPY", new[] { Bar(T0, 15_000m) }),
+                ("USD_JPY", new[] { Bar(T0, 150m) }));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            await engine.StartAsync();
+
+            A.CallTo(() => fetcher.FetchAsync("USD_JPY", A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._)).MustHaveHappened();
+        }
+
+        [Fact]
+        public async Task StartAsync_ConversionSymbol_NeverTriggersOnBar()
+        {
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("EUR_JPY", new[] { Bar(T0, 15_000m), Bar(T0.AddDays(1), 15_100m) }),
+                ("USD_JPY", new[] { Bar(T0, 150m), Bar(T0.AddDays(1), 150m) }));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+            BarRecordingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.DoesNotContain(strategy.Calls, call => call.Symbol == "USD_JPY");
+            Assert.Contains(strategy.Calls, call => call.Symbol == "EUR_JPY");
+        }
+
+        [Fact]
+        public async Task StartAsync_ConversionSymbol_NeverAppearsInResultSymbolsOrCandleHistory()
+        {
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("EUR_JPY", new[] { Bar(T0, 15_000m) }),
+                ("USD_JPY", new[] { Bar(T0, 150m) }));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.Equal(new[] { "EUR_JPY" }, result.Symbols);
+            Assert.True(result.CandleHistory.ContainsKey("EUR_JPY"));
+            Assert.False(result.CandleHistory.ContainsKey("USD_JPY"));
+        }
+
+        [Fact]
+        public async Task StartAsync_JpyQuotedInstrumentInUsdAccount_ConvertsCashRealizedPnLAndMarkedEquity_WhileKeepingNativePrices()
+        {
+            // EUR_JPY: buy fills at bar1's open (15,300), sell fills at bar2's open (15,400), a constant
+            // 100 JPY-per-USD conversion rate throughout. Native gain = (15,400-15,300)*10 = 1,000 JPY ->
+            // converted = 10 USD. Cash = 10,000 - (15,300*10/100) + (15,400*10/100) = 10,000-1,530+1,540 = 10,010.
+            Candle[] eurJpyBars = { Bar(T0, 15_000m), Bar(T0.AddDays(1), 15_300m), Bar(T0.AddDays(2), 15_400m) };
+            Candle[] usdJpyBars = { Bar(T0, 100m), Bar(T0.AddDays(1), 100m), Bar(T0.AddDays(2), 100m) };
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("EUR_JPY", eurJpyBars), ("USD_JPY", usdJpyBars));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+            RoundTripRecordingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            Backtester.Engine.BacktestResult result = await engine.StartAsync();
+
+            Assert.Equal(10_010m, portfolio.Cash);
+            Assert.Equal(10m, portfolio.RealizedPnL);
+            Assert.Equal(10_010m, portfolio.MarkedEquity);
+
+            RoundTrip roundTrip = Assert.Single(portfolio.RoundTrips);
+            Assert.Equal(15_300m, roundTrip.EntryPrice);
+            Assert.Equal(15_400m, roundTrip.ExitPrice);
+            Assert.Equal(10m, roundTrip.RealizedPnL);
+
+            Assert.Equal(new[] { "EUR_JPY" }, result.Symbols);
+            Assert.DoesNotContain(portfolio.RoundTrips, trip => trip.Symbol == "USD_JPY");
+        }
+
         [Fact]
         public async Task StartAsync_FetchesEverySymbol()
         {
