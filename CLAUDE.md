@@ -43,7 +43,9 @@ code here:
 ## Build & test
 
 - Build: `dotnet build Backtester.sln` (the human builds in-IDE with Ctrl+Shift+B; use the CLI to verify).
-- Test: `dotnet test` runs the `BacktesterTests` project.
+- Test: `dotnet test BacktesterTests\BacktesterTests.csproj`. Name the project explicitly —
+  `BacktesterTests` is not in `Backtester.sln`, so a bare `dotnet test` resolves the solution, finds
+  no test project, runs nothing, and still exits 0. A green bare `dotnet test` proves nothing.
 
 ## Practices
 
