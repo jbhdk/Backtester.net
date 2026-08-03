@@ -112,6 +112,10 @@ namespace BacktesterTests.Data.Tests
         [InlineData("1d", "D")]
         [InlineData("1wk", "W")]
         [InlineData("1mo", "M")]
+        [InlineData("5s", "S5")]
+        [InlineData("10s", "S10")]
+        [InlineData("15s", "S15")]
+        [InlineData("30s", "S30")]
         public async Task FetchAsync_SupportedInterval_RequestsMatchingGranularity(string interval, string granularity)
         {
             StubHttpHandler stub = new(EmptyCandlesJson);
@@ -128,6 +132,9 @@ namespace BacktesterTests.Data.Tests
         [InlineData("2d")]
         [InlineData("2wk")]
         [InlineData("2mo")]
+        [InlineData("1s")]
+        [InlineData("20s")]
+        [InlineData("45s")]
         [InlineData("bogus")]
         public async Task FetchAsync_UnsupportedInterval_ThrowsNotSupportedException(string interval)
         {

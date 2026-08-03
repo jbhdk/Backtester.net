@@ -108,11 +108,14 @@ namespace Backtester.Data.Oanda
         }
 
         /// <summary>
-        /// Parses an interval string (shared with the Yahoo/Alpaca providers' vocabulary) into an Oanda
-        /// granularity code. The leading digits give the multiple and the trailing suffix the unit: <c>m</c>
-        /// minutes, <c>h</c> hours, <c>d</c> days, <c>wk</c> weeks, <c>mo</c> months. Oanda's day/week/month
-        /// granularities have no multiplier, so only a multiple of 1 is valid for <c>d</c>/<c>wk</c>/<c>mo</c>.
-        /// Throws <see cref="NotSupportedException"/> for anything outside Oanda's fixed granularity set.
+        /// Parses an interval string into an Oanda granularity code. The leading digits give the multiple
+        /// and the trailing suffix the unit: <c>m</c> minutes, <c>h</c> hours, <c>d</c> days, <c>wk</c>
+        /// weeks, <c>mo</c> months — this vocabulary is shared with the Yahoo/Alpaca providers. Oanda's
+        /// day/week/month granularities have no multiplier, so only a multiple of 1 is valid for
+        /// <c>d</c>/<c>wk</c>/<c>mo</c>. The <c>s</c> (seconds) unit is an Oanda-specific extension not
+        /// present in the shared vocabulary, and only <c>5s</c>/<c>10s</c>/<c>15s</c>/<c>30s</c> map to a
+        /// granularity, matching Oanda's fixed second-level set. Throws <see cref="NotSupportedException"/>
+        /// for anything outside Oanda's fixed granularity set.
         /// </summary>
         private static string ParseGranularity(string interval)
         {
@@ -141,6 +144,7 @@ namespace Backtester.Data.Oanda
                 ("d", 1) => "D",
                 ("wk", 1) => "W",
                 ("mo", 1) => "M",
+                ("s", 5) => "S5", ("s", 10) => "S10", ("s", 15) => "S15", ("s", 30) => "S30",
                 _ => throw Unsupported(interval)
             };
         }
@@ -150,7 +154,7 @@ namespace Backtester.Data.Oanda
         {
             return new NotSupportedException(
                 $"Oanda provider does not support interval '{interval}'. Supported: M1, M2, M4, M5, M10, M15, M30, " +
-                "H1, H2, H3, H4, H6, H8, H12, D (1d), W (1wk), M (1mo).");
+                "H1, H2, H3, H4, H6, H8, H12, D (1d), W (1wk), M (1mo), S5 (5s), S10 (10s), S15 (15s), S30 (30s).");
         }
     }
 }
