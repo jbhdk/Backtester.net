@@ -43,6 +43,37 @@ namespace BacktesterTests.Data.Tests
   ""instrument"": ""EUR_USD""
 }";
 
+        // A single candle with distinct mid/bid/ask sub-objects, so a test can prove which one was read.
+        private const string MidBidAskCandleJson = @"{
+  ""candles"": [
+    {
+      ""complete"": true,
+      ""volume"": 10,
+      ""time"": ""2021-05-03T00:00:00.000000000Z"",
+      ""mid"": { ""o"": ""1.20000"", ""h"": ""1.20150"", ""l"": ""1.19950"", ""c"": ""1.20100"" },
+      ""bid"": { ""o"": ""1.19900"", ""h"": ""1.20050"", ""l"": ""1.19850"", ""c"": ""1.20000"" },
+      ""ask"": { ""o"": ""1.20100"", ""h"": ""1.20250"", ""l"": ""1.20050"", ""c"": ""1.20200"" }
+    }
+  ],
+  ""granularity"": ""H1"",
+  ""instrument"": ""EUR_USD""
+}";
+
+        [Theory]
+        [InlineData(PriceComponent.Bid, "B", 1.19900)]
+        [InlineData(PriceComponent.Ask, "A", 1.20100)]
+        public async Task FetchAsync_NonDefaultPriceComponent_RequestsMatchingParamAndReadsMatchingSubObject(
+            PriceComponent priceComponent, string expectedQueryParam, decimal expectedOpen)
+        {
+            StubHttpHandler stub = new(MidBidAskCandleJson);
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token", priceComponent);
+
+            List<Candle> candles = new(await provider.FetchAsync("EUR_USD", From, To, "1h"));
+
+            Assert.Contains($"price={expectedQueryParam}", stub.LastRequestUri);
+            Assert.Equal(expectedOpen, Assert.Single(candles).Open);
+        }
+
         [Fact]
         public async Task FetchAsync_RequestsPracticeCandlesEndpoint_WithInstrumentAndMidPrice()
         {

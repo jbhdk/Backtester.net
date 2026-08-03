@@ -13,10 +13,11 @@ namespace Backtester.Data.Oanda
 {
     /// <summary>
     /// Fetches historical OHLCV candle data for forex instruments from Oanda's v20 REST API.
-    /// This tracer-bullet implementation always targets the Practice environment and always requests
-    /// Mid-price candles. Wide date ranges are chunked to Oanda's 5000-candle-per-response cap and
-    /// walked until the full range is covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick
-    /// count, not consolidated traded volume — forex spot is decentralized, so no such figure exists.
+    /// This tracer-bullet implementation always targets the Practice environment and requests
+    /// Mid-price candles by default, overridable via <see cref="PriceComponent"/>. Wide date ranges
+    /// are chunked to Oanda's 5000-candle-per-response cap and walked until the full range is
+    /// covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick count, not consolidated
+    /// traded volume — forex spot is decentralized, so no such figure exists.
     /// </summary>
     public class OandaHistoricalDataProvider : IHistoricalDataProvider
     {
@@ -27,21 +28,27 @@ namespace Backtester.Data.Oanda
 
         private readonly HttpClient _http;
         private readonly string _apiToken;
+        private readonly PriceComponent _priceComponent;
 
         /// <summary>
         /// Initializes a new provider using the given <see cref="HttpClient"/> and Oanda API bearer token.
+        /// The <paramref name="priceComponent"/> selects which side of the spread candles are read from
+        /// and defaults to <see cref="PriceComponent.Mid"/>.
         /// </summary>
-        public OandaHistoricalDataProvider(HttpClient http, string apiToken)
+        public OandaHistoricalDataProvider(HttpClient http, string apiToken, PriceComponent priceComponent = PriceComponent.Mid)
         {
             _http = http ?? throw new ArgumentNullException(nameof(http));
             _apiToken = apiToken ?? throw new ArgumentNullException(nameof(apiToken));
+            _priceComponent = priceComponent;
         }
 
         /// <summary>
         /// Initializes a new provider from an Oanda API bearer token, building a default <see cref="HttpClient"/>.
+        /// The <paramref name="priceComponent"/> selects which side of the spread candles are read from
+        /// and defaults to <see cref="PriceComponent.Mid"/>.
         /// </summary>
-        public OandaHistoricalDataProvider(string apiToken)
-            : this(new HttpClient(), apiToken)
+        public OandaHistoricalDataProvider(string apiToken, PriceComponent priceComponent = PriceComponent.Mid)
+            : this(new HttpClient(), apiToken, priceComponent)
         {
         }
 
@@ -85,7 +92,8 @@ namespace Backtester.Data.Oanda
         {
             string from = Uri.EscapeDataString(FormatTimestamp(fromUtc));
             string to = Uri.EscapeDataString(FormatTimestamp(toUtc));
-            string url = $"{PracticeBaseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price=M&granularity={granularity}&from={from}&to={to}";
+            string priceParam = PriceQueryParam(_priceComponent);
+            string url = $"{PracticeBaseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price={priceParam}&granularity={granularity}&from={from}&to={to}";
 
             using HttpRequestMessage request = new(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
@@ -98,29 +106,55 @@ namespace Backtester.Data.Oanda
             }
 
             string json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            return ParseCandles(json);
+            return ParseCandles(json, _priceComponent);
+        }
+
+        /// <summary>Maps a <see cref="PriceComponent"/> to Oanda's <c>price</c> query parameter value.</summary>
+        private static string PriceQueryParam(PriceComponent priceComponent)
+        {
+            return priceComponent switch
+            {
+                PriceComponent.Mid => "M",
+                PriceComponent.Bid => "B",
+                PriceComponent.Ask => "A",
+                _ => throw new ArgumentOutOfRangeException(nameof(priceComponent), priceComponent, "Unknown price component.")
+            };
+        }
+
+        /// <summary>Maps a <see cref="PriceComponent"/> to the response sub-object OHLC values are read from.</summary>
+        private static string PriceJsonProperty(PriceComponent priceComponent)
+        {
+            return priceComponent switch
+            {
+                PriceComponent.Mid => "mid",
+                PriceComponent.Bid => "bid",
+                PriceComponent.Ask => "ask",
+                _ => throw new ArgumentOutOfRangeException(nameof(priceComponent), priceComponent, "Unknown price component.")
+            };
         }
 
         /// <summary>
-        /// Parses an Oanda v20 candles JSON payload into candles, reading OHLC from the Mid sub-object
-        /// and mapping the per-candle tick-count <c>volume</c> field into <see cref="Candle.Volume"/>.
+        /// Parses an Oanda v20 candles JSON payload into candles, reading OHLC from the sub-object
+        /// matching <paramref name="priceComponent"/> and mapping the per-candle tick-count
+        /// <c>volume</c> field into <see cref="Candle.Volume"/>.
         /// </summary>
-        private static List<Candle> ParseCandles(string json)
+        private static List<Candle> ParseCandles(string json, PriceComponent priceComponent)
         {
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement candlesElement = doc.RootElement.GetProperty("candles");
+            string priceProperty = PriceJsonProperty(priceComponent);
 
             List<Candle> candles = new();
             foreach (JsonElement candle in candlesElement.EnumerateArray())
             {
-                JsonElement mid = candle.GetProperty("mid");
+                JsonElement price = candle.GetProperty(priceProperty);
                 candles.Add(new Candle
                 {
                     Timestamp = ParseTimestamp(candle.GetProperty("time").GetString()),
-                    Open = decimal.Parse(mid.GetProperty("o").GetString(), CultureInfo.InvariantCulture),
-                    High = decimal.Parse(mid.GetProperty("h").GetString(), CultureInfo.InvariantCulture),
-                    Low = decimal.Parse(mid.GetProperty("l").GetString(), CultureInfo.InvariantCulture),
-                    Close = decimal.Parse(mid.GetProperty("c").GetString(), CultureInfo.InvariantCulture),
+                    Open = decimal.Parse(price.GetProperty("o").GetString(), CultureInfo.InvariantCulture),
+                    High = decimal.Parse(price.GetProperty("h").GetString(), CultureInfo.InvariantCulture),
+                    Low = decimal.Parse(price.GetProperty("l").GetString(), CultureInfo.InvariantCulture),
+                    Close = decimal.Parse(price.GetProperty("c").GetString(), CultureInfo.InvariantCulture),
                     Volume = candle.GetProperty("volume").GetDecimal()
                 });
             }
