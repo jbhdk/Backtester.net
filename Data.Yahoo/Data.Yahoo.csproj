@@ -5,12 +5,12 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <RootNamespace>Backtester.Data.Alpaca</RootNamespace>
-    <AssemblyName>Backtester.Data.Alpaca</AssemblyName>
+    <RootNamespace>Backtester.Data.Yahoo</RootNamespace>
+    <AssemblyName>Backtester.Data.Yahoo</AssemblyName>
 
-    <PackageId>backtester.net.alpaca</PackageId>
+    <PackageId>backtester.net.data.yahoo</PackageId>
     <Authors>Jesper Baagøe Hansen</Authors>
-    <Description>Alpaca historical market-data provider for the backtester.net engine.</Description>
+    <Description>Yahoo Finance historical market-data provider for the backtester.net engine.</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
@@ -18,17 +18,13 @@
     <BuildNumberFile>$(MSBuildProjectDirectory)\buildnumber.txt</BuildNumberFile>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
   <PropertyGroup>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Alpaca.Markets" Version="7.2.0" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

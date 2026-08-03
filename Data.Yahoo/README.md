@@ -1,4 +1,4 @@
-# backtester.net.yahoo
+# backtester.net.data.yahoo
 
 A [Yahoo Finance](https://finance.yahoo.com) historical market-data provider for the
 [backtester.net](https://www.nuget.org/packages/backtester.net) engine.
@@ -41,7 +41,7 @@ intervals). An unsupported interval throws `NotSupportedException` before any ne
 
 - **Raw, unadjusted prices.** Yahoo's v8 `quote` block is as-traded OHLC, so a stock split appears as
   an overnight price gap. If split-adjusted data matters for your study, prefer the Alpaca provider
-  (`backtester.net.alpaca`), which defaults to split-adjusted bars.
+  (`backtester.net.data.alpaca`), which defaults to split-adjusted bars.
 - **Holiday gaps are skipped.** Rows where open or close is null are dropped.
 - **Bars are returned sorted ascending by timestamp.**
 - **Transport errors surface** as `InvalidOperationException` carrying the HTTP status and body.

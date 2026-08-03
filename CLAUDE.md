@@ -15,6 +15,15 @@ code here:
 - All async methods end with Async.
 - One file, one primary type: every public class, struct, enum, or interface gets its own .cs file named to match the declared type.
 - Namespaces mirror folder/project names (e.g. `Backtester.Core`, `Backtester.Engine`).
+- A project's folder, `.csproj` basename, namespace and package id all derive from one name. For a
+  project named `Stops`: folder `Stops/`, project file `Stops/Stops.csproj`, namespace
+  `Backtester.Stops`, `PackageId` `backtester.net.stops`. The rule: folder == `.csproj` basename;
+  namespace == `Backtester.<name>`; `PackageId` == the namespace lowercased with `Backtester`
+  replaced by `backtester.net`. The `Backtester` prefix lives in the namespace and the package id
+  only — never in a folder or file name. A multi-segment name keeps every segment throughout, so
+  `Data.Alpaca/` is namespace `Backtester.Data.Alpaca` and package `backtester.net.data.alpaca`.
+- Don't wrap a project in a solution folder that just repeats its own name; solution folders are for
+  grouping several projects (as `samples` does).
 - Use block-scoped namespaces (`namespace X { ... }`), not file-scoped.
 - Tests follow the same rule: one test class per file; test file names mirror the production type (`PortfolioTests.cs` tests `Portfolio`).
 - Keep files small and focused to make reviews and unit testing straightforward.

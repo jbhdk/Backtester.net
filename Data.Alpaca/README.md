@@ -1,4 +1,4 @@
-# backtester.net.alpaca
+# backtester.net.data.alpaca
 
 An [Alpaca](https://alpaca.markets) historical market-data provider for the
 [backtester.net](https://www.nuget.org/packages/backtester.net) engine.

@@ -10,7 +10,7 @@ A bar-by-bar backtesting engine for financial market strategies, written in C# o
 - **Long and short** — positions carry a signed quantity (long, short, or flat). A sell from flat opens a short, a buy covers it, and short brackets arm opposite-side protective legs. No single fill flips a position's sign, so reversing direction flattens first, then opens the opposite side. When both orders fill on the same bar, set `OrderRequest.Priority` (higher fills sooner) on the flatten so it is applied before the reversing entry, letting the entry open from flat and carry its protective stop.
 - **Pluggable models** — swap in your own implementations of `IFillModel`, `ICommissionModel`, `ISlippageModel`, and `ISizingModel` without touching engine code.
 - **Reg-T margin account** — the account enforces initial margin intrinsically (50% long, 150% short), rejecting any opening order whose margin exceeds `Portfolio.BuyingPower` (marked equity less the margin already committed).
-- **Data seams** — the engine fetches each symbol through `IHistoricalDataFetcher` and synchronizes multi-symbol data internally. The core ships the cache-aware `HistoricalDataFetcher`, the offline `CsvHistoricalDataFetcher`, and `CsvBarLoader`; live network providers are opt-in packages (`backtester.net.yahoo`, `backtester.net.alpaca`).
+- **Data seams** — the engine fetches each symbol through `IHistoricalDataFetcher` and synchronizes multi-symbol data internally. The core ships the cache-aware `HistoricalDataFetcher`, the offline `CsvHistoricalDataFetcher`, and `CsvBarLoader`; live network providers are opt-in packages (`backtester.net.data.yahoo`, `backtester.net.data.alpaca`).
 - **Coverage floor & priming** — the cache-aware fetcher records the earliest range start ever asked of the provider (a per-symbol+interval sidecar) and refuses a run that starts before it with a `DataCoverageException`, rather than silently serving a short slice. `IDataPrimer.PrimeAsync` warms a wide range up front so in-sample and out-of-sample sub-ranges run entirely from the cache.
 - **Performance stats** — `Portfolio.GetPerformanceStats()` returns win rate, profit factor, expectancy, max drawdown, CAGR, Sharpe, and more, computed from completed round trips.
 
@@ -30,8 +30,8 @@ IBrokerSimulator broker = new BrokerSimulator(
     sizingModel: new FixedSizeModel { FixedSize = 10 });
 
 // 3. Create a data fetcher. The offline CSV fetcher ships in this package and needs no
-//    network; for live data add a provider package (backtester.net.yahoo or
-//    backtester.net.alpaca) and pass its provider to HistoricalDataFetcher instead.
+//    network; for live data add a provider package (backtester.net.data.yahoo or
+//    backtester.net.data.alpaca) and pass its provider to HistoricalDataFetcher instead.
 IHistoricalDataFetcher fetcher = new CsvHistoricalDataFetcher(dataFolder: "data");
 
 // 4. Run — the engine fetches the data, synchronizes it, and steps through it bar by bar

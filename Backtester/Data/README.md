@@ -48,7 +48,7 @@ await fetcher.PrimeAsync(new[] { "AAPL", "MSFT" }, new DateTime(2020, 1, 1), Dat
 
 Provider notes
 - Implement `IHistoricalDataProvider.FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken)`.
-- Live network providers ship as their own opt-in packages, so the core stays network-free (see `docs/adr/0009-network-providers-separate-packages.md`): `backtester.net.yahoo` (Yahoo Finance v8) and `backtester.net.alpaca` (Alpaca). The only provider in the core package is the offline `CsvHistoricalDataFetcher`. If a provider cannot serve the requested interval it throws `NotSupportedException`.
+- Live network providers ship as their own opt-in packages, so the core stays network-free (see `docs/adr/0009-network-providers-separate-packages.md`): `backtester.net.data.yahoo` (Yahoo Finance v8) and `backtester.net.data.alpaca` (Alpaca). The only provider in the core package is the offline `CsvHistoricalDataFetcher`. If a provider cannot serve the requested interval it throws `NotSupportedException`.
 
 Concurrency & safety
 - Writes are atomic: CSV writes are performed to a temp file then copied to the target path to reduce corruption risk. This implementation does not implement cross-process locking — coordinate multiple processes externally if necessary.

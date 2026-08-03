@@ -19,12 +19,12 @@
     <ProjectReference Include="..\Backtester\Backtester.csproj" />
     <ProjectReference Include="..\Report\Report.csproj" />
     <ProjectReference Include="..\Report.Toolkit\Report.Toolkit.csproj" />
-    <ProjectReference Include="..\Backtester.Data.Alpaca\Backtester.Data.Alpaca.csproj" />
-    <ProjectReference Include="..\Backtester.Data.Yahoo\Backtester.Data.Yahoo.csproj" />
+    <ProjectReference Include="..\Data.Alpaca\Data.Alpaca.csproj" />
+    <ProjectReference Include="..\Data.Yahoo\Data.Yahoo.csproj" />
     <ProjectReference Include="..\Analysis\Analysis.csproj" />
     <ProjectReference Include="..\Analysis.Claude\Analysis.Claude.csproj" />
-    <ProjectReference Include="..\Optimization\Backtester.Optimization.csproj" />
-    <ProjectReference Include="..\Stops\Backtester.Stops.csproj" />
+    <ProjectReference Include="..\Optimization\Optimization.csproj" />
+    <ProjectReference Include="..\Stops\Stops.csproj" />
   </ItemGroup>
 
 </Project>

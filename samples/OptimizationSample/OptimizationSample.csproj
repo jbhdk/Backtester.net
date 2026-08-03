@@ -23,7 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Backtester\Backtester.csproj" />
-    <ProjectReference Include="..\..\Optimization\Backtester.Optimization.csproj" />
+    <ProjectReference Include="..\..\Optimization\Optimization.csproj" />
     <ProjectReference Include="..\..\Report\Report.csproj" />
     <ProjectReference Include="..\..\Report.Toolkit\Report.Toolkit.csproj" />
   </ItemGroup>

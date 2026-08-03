@@ -21,8 +21,8 @@ provider is an opt-in package (see [ADR-0009](docs/adr/0009-network-providers-se
 | Package | What it is | Depends on |
 |---|---|---|
 | [`backtester.net`](Backtester/README.md) | The backtesting engine: the data seams, the cache-aware fetcher, the offline CSV provider, broker, portfolio, strategies, execution models. | — |
-| [`backtester.net.yahoo`](Backtester.Data.Yahoo/README.md) | Opt-in Yahoo Finance data provider. BCL-only. | `backtester.net` |
-| [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
+| [`backtester.net.data.yahoo`](Data.Yahoo/README.md) | Opt-in Yahoo Finance data provider. BCL-only. | `backtester.net` |
+| [`backtester.net.data.alpaca`](Data.Alpaca/README.md) | Opt-in Alpaca data provider (US equities, consolidated SIP, split-adjusted). | `backtester.net`, `Alpaca.Markets` |
 | [`backtester.net.report`](Report/README.md) | Opt-in HTML reporting built from a run's `BacktestResult`. Kept separate so the engine takes on no web-asset dependencies. | `backtester.net` |
 | [`backtester.net.report.toolkit`](Report.Toolkit/README.md) | Opt-in report-side helper that reflects an attributed settings object into configuration cards, so a strategy's parameters render at the top of the report. | `backtester.net.report` |
 | [`backtester.net.analysis`](Analysis/README.md) | Opt-in, AI-agnostic Analysis: reduces a report model to an Analysis digest, asks an Analysis client, and enforces the Analysis contract. Makes no outbound call. | `backtester.net.report` |
@@ -72,7 +72,7 @@ A complete run: fetch data, simulate a strategy, and write an HTML report.
 using Backtester.Broker;
 using Backtester.Core;
 using Backtester.Data;
-using Backtester.Data.Yahoo;   // from the backtester.net.yahoo package
+using Backtester.Data.Yahoo;   // from the backtester.net.data.yahoo package
 using Backtester.Engine;
 using Backtester.ExecutionModels.Commission;
 using Backtester.ExecutionModels.Slippage;
@@ -94,7 +94,7 @@ IBrokerSimulator broker = new BrokerSimulator(
 
 // 3. Create a cache-aware data fetcher. It serves bars from a local CSV cache
 //    and only calls Yahoo Finance for bars the cache is missing. The Yahoo
-//    provider ships in the opt-in backtester.net.yahoo package.
+//    provider ships in the opt-in backtester.net.data.yahoo package.
 IHistoricalDataFetcher fetcher = new HistoricalDataFetcher(new YahooHistoricalDataProvider());
 
 // 4. Run the engine. It fetches each symbol, synchronizes them into slices,
@@ -317,9 +317,9 @@ Data flows through two seams (see [`CONTEXT.md`](CONTEXT.md) for the distinction
 - **Provider** (`IHistoricalDataProvider`) — pure acquisition from an external service. Each live
   provider is an opt-in package, so the core stays network-free
   (see [ADR-0009](docs/adr/0009-network-providers-separate-packages.md)):
-  - [`backtester.net.yahoo`](Backtester.Data.Yahoo/README.md) — Yahoo Finance v8 chart API
+  - [`backtester.net.data.yahoo`](Data.Yahoo/README.md) — Yahoo Finance v8 chart API
     (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1wk`, `1mo`, …); raw, unadjusted prices.
-  - [`backtester.net.alpaca`](Backtester.Data.Alpaca/README.md) — Alpaca (US equities, consolidated
+  - [`backtester.net.data.alpaca`](Data.Alpaca/README.md) — Alpaca (US equities, consolidated
     SIP, split-adjusted by default).
 - **Fetcher** (`IHistoricalDataFetcher`) — the cache-aware orchestrator the engine talks to. The
   fetchers and the offline CSV provider live in the core package.
@@ -328,7 +328,7 @@ Two fetchers ship in the box:
 
 ```csharp
 // Online + cached: calls the provider only for bars the local CSV cache lacks.
-// Add the backtester.net.yahoo package for the provider below (or backtester.net.alpaca).
+// Add the backtester.net.data.yahoo package for the provider below (or backtester.net.data.alpaca).
 IHistoricalDataFetcher live = new HistoricalDataFetcher(
     new YahooHistoricalDataProvider(),
     dataFolder: "data");   // defaults to ./data
@@ -564,8 +564,8 @@ Backtester/            The engine (backtester.net)
   Data/                Data seams, HistoricalDataFetcher, CSV provider/fetcher, CsvBarLoader
   Strategies/          IStrategy, StrategyBase, reference strategies
   ExecutionModels/     Commission, Slippage, Sizing, Risk models
-Backtester.Data.Yahoo/   Yahoo Finance provider (backtester.net.yahoo)
-Backtester.Data.Alpaca/  Alpaca provider (backtester.net.alpaca)
+Data.Yahoo/            Yahoo Finance provider (backtester.net.data.yahoo)
+Data.Alpaca/           Alpaca provider (backtester.net.data.alpaca)
 Report/                HTML reporting (backtester.net.report)
 Report.Toolkit/        Settings-to-cards helper (backtester.net.report.toolkit)
 Analysis/              AI-agnostic Analysis (backtester.net.analysis)
@@ -580,8 +580,8 @@ CONTEXT.md             The engine's ubiquitous language (glossary)
 ```
 
 Each library has its own focused README: [`Backtester/README.md`](Backtester/README.md),
-[`Backtester.Data.Yahoo/README.md`](Backtester.Data.Yahoo/README.md),
-[`Backtester.Data.Alpaca/README.md`](Backtester.Data.Alpaca/README.md),
+[`Data.Yahoo/README.md`](Data.Yahoo/README.md),
+[`Data.Alpaca/README.md`](Data.Alpaca/README.md),
 [`Report/README.md`](Report/README.md),
 [`Report.Toolkit/README.md`](Report.Toolkit/README.md),
 [`Analysis/README.md`](Analysis/README.md),

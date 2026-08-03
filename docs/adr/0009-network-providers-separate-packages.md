@@ -3,10 +3,10 @@
 A concrete `IHistoricalDataProvider` that fetches from a **live external service** ships in its own
 project and NuGet package referencing `Backtester`, rather than living in `Backtester\Data` inside
 the core `backtester.net` package. The two such providers are `Backtester.Data.Yahoo`
-(`backtester.net.yahoo`, BCL-only) and `Backtester.Data.Alpaca` (`backtester.net.alpaca`, on the
-third-party `Alpaca.Markets` SDK). The engine is unaffected: it consumes the `IHistoricalDataProvider`
-and `IHistoricalDataFetcher` seams, which stay in core, so a provider is wired into
-`HistoricalDataFetcher` from its package exactly like any other.
+(`backtester.net.data.yahoo`, BCL-only) and `Backtester.Data.Alpaca`
+(`backtester.net.data.alpaca`, on the third-party `Alpaca.Markets` SDK). The engine is unaffected:
+it consumes the `IHistoricalDataProvider` and `IHistoricalDataFetcher` seams, which stay in core, so
+a provider is wired into `HistoricalDataFetcher` from its package exactly like any other.
 
 The dividing line is **network vs. offline**, not third-party-vs-BCL. The core package keeps the data
 seams, the cache orchestrator (`HistoricalDataFetcher`), and the offline, deterministic CSV path
@@ -39,8 +39,8 @@ network coupling we wanted to keep out of the core. Network-vs-offline is the st
 - Core ships the data **seams** and the **offline** path only; CSV stays in `Backtester\Data`, while
   Yahoo and Alpaca are separate packages. The "all providers live together" pattern is gone.
 - Removing `YahooHistoricalDataProvider` from `Backtester` is a **breaking change** to the
-  `backtester.net` public surface: consumers add the `backtester.net.yahoo` package and switch to the
-  `Backtester.Data.Yahoo` namespace (Alpaca already lived in `Backtester.Data.Alpaca`).
+  `backtester.net` public surface: consumers add the `backtester.net.data.yahoo` package and switch
+  to the `Backtester.Data.Yahoo` namespace (Alpaca already lived in `Backtester.Data.Alpaca`).
 - Composing a live run means referencing `backtester.net` plus the chosen provider package; the
   provider is wired into `HistoricalDataFetcher` unchanged.
 - Each provider package versions and packs independently, mirroring the existing `Report` split.
