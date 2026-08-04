@@ -41,9 +41,11 @@ namespace Backtester.Core
 
         /// <summary>
         /// Gets or sets the per-share stop distance frozen when the current lot opened from flat
-        /// (<c>|openingFillPrice − entryStopPrice|</c>). Preserved across same-direction adds and partial
-        /// reductions, so a round trip carries the risk of the entry that opened it. Null when the opening
-        /// entry declared no protective stop.
+        /// (<c>|openingFillPrice − entryStopPrice|</c>), translated into the account's currency at the rate
+        /// in force at that moment (ADR 0032) — the amount per share the account itself stood to lose.
+        /// Preserved across same-direction adds and partial reductions, so a round trip carries the risk of
+        /// the entry that opened it and no later rate move changes it. Null when the opening entry declared
+        /// no protective stop.
         /// </summary>
         public decimal? EntryStopDistance { get; set; }
 

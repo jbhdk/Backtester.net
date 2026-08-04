@@ -26,9 +26,12 @@ namespace Backtester.Core
         public decimal RealizedPnL { get; set; }
 
         /// <summary>
-        /// Gets or sets the currency this round trip stood to lose if its entry stop had been hit, before
-        /// any trailing: the per-share stop distance frozen at entry times this trip's quantity. Null when
-        /// the entry declared no protective stop, in which case no R-multiple is defined.
+        /// Gets or sets the Account-currency amount this round trip stood to lose if its entry stop had been
+        /// hit, before any trailing: the per-share stop distance frozen at entry — translated at the rate in
+        /// force when the position opened from flat (ADR 0032) — times this trip's quantity. A rate move
+        /// between entry and exit therefore shows up in the R-multiple rather than in this figure, which
+        /// stays what a broker would have said was at risk as the trip was entered. Null when the entry
+        /// declared no protective stop, in which case no R-multiple is defined.
         /// </summary>
         public decimal? InitialRisk { get; set; }
 

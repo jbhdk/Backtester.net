@@ -348,10 +348,12 @@ namespace Backtester.Core
             {
                 position.EntryTime = effective.Timestamp;
                 position.EntryBarIndex = _equityHistory.Count;
-                // Freeze the per-share initial risk from the entry stop declared on this opening fill;
-                // a later trailed stop or a scale-in at a different stop does not change it.
+                // Freeze the per-share initial risk from the entry stop declared on this opening fill,
+                // translated into AccountCurrency at the rate in force at this moment — what a broker would
+                // have said was at risk as the position opened (ADR 0032). A later trailed stop, a scale-in
+                // at a different stop, and a later rate move all leave it alone.
                 position.EntryStopDistance = effective.EntryStopPrice.HasValue
-                    ? Math.Abs(effective.Price - effective.EntryStopPrice.Value)
+                    ? ToAccountCurrency(effective.Symbol, Math.Abs(effective.Price - effective.EntryStopPrice.Value))
                     : (decimal?)null;
                 // Freeze the raw initial stop and target levels from the opening fill, so the round trip
                 // carries the entry setup (the levels before any trailing) for the report.

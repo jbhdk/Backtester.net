@@ -66,8 +66,10 @@ namespace Backtester.Report
 
         /// <summary>
         /// Gets or sets the realized profit in units of initial risk (<c>RealizedPnL / InitialRisk</c>),
-        /// e.g. <c>2</c> for a +2R win. Null when the round trip has no initial risk (its entry declared
-        /// no protective stop), in which case the report shows no R.
+        /// e.g. <c>2</c> for a +2R win. Both sides are account-currency figures the engine stamped on the
+        /// round trip — risk translated at the entry rate, profit at the exit rate — so this is a plain
+        /// division of like units. Null when the round trip has no initial risk (its entry declared no
+        /// protective stop), in which case the report shows no R.
         /// </summary>
         public decimal? RMultiple { get; set; }
 

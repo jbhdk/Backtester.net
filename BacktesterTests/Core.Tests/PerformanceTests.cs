@@ -308,6 +308,105 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
         }
 
+        // --- Initial risk in Account currency (ADR 0032) ---
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyEntryStop_InitialRiskIsTranslatedAtTheEntryRate()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. Buy 1 unit @ 15,000 JPY with a stop 100 JPY below
+            // while USD_JPY reads 100: the entry risked 100 JPY, which the account felt as $1.00 — what a
+            // broker would have told the trader was at risk as the position opened.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_000m, 1, T0, stopPrice: 14_900m));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1, T0.AddDays(1)));
+
+            Assert.Equal(1m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_RateMovesBetweenEntryAndExit_InitialRiskKeepsTheEntryRate()
+        {
+            // Same entry as above at USD_JPY 100, but the rate moves to 125 before the exit. The stamped
+            // risk stays $1.00: it is what was at risk at entry, not a figure retranslated at the exit rate.
+            // The exit's own 200 JPY profit converts at 125 into $1.60, so R reads 1.6 — the rate move
+            // shows up in R exactly as it showed up in the account.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_000m, 1, T0, stopPrice: 14_900m));
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1, T0.AddDays(1)));
+
+            Assert.Equal(1m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyScaleInAcrossARateMove_InitialRiskAnchorsOnTheOpeningRate()
+        {
+            // Open 1 @ 15,000 stop 14,900 at USD_JPY 100 ($1.00 at risk per unit). The rate moves to 125,
+            // then a second unit is added at the same 100 JPY stop distance, worth only $0.80 at the new
+            // rate. The add re-blends neither the distance nor the rate: 2 units at the opening $1.00.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_000m, 1, T0, stopPrice: 14_900m));
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_300m, 1, T0.AddDays(1), stopPrice: 15_200m));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_400m, 2, T0.AddDays(2)));
+
+            Assert.Equal(2m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyPartialExit_InitialRiskScalesToEachExitedSlice()
+        {
+            // Open 4 @ 15,000 stop 14,900 at USD_JPY 100 ($1.00 per unit), then exit 3 and 1. Each slice
+            // carries its own share of the converted per-unit risk: $3.00 then $1.00.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_000m, 4, T0, stopPrice: 14_900m));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 3, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_300m, 1, T0.AddDays(2)));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            Assert.Equal(3m, portfolio.RoundTrips[0].InitialRisk);
+            Assert.Equal(1m, portfolio.RoundTrips[1].InitialRisk);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyEntryWithoutStop_LeavesInitialRiskNull()
+        {
+            // Converting the risk never invents one: an entry with no protective stop still has no initial
+            // risk and so no R, exactly as for an account-currency symbol.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1, T0));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1, T0.AddDays(1)));
+
+            Assert.Null(Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
+        [Fact]
+        public void GetPerformanceStats_CrossCurrencyTripAcrossARateMove_AvgRDividesAccountCurrencyByAccountCurrency()
+        {
+            // The ADR 0032 worked example end to end through the stats: 100 JPY risked at USD_JPY 100 is
+            // $1.00, 200 JPY made at USD_JPY 125 is $1.60, so Avg R is 1.6 — not the native price ratio of
+            // 2.0 the mixed-unit division used to produce.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(BuyWithStop("EUR_JPY", 15_000m, 1, T0, stopPrice: 14_900m));
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1, T0.AddDays(1)));
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 125m, T0.AddDays(2)));
+
+            Assert.Equal(1.6m, portfolio.GetPerformanceStats().AvgRMultiple);
+        }
+
         [Fact]
         public void ApplyTrade_EntryStopAndTargetStamped_RoundTripCarriesBothLevels()
         {

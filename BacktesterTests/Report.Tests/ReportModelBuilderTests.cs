@@ -241,6 +241,26 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_CrossCurrencyRoundTrip_DerivesRMultipleFromTheStampedAccountCurrencyRisk()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. The entry risked 100 JPY at USD_JPY 100 ($1.00);
+            // the exit made 200 JPY at USD_JPY 125 ($1.60). The R column divides the engine's two stamped
+            // account-currency figures, so it reads 1.6 — the same value the Avg R stat reports.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            Trade entry = Trade("EUR_JPY", OrderSide.Buy, 15_000m, 1, T0);
+            entry.EntryStopPrice = 14_900m;
+            portfolio.ApplyTrade(entry);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 125m, T0.AddDays(2)));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Sell, 15_200m, 1, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal(1.6m, Assert.Single(model.RoundTrips).RMultiple);
+        }
+
+        [Fact]
         public void Build_RoundTripWithEntryLevels_MapsInitialStopAndTarget()
         {
             // The entry declared stop 90 and target 130; the report row carries both entry-time levels.
