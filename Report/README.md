@@ -125,7 +125,7 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 - **Max capital** — peak gross capital deployed in open positions on any single bar, in currency.
 - **Avg leverage** — average leverage (gross exposure `Σ|position value|` over marked equity) across bars that held a position; flat bars are excluded, so the figure reads "how levered when in the market" rather than blending with time out of it (that is **Market exposure**). `1.0x` is fully invested and unlevered.
 - **Peak leverage** — the highest single-bar leverage reached over the run.
-- **Avg margin** — average margin utilization (committed Reg-T initial margin over marked equity) across bars that held a position, as a fraction. This is the same committed margin that gates buying power, re-marked each bar.
+- **Avg margin** — average margin utilization (committed initial margin over marked equity, at each `Instrument`'s own rate) across bars that held a position, as a fraction. This is the same committed margin that gates buying power, re-marked each bar.
 - **Peak margin** — the highest single-bar margin utilization; near 100% means open positions had nearly exhausted buying power.
 
 > **Per-symbol leverage and margin are understated.** The per-symbol column measures each symbol against its **isolated equity**, which assumes that symbol alone traded the *full* starting capital. A symbol that in reality shared the account's capital therefore shows lower leverage and margin utilization in its own column than it actually contributed to the portfolio — the same caveat that already applies to per-symbol drawdown and CAGR. The **All symbols** column is the true portfolio figure.
@@ -133,9 +133,7 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 The per-round-trip table also carries two entry-time columns derived from the same idea:
 
 - **Leverage** (round-trip column) — the trip's entry notional over the marked equity when it opened; a dash when that equity was non-positive. Both figures are in the account's currency: the engine stamps the notional on the round trip, accumulating each fill's converted cost as it fills, so a trip that scaled in across a rate move divides by the money that actually left the account.
-- **Margin** (round-trip column) — the Reg-T initial margin the trip committed at entry: its side's rate (0.5 long / 1.5 short) times the trip's *native* entry notional (`EntryPrice × Quantity`), in currency. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at entry rather than re-marked.
-
-> **The Margin column is not yet cross-currency-aware.** It recomputes from the account's Reg-T rates over the trip's *native* entry notional, so for an `Instrument` that declares its own `MarginRate` (e.g. 2% for 50:1 forex leverage) or quotes in another currency it is not the margin the account actually committed — the aggregate **Avg/Peak margin** stats, which come from the portfolio's own committed margin, are correct. Single-currency runs on Reg-T margin are unaffected; making the report consume the engine's stamped margin is a separate piece of work.
+- **Margin** (round-trip column) — the initial margin the trip committed at entry, in the account's currency. The engine stamps it on the round trip, applying its own rate — the `Instrument`'s declared `MarginRate` when it has one (e.g. 2% for 50:1 forex leverage), else the Reg-T split (0.5 long / 1.5 short) — to the same converted entry notional the **Leverage** column divides by. The report displays that figure rather than re-deriving it, so a change to how margin is rated cannot leave this column describing a rule the engine no longer follows. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at entry rather than re-marked.
 
 ### Run context
 

@@ -974,5 +974,25 @@ namespace BacktesterTests.Report.Tests
 
             Assert.Equal(2_250m, Assert.Single(model.RoundTrips).Margin);
         }
+
+        [Fact]
+        public void Build_RoundTripOnAnInstrumentDeclaringAMarginRate_ShowsTheMarginTheEngineStamped()
+        {
+            // A 50:1 forex instrument declaring 2%: buying 1 unit @ 15,000 JPY at USD_JPY 100 committed $150,
+            // so the column reads $3.00 — the margin the account actually held. Re-deriving Reg-T from the
+            // native entry price, as the column once did, would read $7,500 instead.
+            Instrument[] instruments =
+            {
+                new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m }
+            };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Buy, 15_000m, 1, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Sell, 15_200m, 1, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal(3m, Assert.Single(model.RoundTrips).Margin);
+        }
     }
 }

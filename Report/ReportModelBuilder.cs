@@ -40,7 +40,7 @@ namespace Backtester.Report
             {
                 Stats = MapStats(stats, startingEquity, portfolioBuyHold),
                 StatsBySymbol = MapStatsBySymbol(result.Portfolio.GetPerformanceStatsBySymbol(), startingEquity, buyHoldBySymbol),
-                RoundTrips = MapRoundTrips(stats.RoundTrips, result.Portfolio.LongInitialMarginRate, result.Portfolio.ShortInitialMarginRate),
+                RoundTrips = MapRoundTrips(stats.RoundTrips),
                 RejectedOrders = MapRejectedOrders(result.RejectedOrders),
                 Indicators = MapIndicators(result.Indicators),
                 EquityCurve = MapEquityCurve(stats.RoundTrips, startingEquity),
@@ -58,10 +58,7 @@ namespace Backtester.Report
             };
         }
 
-        private static IReadOnlyList<ReportRoundTrip> MapRoundTrips(
-            IReadOnlyList<RoundTrip> roundTrips,
-            decimal longMarginRate,
-            decimal shortMarginRate)
+        private static IReadOnlyList<ReportRoundTrip> MapRoundTrips(IReadOnlyList<RoundTrip> roundTrips)
         {
             List<ReportRoundTrip> mapped = new(roundTrips.Count);
             for (int i = 0; i < roundTrips.Count; i++)
@@ -70,9 +67,6 @@ namespace Backtester.Report
                 bool isShort = trip.Direction == PositionDirection.Short;
                 // A short profits when the price falls, so its return is the raw price move negated.
                 decimal directionSign = isShort ? -1m : 1m;
-                // The native position put on at entry, still the base the Reg-T margin column is taken on.
-                decimal nativeEntryNotional = trip.EntryPrice * trip.Quantity;
-                decimal marginRate = isShort ? shortMarginRate : longMarginRate;
                 mapped.Add(new ReportRoundTrip
                 {
                     Number = i + 1,
@@ -88,9 +82,10 @@ namespace Backtester.Report
                     Quantity = trip.Quantity,
                     // Leverage divides the engine's stamped Account-currency entry notional by the equity at
                     // entry — two figures in the same currency (ADR 0032); a dash when that equity was
-                    // non-positive. Margin is still the committed initial margin at the side's Reg-T rate.
+                    // non-positive. Margin is the engine's stamped figure too: the report displays the
+                    // portfolio's own margin decision rather than re-deriving a rule it would then own.
                     Leverage = trip.EntryEquity > 0m ? trip.EntryNotional / trip.EntryEquity : (decimal?)null,
-                    Margin = marginRate * nativeEntryNotional,
+                    Margin = trip.EntryMargin,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
                     // Realized profit in units of initial risk; undefined when the entry declared no stop.

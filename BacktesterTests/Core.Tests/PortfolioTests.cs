@@ -748,6 +748,89 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(1_500m, Assert.Single(portfolio.RoundTrips).EntryNotional);
         }
 
+        // --- Entry margin (ADR 0032) ---
+
+        [Fact]
+        public void ApplyTrade_LongRoundTrip_EntryMarginIsTheRegTLongRateOnTheEntryNotional()
+        {
+            // Buy 10 @ $100: $1,000 of notional at the 0.5 long rate committed $500 of margin.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
+
+            Assert.Equal(500m, Assert.Single(portfolio.RoundTrips).EntryMargin);
+        }
+
+        [Fact]
+        public void ApplyTrade_ShortRoundTrip_EntryMarginIsTheRegTShortRateOnTheEntryNotional()
+        {
+            // Sell 10 @ $150 from flat: $1,500 of notional at the 1.5 short rate committed $2,250.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));
+
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10));
+
+            Assert.Equal(2_250m, Assert.Single(portfolio.RoundTrips).EntryMargin);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyRoundTrip_EntryMarginIsTheRegTRateOnTheConvertedNotional()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. Buying 1 unit @ 15,000 JPY at USD_JPY 100 committed
+            // $150, so the 0.5 long rate held $75 - not the 7,500 a native notional would have reported.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1));
+
+            Assert.Equal(75m, Assert.Single(portfolio.RoundTrips).EntryMargin);
+        }
+
+        [Fact]
+        public void ApplyTrade_InstrumentDeclaringAMarginRate_EntryMarginUsesThatRateNotTheRegTSplit()
+        {
+            // A 50:1 forex instrument declares 2%. The same $150 of committed capital therefore held $3.00
+            // of margin - not the $75 a Reg-T requirement the account never had would have reported.
+            Instrument[] instruments =
+            {
+                new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m }
+            };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1));
+
+            Assert.Equal(3m, Assert.Single(portfolio.RoundTrips).EntryMargin);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyPartialExit_EachSliceCarriesItsProRataShareOfTheEntryMargin()
+        {
+            // The ADR 0032 scale-in: $150 then $128, so $278 committed at 2% held $5.56 of margin. Exited a
+            // unit at a time, each half carries $2.78 - so two halves of one position report comparable
+            // margin instead of the first claiming the whole of it.
+            Instrument[] instruments =
+            {
+                new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m }
+            };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 16_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 16_500m, 1));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 16_700m, 1));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            Assert.Equal(2.78m, portfolio.RoundTrips[0].EntryMargin);
+            Assert.Equal(2.78m, portfolio.RoundTrips[1].EntryMargin);
+        }
+
         [Fact]
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()
         {

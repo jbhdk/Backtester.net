@@ -55,8 +55,10 @@ namespace Backtester.Report
         public decimal? Leverage { get; set; }
 
         /// <summary>
-        /// Gets or sets the Reg-T initial margin the trip committed at entry, in currency: its side's rate
-        /// (0.5 long / 1.5 short) times its entry notional.
+        /// Gets or sets the initial margin the trip committed at entry, in the Account currency: the
+        /// engine's stamped figure, taken at the Instrument's own rate when it declares one and the Reg-T
+        /// split (0.5 long / 1.5 short) otherwise, on the entry notional (ADR 0032). Displayed as stamped —
+        /// the report does not know how margin is rated, so it cannot describe a rule the engine dropped.
         /// </summary>
         public decimal Margin { get; set; }
 

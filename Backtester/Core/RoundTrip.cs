@@ -60,6 +60,15 @@ namespace Backtester.Core
         public decimal EntryNotional { get; set; }
 
         /// <summary>
+        /// Gets or sets the Account-currency initial margin this round trip committed when it opened: the
+        /// portfolio's own margin rate for the symbol and side — the Instrument's declared rate when it has
+        /// one, else the Reg-T long/short split (ADR 0030) — applied to <see cref="EntryNotional"/>, and so
+        /// already converted at the rates in force as the trip filled (ADR 0032). Frozen at entry rather
+        /// than re-marked; the account's live committed margin is the aggregate Avg/Peak margin's business.
+        /// </summary>
+        public decimal EntryMargin { get; set; }
+
+        /// <summary>
         /// Gets or sets the account's marked equity on the bar this round trip's position opened from flat.
         /// The denominator for the trip's leverage (its entry notional over this equity); preserved across
         /// same-direction adds and partial exits so each slice divides by the opening bar's equity.

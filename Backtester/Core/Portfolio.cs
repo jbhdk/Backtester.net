@@ -336,6 +336,10 @@ namespace Backtester.Core
                     EntryTargetPrice = position.EntryTargetPrice,
                     BarsHeld    = Math.Max(0, _equityHistory.Count - position.EntryBarIndex),
                     EntryNotional = exitedNotional,
+                    // The margin that notional committed, at the portfolio's own rate for this symbol and
+                    // side — so an Instrument declaring its own rate reports that rather than Reg-T (ADR
+                    // 0032). Stamped here so no consumer has to know the rule, let alone re-derive it.
+                    EntryMargin = MarginRate(effective.Symbol, currentQty) * exitedNotional,
                     // The marked equity captured when this lot opened, the denominator for the trip's leverage.
                     EntryEquity = position.EntryEquity,
                     EntryTime   = position.EntryTime,
