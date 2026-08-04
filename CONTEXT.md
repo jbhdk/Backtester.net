@@ -199,14 +199,14 @@ round trip, so it has no exit reason).
 
 **Realized equity** (cost-basis equity):
 Cash plus the cost basis of open positions (`Cash + Σ AveragePrice·Quantity`, Quantity signed so a
-short contributes negative cost basis); excludes unrealized PnL. Equals cash when flat. The base for
-risk sizing.
+short contributes negative cost basis), each position's cost basis translated into the Account
+currency; excludes unrealized PnL. Equals cash when flat. The base for risk sizing.
 _Avoid_: equity (unqualified), book value.
 
 **Marked equity**:
 Cash plus open positions marked to the latest close (`Cash + Σ Close·Quantity`, Quantity signed so a
-short's value falls as price rises); includes unrealized PnL. The basis of the equity curve and of
-buying power.
+short's value falls as price rises), each position's value translated into the Account currency;
+includes unrealized PnL. The basis of the equity curve and of buying power.
 _Avoid_: equity (unqualified), NAV.
 
 ### Instruments & currency
@@ -290,15 +290,19 @@ target feeds no risk, so it is not a Stop distance.
 _Avoid_: risk, spread.
 
 **Initial risk**:
-The currency a round trip stood to lose if its **entry** stop had been hit, before any trailing:
-`Stop distance at entry · Quantity`. Fixed at entry; a trailed **Stop level** moving later does not
-change it. Undefined for a round trip that entered without a protective stop.
+The Account-currency amount a round trip stood to lose if its **entry** stop had been hit, before any
+trailing: `Stop distance at entry · Quantity`, translated at the rate in force when the trip opened —
+what a broker would have told you was at risk as you entered. Fixed at entry; neither a trailed **Stop
+level** nor a later rate move changes it. Undefined for a round trip that entered without a protective
+stop.
 _Avoid_: risk (unqualified), current risk, stop-out amount.
 
 **R-multiple**:
 A round trip's realized profit expressed in units of its **Initial risk**:
 `RealizedPnL / Initial risk`. `+2R` is a win of twice the risked amount; `−1R` is a full stop-out
-loss. Defined only when Initial risk is (the round trip entered with a stop).
+loss. Defined only when Initial risk is (the round trip entered with a stop). Both sides are Account
+currency, each translated at its own moment — risk at entry, profit at exit — so for a cross-currency
+trip a rate move between the two shows up in R, as it did in the account.
 _Avoid_: R (unqualified in prose), reward-to-risk (that is a forward-looking target ratio, not a
 realized outcome).
 
@@ -313,9 +317,17 @@ drive marked equity negative and the run simply reports it.
 _Avoid_: cash account, leverage (as the model name).
 
 **Initial margin**:
-The equity an order must commit to open or add to a position: `rate · |price · quantity|`, rate 0.5
-long / 1.5 short. A reducing order commits none and releases the closed portion's margin.
+The equity an order must commit to open or add to a position: `rate · |price · quantity|`, at the
+Instrument's own symmetric rate when it declares one, else the Reg-T split (0.5 long / 1.5 short). A
+reducing order commits none and releases the closed portion's margin.
 _Avoid_: margin requirement (unqualified), maintenance margin.
+
+**Entry notional**:
+The capital a round trip committed when it opened, in the Account currency at the rates in force as it
+filled — so a trip that scaled in across a rate move carries what actually left the account, not a
+blended price re-translated afterwards. The numerator of the trip's **Leverage** and the base its
+**Initial margin** was taken on.
+_Avoid_: exposure (that is Market exposure, a time fraction), position size, entry cost.
 
 **Buying power**:
 Marked equity above the initial margin already committed by open positions
@@ -328,8 +340,8 @@ The ratio of gross market exposure to marked equity — how much position the ac
 its own capital, gross value so a short counts positive (`Σ|position value| / marked equity`). Aggregated
 over a run as **Peak leverage** (the highest single-bar value) and **Avg leverage** (the mean over bars
 that held a position; flat bars are excluded, so the figure is not diluted by time out of the market —
-that dilution is **Market exposure**'s job). Per **Round trip** it is that trip's entry notional
-(`EntryPrice·Quantity`) over marked equity on its entry bar. 1.0 is fully invested and unlevered; above
+that dilution is **Market exposure**'s job). Per **Round trip** it is that trip's **Entry notional**
+over marked equity on its entry bar. 1.0 is fully invested and unlevered; above
 1.0 the account carries exposure beyond its own equity (borrowing long, or short proceeds).
 _Avoid_: gearing, exposure (unqualified — that is Market exposure, a time fraction), margin (leverage is
 notional-to-equity, not the committed requirement).
@@ -341,7 +353,8 @@ It climbs toward and past 100% as open positions consume the account; its curren
 head-room left — is **Buying power**. Reads the same committed margin the account holds to gate buying
 power: the initial-margin rate applied to each position's *current* marked value (the engine models no
 separate maintenance margin). Its per-**Round trip** sibling column instead freezes the margin at the
-entry notional — the margin the trade committed when it opened.
+trip's **Entry notional**, taken at that Instrument's own rate — the margin the trade committed when it
+opened.
 _Avoid_: margin (unqualified), leverage (that is notional-to-equity), buying power (the currency head-room,
 not the used fraction).
 

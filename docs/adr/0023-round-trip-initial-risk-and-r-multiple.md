@@ -1,5 +1,11 @@
 # Round trips carry initial risk so R-multiple is a first-class outcome
 
+> **Amended by [ADR 0032](0032-round-trips-carry-account-currency-figures.md).** `InitialRisk` is
+> denominated in the Account currency, translated at the rate in force when the trip opened, rather
+> than left in the instrument's quote currency. Everything below — the primitive on the round trip,
+> frozen at entry, anchored on the opening entry, R derived by both consumers — stands unchanged; only
+> the units are pinned.
+
 A trader thinks of a result in **R-multiples** — profit as a multiple of what was risked — but the
 denominator, the entry stop, was thrown away. `RiskPerTradeSizing` reads `|entryPrice − stopPrice|`
 to size the position and discards it; the armed bracket stop lived only on the broker's working
