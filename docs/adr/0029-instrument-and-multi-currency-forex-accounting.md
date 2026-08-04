@@ -1,5 +1,12 @@
 # Instrument and multi-currency forex accounting
 
+> **Amended by [ADR 0031](0031-currency-converter-module.md).** Two clauses below are superseded: the
+> `Engine` constructors taking `Instrument[]` (Instruments now reach a run through the Portfolio
+> alone, which owns the Currency converter and declares the conversion series to fetch), and the
+> silent native-amount fallback this design shipped with (a declared conversion with no observed rate
+> now throws). The rest of this ADR stands — including its rejection of engine-side symbol inference,
+> which ADR 0031 upholds.
+
 Data.Oanda is the engine's first forex provider, and forex breaks an assumption baked into every
 existing consumer: that a symbol's price is already denominated in the account's own currency.
 `EUR_USD` prices in USD, but `USD_JPY` prices in JPY — a USD account holding `USD_JPY` needs its

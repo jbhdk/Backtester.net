@@ -364,9 +364,10 @@ rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the
 quote currency, the real price a chart would show. Converting a declared conversion before any rate has
 been observed throws a `MissingConversionRateException` naming both symbols — a mis-wired run fails
 loudly instead of presenting native-currency numbers as account currency. See
-[ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) (currency conversion) and
-[ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md) (per-instrument margin) for the
-full design.
+[ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) (currency conversion),
+[ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md) (per-instrument margin) and
+[ADR 0031](docs/adr/0031-currency-converter-module.md) (the Currency converter module, which amends
+0029) for the full design.
 
 ---
 

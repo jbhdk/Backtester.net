@@ -212,11 +212,14 @@ _Avoid_: equity (unqualified), NAV.
 ### Instruments & currency
 
 **Instrument**:
-Caller-supplied per-symbol metadata: its quote currency and, when that differs from the account's
-currency, the Conversion symbol needed to translate it. Required for every traded symbol, not just
-forex — a stock/ETF Instrument simply has no conversion to do. Deliberately left room to carry other
-per-symbol execution config later (e.g. per-instrument spread/commission), but today it holds only
-currency information.
+Caller-supplied per-symbol metadata: its quote currency, the Conversion symbol and Conversion
+operation needed to translate that currency into the Account currency, and an optional per-instrument
+margin rate. Handed to the Portfolio — the single hand-off point — which cross-checks every
+declaration against the Account currency: a quote currency is required on each Instrument, one
+differing from the account's requires a Conversion symbol, one equal to it forbids one. Supplied only
+for symbols that need it: a stock/ETF run on Reg-T margin in the account's own currency declares none
+at all. Deliberately left room to carry other per-symbol execution config later (e.g. per-instrument
+spread/commission).
 _Avoid_: symbol (a symbol is `Instrument.Symbol`, a bare identifier), ticker.
 
 **Account currency**:
@@ -245,9 +248,10 @@ _Avoid_: rate quotation, inversion, direction (unqualified).
 
 **Currency converter**:
 The module that translates quote-currency amounts into the Account currency: it holds each
-Instrument's conversion declaration, observes Conversion-symbol closes as bars arrive, and applies the
-Conversion operation. Identity for an Instrument declaring no conversion; a declared conversion with
-no observed rate is refused loudly, never silently left unconverted. Its timing rule: a fill
+Instrument's conversion declaration and cross-checks it against the Account currency at construction,
+observes Conversion-symbol closes as bars arrive, and applies the Conversion operation. Identity for
+an Instrument declaring no conversion; a declared conversion with no observed rate is refused loudly,
+never silently left unconverted. Its timing rule: a fill
 translates at the conversion pair's previous close — the last rate honestly known without lookahead —
 while an end-of-bar mark uses the current close. Owned by the Portfolio, which is the single hand-off
 point for Instruments.
