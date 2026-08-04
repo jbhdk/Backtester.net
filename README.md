@@ -370,8 +370,8 @@ mis-wiring is unrepresentable rather than merely checked.
 tradable symbol — the conversion series never triggers `OnBar` and never appears in a
 `BacktestResult`'s symbol list or any `RoundTrip`; it is plumbing a strategy trading `EUR_USD` in a JPY
 account never needs to know exists. Only the account-currency-denominated aggregates —
-`Portfolio.Cash`, `RealizedPnL`, `MarkedEquity`, and isolated equity — pass through the conversion
-rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
+`Portfolio.Cash`, `RealizedPnL`, `MarkedEquity`, `RealizedEquity`, and isolated equity — pass through
+the conversion rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
 quote currency, the real price a chart would show. Converting a declared conversion before any rate has
 been observed throws a `MissingConversionRateException` naming both symbols — a mis-wired run fails
 loudly instead of presenting native-currency numbers as account currency.

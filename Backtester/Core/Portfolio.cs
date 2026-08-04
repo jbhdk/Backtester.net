@@ -66,6 +66,14 @@ namespace Backtester.Core
         public decimal MarkedEquity => Cash + Positions.Sum(ConvertedMarketValue);
 
         /// <summary>
+        /// Gets the account's realized (cost-basis) equity: cash plus each open position's cost basis at
+        /// its volume-weighted average entry price, converted into AccountCurrency for any position whose
+        /// Instrument quotes in a different currency (ADR 0032). Excludes unrealized P&amp;L, so it equals
+        /// cash when flat. The base risk-per-trade sizing budgets against.
+        /// </summary>
+        public decimal RealizedEquity => Cash + Positions.Sum(ConvertedCostBasis);
+
+        /// <summary>
         /// Gets the initial margin committed by open positions, in AccountCurrency: each position's latest
         /// market value (converted) times its side's initial-margin rate, always a non-negative (gross)
         /// amount.
@@ -149,6 +157,17 @@ namespace Backtester.Core
         private decimal ConvertedMarketValue(Position position)
         {
             return ToAccountCurrency(position.Symbol, MarkPrice(position) * position.Quantity);
+        }
+
+        /// <summary>
+        /// Returns a position's signed cost basis (average entry price times quantity) converted into
+        /// AccountCurrency — the same shape as <see cref="ConvertedMarketValue"/> but valued at what the
+        /// position cost rather than what it is now worth, so RealizedEquity and MarkedEquity share
+        /// denomination and differ only by unrealized P&amp;L.
+        /// </summary>
+        private decimal ConvertedCostBasis(Position position)
+        {
+            return ToAccountCurrency(position.Symbol, position.AveragePrice * position.Quantity);
         }
 
         /// <summary>
@@ -272,12 +291,11 @@ namespace Backtester.Core
         /// </summary>
         public PortfolioSnapshot SnapshotAt(DateTime timestamp)
         {
-            decimal costBasisEquity = Cash + Positions.Sum(p => p.AveragePrice * p.Quantity);
             return new PortfolioSnapshot
             {
                 Timestamp = timestamp,
                 Cash = Cash,
-                CostBasisEquity = costBasisEquity,
+                CostBasisEquity = RealizedEquity,
                 Positions = Positions.ToList()
             };
         }

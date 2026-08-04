@@ -1,15 +1,15 @@
-using System.Linq;
 using Backtester.Core;
 
 namespace Backtester.ExecutionModels.Sizing
 {
     /// <summary>
     /// Sizes positions so that a stop-out loses a fixed fraction of realized (cost-basis) equity.
-    /// Formula: shares = floor(RiskFraction * realizedEquity / stopDistance), where the per-share stop
-    /// distance is the fill-relative <see cref="OrderRequest.StopOffset"/> when set (a bracket entry whose
-    /// absolute stop is not yet known), else the absolute <c>|entryPrice - stopPrice|</c>, converted into
-    /// the portfolio's account currency (ADR 0029) so a cross-currency instrument's stop distance shares
-    /// units with realizedEquity before dividing.
+    /// Formula: shares = floor(RiskFraction * <see cref="Portfolio.RealizedEquity"/> / stopDistance), where
+    /// the per-share stop distance is the fill-relative <see cref="OrderRequest.StopOffset"/> when set (a
+    /// bracket entry whose absolute stop is not yet known), else the absolute <c>|entryPrice - stopPrice|</c>,
+    /// converted into the portfolio's account currency (ADR 0029) so a cross-currency instrument's stop
+    /// distance shares units with the equity budget before dividing. The budget itself is the Portfolio's
+    /// own translated figure (ADR 0032), so an open cross-currency position cannot inflate it.
     /// Returns zero when no stop distance is available.
     /// </summary>
     public class RiskPerTradeSizing : ISizingModel
@@ -28,9 +28,8 @@ namespace Backtester.ExecutionModels.Sizing
                 return 0;
             }
 
-            decimal realizedEquity = portfolio.Cash + portfolio.Positions.Sum(p => p.AveragePrice * p.Quantity);
             decimal convertedStopDistance = portfolio.ToAccountCurrency(request.Symbol, stopDistance);
-            return (int)(RiskFraction * realizedEquity / convertedStopDistance);
+            return (int)(RiskFraction * portfolio.RealizedEquity / convertedStopDistance);
         }
     }
 }

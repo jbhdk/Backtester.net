@@ -155,6 +155,26 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(20, qty);
         }
 
+        [Fact]
+        public void RiskPerTradeSizing_SizesFromTranslatedEquity_WhileACrossCurrencyPositionIsOpen()
+        {
+            // A EUR_JPY long is open: 10 @ 15,000 JPY at rate 150 left Cash at $9,000 against a $1,000
+            // cost basis, so realized equity is still $10,000 and a 1% budget on a $5 stop sizes the next
+            // (USD) trade at 20 shares. Adding the position's native 150,000 JPY basis to account-currency
+            // cash would budget against $159,000 and size 318 - the open forex position inflating the
+            // account by roughly the exchange rate.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            RiskPerTradeSizing sizing = new() { RiskFraction = 0.01m };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(new Trade { Id = "t1", Symbol = "EUR_JPY", Side = OrderSide.Buy, Price = 15_000m, Quantity = 10, Timestamp = T0 });
+            OrderRequest request = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Stop, Price = 50m, StopPrice = 45m, Quantity = 1 };
+
+            int qty = sizing.Size(request, portfolio);
+
+            Assert.Equal(20, qty);
+        }
+
         // --- PercentNotionalSizing ---
 
         [Fact]

@@ -623,6 +623,38 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void RealizedEquity_CrossCurrencyInstrument_TranslatesTheCostBasisIntoTheAccountCurrency()
+        {
+            // Buy 10 @ 15,000 JPY (rate 150): Cash falls by the converted 1,000 USD to 9,000, and the
+            // position's native cost basis of 150,000 JPY converts back to that same 1,000 USD, so
+            // RealizedEquity == StartingCash. Adding the native basis to account-currency cash would
+            // read 159,000 - the mixed-unit figure risk sizing used to divide by.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            Assert.Equal(10_000m, portfolio.RealizedEquity);
+        }
+
+        [Fact]
+        public void SnapshotAt_CrossCurrencyInstrument_CostBasisEquityIsTranslatedIntoTheAccountCurrency()
+        {
+            // The figure a strategy reads each bar must be the same one the sizing model divides by: the
+            // 150,000 JPY cost basis converts at 150 to 1,000 USD against Cash of 9,000, so the snapshot
+            // reads 10,000 - not the 159,000 a native basis added to account-currency cash would give.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            PortfolioSnapshot snapshot = portfolio.SnapshotAt(T0.AddDays(1));
+
+            Assert.Equal(10_000m, snapshot.CostBasisEquity);
+        }
+
+        [Fact]
         public void BuyingPower_CrossCurrencyInstrument_CommittedMarginConvertedToSameCurrencyAsMarkedEquity()
         {
             // Buy 10 @ 15,000 JPY (rate 150): converted notional = 1,000 USD. CommittedMargin =

@@ -14,7 +14,11 @@ namespace Backtester.Core
         /// <summary>Gets or sets the available cash at this point in time.</summary>
         public decimal Cash { get; set; }
 
-        /// <summary>Gets or sets the total cost-basis equity (cash plus open position cost, excluding unrealized P&amp;L).</summary>
+        /// <summary>
+        /// Gets or sets the total cost-basis equity (cash plus open position cost, excluding unrealized
+        /// P&amp;L), each position's cost translated into the portfolio's account currency — the same
+        /// <see cref="Portfolio.RealizedEquity"/> risk-per-trade sizing budgets against.
+        /// </summary>
         public decimal CostBasisEquity { get; set; }
 
         /// <summary>Gets or sets the list of open positions at this point in time.</summary>
