@@ -32,6 +32,7 @@ Behavior & policy
 - Empty cache: the fetcher fetches the full requested range, persists it, and establishes the coverage floor at the requested `from`.
 - Stale cache: the fetcher extends the **tail** from the latest cached bar (`latest..to`) and merges the result; it never lowers the coverage floor.
 - Merge policy: when duplicates by `Timestamp` occur the later occurrence (the appended row) wins and replaces earlier values.
+- Conversion symbols are ordinary symbols here: when a `Portfolio`'s `Instrument` declares a `ConversionSymbol`, the `Engine` fetches that series through this same seam, and it is cached, coverage-floored, and warmup-resolved exactly like a tradable symbol. Nothing in this layer knows it carries an exchange rate — so **prime the conversion pairs alongside the tradable ones**, or a run over a primed sub-range will refuse the rate series it never covered.
 - Intervals: initial implementation targets hourly (`1h`) OHLCV and daily; provider support varies. If a provider cannot supply the requested interval or symbol it must throw an informative exception — the fetcher will propagate this error (no automatic fallback between providers).
 
 Coverage floor & priming

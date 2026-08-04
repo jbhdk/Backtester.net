@@ -319,11 +319,12 @@ correctly instead of silently mixing units (see [ADR 0029](docs/adr/0029-instrum
 
 ## Multi-currency & forex accounting
 
-Every traded symbol is described by an `Instrument` — its `QuoteCurrency` (required) and, when that
-differs from the account's own currency, a `ConversionSymbol` naming the exact series to fetch for
-converting it (e.g. an Instrument quoted in JPY names `USD_JPY` when the account is USD). A stock/ETF
-Instrument simply sets `QuoteCurrency` equal to the account's currency and leaves `ConversionSymbol`
-null, so no conversion machinery runs at all — every existing single-currency backtest is unaffected.
+A symbol that needs currency metadata (or its own margin rate) is described by an `Instrument` — its
+`QuoteCurrency` (required on every Instrument) and, when that differs from the account's own currency,
+a `ConversionSymbol` naming the exact series to fetch for converting it (e.g. an Instrument quoted in
+JPY names `USD_JPY` when the account is USD). A single-currency stock/ETF run on the default Reg-T
+margin declares no Instruments at all — it passes its symbols to the `Engine` as it always did, and no
+conversion machinery is built.
 
 The two declarations are cross-checked when the `Portfolio` is built: a quote currency differing from
 the account's **requires** a `ConversionSymbol`, one equal to it **forbids** one, and a missing quote
@@ -333,7 +334,17 @@ forgotten `ConversionSymbol` is caught at construction rather than mid-run.
 `ConversionOperation` declares which way the conversion pair is quoted: `Divide` (the default) for an
 account-first pair such as `USD_JPY` in a USD account, `Multiply` for a quote-first one such as
 `GBP_USD`, which is what lets a GBP-quoted cross convert in a USD account where no USD-first pair
-exists.
+exists. Rate direction is always **declared**, never inferred from the symbol by the engine — the
+engine stays ignorant of every provider's naming convention.
+
+You rarely write those three fields by hand: a provider package that serves forex ships an
+**Instrument factory** that infers all of them from its own pair naming. For Oanda,
+`OandaInstrument.For("EUR_GBP", accountCurrency: "USD")` returns the Instrument with `QuoteCurrency`
+`GBP`, `ConversionSymbol` `GBP_USD`, and `ConversionOperation.Multiply` already set, and rejects a
+symbol that isn't an Oanda pair at declaration time (see the
+[Oanda provider README](Data.Oanda/README.md#currency-conversion)). The factory lives in the provider
+package because pair-naming conventions are provider-specific; hand-writing an `Instrument`, as below,
+stays available for anything a factory gets wrong.
 
 ```csharp
 Instrument[] instruments =
@@ -363,7 +374,18 @@ account never needs to know exists. Only the account-currency-denominated aggreg
 rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
 quote currency, the real price a chart would show. Converting a declared conversion before any rate has
 been observed throws a `MissingConversionRateException` naming both symbols — a mis-wired run fails
-loudly instead of presenting native-currency numbers as account currency. See
+loudly instead of presenting native-currency numbers as account currency.
+
+All of that lives in one place: `CurrencyConverter`, built and owned by the `Portfolio`. It holds every
+conversion declaration, observes each Conversion symbol's closes as bars arrive, and applies the
+declared operation; `Portfolio.ToAccountCurrency(symbol, nativeAmount)` is a one-line delegation to it,
+and is the same public seam the risk-based sizing models use. Its timing rule is an invariant of the
+module, not an accident of the engine loop: **a fill translates at the conversion pair's previous
+close** — the last rate honestly knowable while that bar was trading — **while an end-of-bar equity
+mark translates at its current close**, the freshest known rate. Translation moves money and never
+execution semantics: a fill price stays the gap-aware price in the instrument's own quote currency,
+whatever the rate does. A conversion series that goes quiet for a bar keeps its last observed rate, so
+a gap in the rate feed does not fail an otherwise healthy run. See
 [ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) (currency conversion),
 [ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md) (per-instrument margin) and
 [ADR 0031](docs/adr/0031-currency-converter-module.md) (the Currency converter module, which amends

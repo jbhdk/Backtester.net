@@ -51,6 +51,11 @@ The page renders a grouped stats panel (headline, trade-quality, run context) wi
 currency, ratio stats as percentages, and P&L colour-coded green/red, plus a sortable round-trips
 table. Displayed P&L is gross of commission and slippage.
 
+Every money figure is in the portfolio's `AccountCurrency`; entry and exit **prices** stay in the
+instrument's own quote currency, so a cross-currency run shows the real price the pair traded at
+alongside account-currency P&L (see the engine's
+[multi-currency accounting](https://github.com/jbhdk/Backtester.net#multi-currency--forex-accounting)).
+
 ## Optimization report
 
 This package also carries the **Optimization** report — a separate report that renders a whole Parameter
@@ -129,6 +134,8 @@ The per-round-trip table also carries two entry-time columns derived from the sa
 
 - **Leverage** (round-trip column) — the trip's entry notional (`EntryPrice × Quantity`) over the marked equity when it opened; a dash when that equity was non-positive.
 - **Margin** (round-trip column) — the Reg-T initial margin the trip committed at entry: its side's rate (0.5 long / 1.5 short) times its entry notional, in currency. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at the entry notional rather than re-marked.
+
+> **Two per-trip figures are not yet cross-currency-aware.** The **Margin** column recomputes from the account's Reg-T rates over the trip's *native* entry notional, so for an `Instrument` that declares its own `MarginRate` (e.g. 2% for 50:1 forex leverage) or quotes in another currency it is not the margin the account actually committed — the aggregate **Avg/Peak margin** stats, which come from the portfolio's own committed margin, are correct. **R multiple** (and the **Avg R** stat) divides an account-currency `RealizedPnL` by a native-currency `InitialRisk`, mixing units for a symbol quoted in another currency. Single-currency runs on Reg-T margin are unaffected; making the report consume the engine's converted figures is a separate piece of work.
 
 ### Run context
 

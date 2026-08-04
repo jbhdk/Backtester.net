@@ -202,6 +202,14 @@ neighbours reveal whether the peak is a plateau or a lucky spike — not by a tr
 search methods (random, coarse-to-fine, Bayesian) and the seam that would host them are deferred, added
 deliberately when a real second method lands.
 
+**Cross-currency Instruments are not supported yet.** Your `portfolioFactory` may hand each Trial's
+`Portfolio` an `Instrument[]`, and a per-instrument `MarginRate` works fine — but the Optimizer's
+fetch-once step pulls only the symbols you passed it, not the `ConversionSymbol`s the Portfolio
+declares, so no rate is ever observed and the first conversion throws a
+`MissingConversionRateException` that ends the sweep. It fails loudly rather than optimizing on
+unconverted numbers; sweeping a cross-currency strategy has to wait until the Optimizer shares the
+engine's run setup.
+
 ## Example
 
 A complete, offline example lives in

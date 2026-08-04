@@ -125,11 +125,16 @@ Instrument instrument = new()
 };
 ```
 
+Hand the Instruments to the `Portfolio` and nothing else: it is the single hand-off point, and the
+`Engine` — which takes only the tradable symbol list — derives the conversion series to fetch from the
+Portfolio's own declarations.
+
 The provider itself stays pure acquisition — it has no concept of the account currency, and the
 factory is a separate declaration-time helper that performs no I/O. See the root
-[README](../README.md#multi-currency--forex-accounting) and
-[ADR 0029](../docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) for how `Engine` fetches
-and `Portfolio` applies the conversion.
+[README](../README.md#multi-currency--forex-accounting),
+[ADR 0029](../docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) and
+[ADR 0031](../docs/adr/0031-currency-converter-module.md) for how `Engine` fetches and `Portfolio`
+applies the conversion.
 
 ## Behavior notes
 
