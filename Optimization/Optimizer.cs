@@ -422,22 +422,44 @@ namespace Backtester.Optimization
         }
 
         /// <summary>
-        /// Fetches every symbol once through the supplied fetcher over the Data range — the Test range plus any
-        /// warmup lead-in — and returns an in-memory fetcher over the results, so every Trial's engine reads the
-        /// same warm bars without re-fetching. Bar-count warmup is resolved here, once per symbol, so its
-        /// throw-if-short refusal fires a single time rather than per Trial (ADR 0022).
+        /// Fetches every symbol the sweep needs — the tradable ones and any Conversion series
+        /// (<see cref="BuildFetchSymbols"/>) — once through the supplied fetcher over the Data range, the Test
+        /// range plus any warmup lead-in, and returns an in-memory fetcher over the results, so every Trial's
+        /// engine reads the same warm bars without re-fetching. A Conversion series resolves its Data-range
+        /// start exactly as a tradable symbol does, so a Trial reads precisely the bars an equivalent single
+        /// run reads (ADR 0032). Bar-count warmup is resolved here, once per symbol, so its throw-if-short
+        /// refusal fires a single time rather than per Trial (ADR 0022).
         /// </summary>
         private async Task<IHistoricalDataFetcher> FetchOnceAsync(CancellationToken ct)
         {
             // Key: symbol/ticker -> the Data-range bars fetched once for that symbol, shared by every Trial.
             Dictionary<string, IReadOnlyList<Candle>> series = new();
-            foreach (string symbol in _symbols)
+            foreach (string symbol in BuildFetchSymbols())
             {
                 DateTime dataFromUtc = await _resolveDataStartAsync(symbol, _testFromUtc, _interval, ct).ConfigureAwait(false);
                 series[symbol] = await _fetcher.FetchAsync(symbol, dataFromUtc, _testToUtc, _interval, ct).ConfigureAwait(false);
             }
 
             return new InMemoryHistoricalDataFetcher(series);
+        }
+
+        /// <summary>
+        /// Returns the series the sweep must pre-fetch: the tradable symbols plus every Conversion symbol the
+        /// caller's own Portfolio declares, deduplicated. The Optimizer builds one Portfolio from the portfolio
+        /// factory purely to read that declaration, asking the same single hand-off point the Engine asks
+        /// (ADR 0031) rather than taking the Instruments a second time through a constructor parameter
+        /// (ADR 0032). A Portfolio declaring no conversion yields the caller's own array untouched, so a plain
+        /// symbol-list sweep fetches exactly its symbols and builds no conversion machinery at all.
+        /// </summary>
+        private string[] BuildFetchSymbols()
+        {
+            IReadOnlyCollection<string> conversionSymbols = _portfolioFactory().ConversionSymbols;
+            if (conversionSymbols.Count == 0)
+            {
+                return _symbols;
+            }
+
+            return _symbols.Concat(conversionSymbols).Distinct().ToArray();
         }
     }
 }
