@@ -570,6 +570,40 @@ namespace BacktesterTests.Core.Tests
         }
 
         [Fact]
+        public void ConversionSymbols_CrossCurrencyAndAccountCurrencyInstruments_ReportsOnlyTheSeriesToFetch()
+        {
+            // The Portfolio is the single place that knows which extra series a run must pull: EUR_JPY
+            // converts through USD_JPY, AAPL already quotes in USD and converts through nothing.
+            Instrument[] instruments =
+            {
+                new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" },
+                new() { Symbol = "AAPL", QuoteCurrency = "USD" }
+            };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+
+            IReadOnlyCollection<string> conversionSymbols = portfolio.ConversionSymbols;
+
+            Assert.Equal(new[] { "USD_JPY" }, conversionSymbols);
+        }
+
+        [Fact]
+        public void RecordEquitySnapshot_ConversionPairMissingFromLaterSlice_CarriesTheLastObservedRateOver()
+        {
+            // Same numbers as the test above, but the later slice carries only EUR_JPY - USD_JPY printed
+            // nothing on that bar. The rate observed at T0 (150) must still convert: 15,300*10 = 153,000 JPY
+            // -> 1,020 USD, so MarkedEquity = Cash(9,000) + 1,020 = 10,020. Losing the rate on a mid-run gap
+            // would leave the position valued at its raw 153,000 JPY.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 150m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 10));
+
+            portfolio.RecordEquitySnapshot(SliceWithBar("EUR_JPY", 15_300m, T0.AddDays(1)));
+
+            Assert.Equal(10_020m, portfolio.EquityHistory.Last().MarkedEquity);
+        }
+
+        [Fact]
         public void MarkedEquity_CrossCurrencyInstrument_AtBreakeven_EqualsStartingCash()
         {
             // Same scenario, but read via the live MarkedEquity property (no RecordEquitySnapshot for the

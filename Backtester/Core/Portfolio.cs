@@ -20,10 +20,9 @@ namespace Backtester.Core
         // and value new orders for the Reg-T margin gate.
         private readonly Dictionary<string, decimal> _lastCloseBySymbol = new();
 
-        // Key: symbol/ticker -> the exact provider symbol whose price converts that symbol's quote
-        // currency into AccountCurrency. Entries exist only for instruments whose QuoteCurrency differs
-        // from AccountCurrency; a symbol absent here already quotes in AccountCurrency.
-        private readonly Dictionary<string, string> _conversionSymbolBySymbol = new();
+        // Owns every conversion declaration and the conversion-rate state behind it, kept apart from
+        // _lastCloseBySymbol so marking positions and converting currencies never read each other's state.
+        private readonly CurrencyConverter _currencyConverter;
 
         // Key: symbol/ticker -> a symmetric long/short initial-margin rate overriding the Reg-T split
         // (ADR 0030). Entries exist only for instruments that declare MarginRate; a symbol absent here
@@ -215,16 +214,12 @@ namespace Backtester.Core
             StartingCash = startingCash;
             Cash = startingCash;
             AccountCurrency = accountCurrency;
+            _currencyConverter = new CurrencyConverter(accountCurrency, instruments);
 
             if (instruments != null)
             {
                 foreach (Instrument instrument in instruments)
                 {
-                    if (instrument.ConversionSymbol != null)
-                    {
-                        _conversionSymbolBySymbol[instrument.Symbol] = instrument.ConversionSymbol;
-                    }
-
                     if (instrument.MarginRate.HasValue)
                     {
                         _marginRateBySymbol[instrument.Symbol] = instrument.MarginRate.Value;
@@ -234,26 +229,23 @@ namespace Backtester.Core
         }
 
         /// <summary>
+        /// Gets the distinct Conversion symbols the portfolio's Instruments declare — the extra series a
+        /// run must fetch on top of its tradable symbols so every cross-currency position can be valued in
+        /// <see cref="AccountCurrency"/>. Empty when every traded symbol already quotes in that currency.
+        /// </summary>
+        public IReadOnlyCollection<string> ConversionSymbols => _currencyConverter.ConversionSymbols;
+
+        /// <summary>
         /// Returns <paramref name="nativeAmount"/> (denominated in <paramref name="symbol"/>'s own quote
-        /// currency) converted into <see cref="AccountCurrency"/>: divided by the latest observed close of
-        /// the symbol's declared ConversionSymbol, quoted as quote-currency units per 1 account-currency
-        /// unit (e.g. <c>USD_JPY</c> for a JPY-quoted symbol in a USD account). Returns the amount
-        /// unchanged when the symbol declares no conversion or no rate has been observed yet, so an
-        /// Instrument already quoting in the account's currency needs no conversion machinery at all.
+        /// currency) converted into <see cref="AccountCurrency"/> by the portfolio's
+        /// <see cref="CurrencyConverter"/>, which owns the conversion rule and its rate state.
         /// A public seam for callers outside Portfolio (e.g. risk-based sizing models) that must convert
         /// a quote-currency-denominated amount, such as a stop distance, into the same units as an
         /// account-currency-denominated budget before dividing (ADR 0029).
         /// </summary>
         public decimal ToAccountCurrency(string symbol, decimal nativeAmount)
         {
-            if (_conversionSymbolBySymbol.TryGetValue(symbol, out string conversionSymbol)
-                && _lastCloseBySymbol.TryGetValue(conversionSymbol, out decimal rate)
-                && rate != 0m)
-            {
-                return nativeAmount / rate;
-            }
-
-            return nativeAmount;
+            return _currencyConverter.ToAccountCurrency(symbol, nativeAmount);
         }
 
         /// <summary>
@@ -400,11 +392,22 @@ namespace Backtester.Core
         /// </summary>
         public void RecordEquitySnapshot(MarketSlice slice)
         {
+            // The one place the two stores are fed, each from the same bars but for its own purpose: every
+            // close becomes the symbol's mark price, and a close on a declared Conversion symbol is also
+            // observed as that series' rate. A symbol that is both traded and another's conversion series
+            // therefore feeds both, and neither store is ever read as if it were the other.
             foreach (KeyValuePair<string, Candle> bar in slice.BarsBySymbol)
             {
-                if (bar.Value is not null)
+                if (bar.Value is null)
                 {
-                    _lastCloseBySymbol[bar.Key] = bar.Value.Close;
+                    continue;
+                }
+
+                _lastCloseBySymbol[bar.Key] = bar.Value.Close;
+
+                if (_currencyConverter.ConversionSymbols.Contains(bar.Key))
+                {
+                    _currencyConverter.ObserveRate(bar.Key, bar.Value.Close);
                 }
             }
 
