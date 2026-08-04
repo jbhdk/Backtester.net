@@ -29,6 +29,11 @@ namespace Backtester.Core
         // falls back to LongInitialMarginRate/ShortInitialMarginRate.
         private readonly Dictionary<string, decimal> _marginRateBySymbol = new();
 
+        // Key: symbol/ticker -> the ISO code its prices are quoted in, as its Instrument declared it. The
+        // converter cross-checks this at construction and then discards it, so the portfolio keeps its own
+        // copy to stamp on each round trip.
+        private readonly Dictionary<string, string> _quoteCurrencyBySymbol = new();
+
         /// <summary>Gets the cash balance the portfolio started with (its starting equity).</summary>
         public decimal StartingCash { get; }
 
@@ -161,6 +166,18 @@ namespace Backtester.Core
             return quantity >= 0 ? LongInitialMarginRate : ShortInitialMarginRate;
         }
 
+        /// <summary>
+        /// Returns the currency a symbol's prices are quoted in: its Instrument's declared quote currency,
+        /// or <see cref="AccountCurrency"/> for a symbol that declares no Instrument — which is exactly the
+        /// currency such a symbol is already converted as being in, the converter's identity case.
+        /// </summary>
+        private string QuoteCurrencyOf(string symbol)
+        {
+            return _quoteCurrencyBySymbol.TryGetValue(symbol, out string quoteCurrency)
+                ? quoteCurrency
+                : AccountCurrency;
+        }
+
         /// <summary>Converts an order side and quantity into a signed change in position quantity.</summary>
         private static int SignedDelta(OrderSide side, int quantity)
         {
@@ -224,6 +241,8 @@ namespace Backtester.Core
                     {
                         _marginRateBySymbol[instrument.Symbol] = instrument.MarginRate.Value;
                     }
+
+                    _quoteCurrencyBySymbol[instrument.Symbol] = instrument.QuoteCurrency;
                 }
             }
         }
@@ -342,6 +361,9 @@ namespace Backtester.Core
                     EntryMargin = MarginRate(effective.Symbol, currentQty) * exitedNotional,
                     // The marked equity captured when this lot opened, the denominator for the trip's leverage.
                     EntryEquity = position.EntryEquity,
+                    // The currency the entry and exit prices above are quoted in, so a mixed report can
+                    // say what its native price columns mean (ADR 0032).
+                    QuoteCurrency = QuoteCurrencyOf(effective.Symbol),
                     EntryTime   = position.EntryTime,
                     ExitTime    = effective.Timestamp,
                     ExitReason  = ExitReasonFor(effective.Leg)

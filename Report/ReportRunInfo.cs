@@ -21,6 +21,13 @@ namespace Backtester.Report
         /// <summary>Gets or sets the requested end of the run's date range (UTC).</summary>
         public DateTime ToUtc { get; set; }
 
+        /// <summary>
+        /// Gets or sets the ISO code of the account currency the run's portfolio was denominated in.
+        /// Every money figure the report shows — equity, profit, margin, per-trade averages — is in this
+        /// currency, so the page names it on its money labels rather than assuming one (ADR 0032).
+        /// </summary>
+        public string AccountCurrency { get; set; }
+
         /// <summary>Gets or sets the equity the portfolio started with.</summary>
         public decimal StartingEquity { get; set; }
 

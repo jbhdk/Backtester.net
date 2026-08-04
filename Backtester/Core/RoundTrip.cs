@@ -75,6 +75,15 @@ namespace Backtester.Core
         /// </summary>
         public decimal EntryEquity { get; set; }
 
+        /// <summary>
+        /// Gets or sets the ISO code of the currency this round trip's prices are quoted in — the
+        /// Instrument's own quote currency, which <see cref="EntryPrice"/>, <see cref="ExitPrice"/>,
+        /// <see cref="EntryStopPrice"/> and <see cref="EntryTargetPrice"/> stay denominated in while every
+        /// money figure beside them is translated into the Account currency (ADR 0032). A mixed report can
+        /// therefore say which currency each price column is in instead of formatting two of them alike.
+        /// </summary>
+        public string QuoteCurrency { get; set; }
+
         /// <summary>Gets or sets the number of bars the position was held before exit.</summary>
         public int BarsHeld { get; set; }
 

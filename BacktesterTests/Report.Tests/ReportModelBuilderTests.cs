@@ -416,8 +416,8 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Theory]
-        [InlineData(120, "+$200.00")] // winning trip P&L label
-        [InlineData(80, "-$200.00")]  // losing trip P&L label
+        [InlineData(120, "+200.00")] // winning trip P&L label
+        [InlineData(80, "-200.00")]  // losing trip P&L label
         public void Build_Chart_MarkerText_CarriesSignedPnL(double exitPrice, string expectedText)
         {
             BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, (decimal)exitPrice, 10);
@@ -993,6 +993,46 @@ namespace BacktesterTests.Report.Tests
             ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
 
             Assert.Equal(3m, Assert.Single(model.RoundTrips).Margin);
+        }
+
+        [Fact]
+        public void Build_CrossCurrencyRoundTrip_CarriesTheCurrencyItsPriceColumnsAreQuotedIn()
+        {
+            // EUR_JPY quotes in JPY in a USD account. The row's entry and exit prices are the native ones
+            // the market printed, so the row states JPY - the fact that tells a reader what 15,000 means.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Buy, 15_000m, 1, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Sell, 15_200m, 1, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal("JPY", Assert.Single(model.RoundTrips).QuoteCurrency);
+        }
+
+        [Fact]
+        public void Build_RoundTripOnAnUndeclaredSymbol_CarriesTheAccountCurrency()
+        {
+            // A plain stock run declares no Instruments at all, so every row still states a currency - the
+            // account's own - and the table never has a blank cell to explain.
+            BacktestResult result = ResultWithRoundTrip(T0, T0.AddDays(2), 100m, 120m, 10);
+
+            ReportModel model = new ReportModelBuilder().Build(result);
+
+            Assert.Equal("USD", Assert.Single(model.RoundTrips).QuoteCurrency);
+        }
+
+        [Fact]
+        public void Build_Run_CarriesThePortfoliosAccountCurrency()
+        {
+            // Every money figure in the report is in this currency, so the page can name it on its money
+            // labels instead of leaving a reader of a EUR account to assume dollars.
+            Portfolio portfolio = new(10_000m, "EUR");
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal("EUR", model.Run.AccountCurrency);
         }
     }
 }

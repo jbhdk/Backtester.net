@@ -51,6 +51,9 @@ namespace Backtester.Report
                     Interval = result.Interval,
                     FromUtc = result.FromUtc,
                     ToUtc = result.ToUtc,
+                    // The currency every money figure below is denominated in, taken from the portfolio
+                    // that produced them rather than assumed.
+                    AccountCurrency = result.Portfolio.AccountCurrency,
                     StartingEquity = startingEquity,
                     FinalEquity = finalEquity,
                     TotalReturnPercent = totalReturn
@@ -79,6 +82,9 @@ namespace Backtester.Report
                     // Initial stop and target levels, carried straight through; null renders as a dash.
                     EntryStopPrice = trip.EntryStopPrice,
                     EntryTargetPrice = trip.EntryTargetPrice,
+                    // The currency those four price columns are quoted in, carried straight through: the
+                    // engine knows each symbol's Instrument, and the report only states what it stamped.
+                    QuoteCurrency = trip.QuoteCurrency,
                     Quantity = trip.Quantity,
                     // Leverage divides the engine's stamped Account-currency entry notional by the equity at
                     // entry — two figures in the same currency (ADR 0032); a dash when that equity was
@@ -391,13 +397,14 @@ namespace Backtester.Report
         }
 
         /// <summary>
-        /// Formats a round trip's profit/loss as a signed currency label (e.g. <c>"+$200.00"</c>,
-        /// <c>"-$50.00"</c>) for a marker.
+        /// Formats a round trip's profit/loss as a signed amount (e.g. <c>"+200.00"</c>,
+        /// <c>"-50.00"</c>) for a marker. Unsymbolled: the figure is in the run's Account currency,
+        /// whatever that is, and a hard-coded "$" would misname it for every other account.
         /// </summary>
         private static string FormatPnL(decimal pnl)
         {
             string sign = pnl >= 0m ? "+" : "-";
-            return sign + "$" + Math.Abs(pnl).ToString("N2", CultureInfo.InvariantCulture);
+            return sign + Math.Abs(pnl).ToString("N2", CultureInfo.InvariantCulture);
         }
 
         /// <summary>

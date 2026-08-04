@@ -59,6 +59,11 @@
   thead th[aria-sort="descending"]::after { content: " \25BC"; }
   tbody tr:hover { background: rgba(255,255,255,.03); }
   .footnote { color: var(--muted); font-size: 12px; margin-top: 16px; }
+  /* Quote-currency column: rendered only when a run's round trips span more than one currency, so it
+     names what the native price columns mean without repeating a constant on every row of a
+     single-currency run (that run states it once in the footnote instead). */
+  th.ccy, td.ccy { text-align: left; }
+  td.ccy { color: var(--muted); }
   #price-chart { width: 100%; height: 600px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   #equity-chart { width: 100%; height: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 28px; }
   .section-head { display: flex; align-items: center; justify-content: space-between; }
@@ -133,6 +138,7 @@
     <tr>
       <th data-key="number" data-type="num">#</th>
       <th data-key="symbol" data-type="str">Symbol</th>
+      <th class="ccy" data-key="quoteCurrency" data-type="str">Ccy</th>
       <th data-key="direction" data-type="str">Side</th>
       <th data-key="entryTime" data-type="date">Entry</th>
       <th data-key="exitTime" data-type="date">Exit</th>
@@ -143,8 +149,8 @@
       <th data-key="exitReason" data-type="str">Exit reason</th>
       <th data-key="quantity" data-type="num">Qty</th>
       <th data-key="leverage" data-type="num">Leverage</th>
-      <th data-key="margin" data-type="num">Margin</th>
-      <th data-key="realizedPnL" data-type="num">P&amp;L</th>
+      <th data-money data-key="margin" data-type="num">Margin</th>
+      <th data-money data-key="realizedPnL" data-type="num">P&amp;L</th>
       <th data-key="returnPercent" data-type="num">Return %</th>
       <th data-key="rMultiple" data-type="num">R</th>
       <th data-key="timeHeld" data-type="str">Time held</th>
@@ -152,7 +158,7 @@
   </thead>
   <tbody></tbody>
 </table>
-<p class="footnote">P&amp;L is shown gross of commission and slippage.</p>
+<p class="footnote" id="round-trips-footnote">P&amp;L is shown gross of commission and slippage.</p>
 
 <script>__CHART_LIB__</script>
 <script id="report-data" type="application/json">__REPORT_DATA__</script>
@@ -163,9 +169,12 @@
   var stats = model.stats || {};
   var run = model.run || {};
 
+  // Money and prices render unsymbolled: an amount is in the run's Account currency and a price in its
+  // Instrument's own quote currency, so no one symbol is right for the whole page. The round-trips
+  // table names the price currency itself; every other money figure is the account's.
   function fmtMoney(v) {
     if (v == null) return "–";
-    return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (v < 0 ? "-" : "") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function fmtPct(v) { return v == null ? "–" : (v * 100).toFixed(2) + "%"; }
   function fmtNum(v, d) { return v == null ? "–" : Number(v).toFixed(d == null ? 2 : d); }
@@ -300,6 +309,16 @@
   // Build a title="" attribute (with a leading space) from tooltip text, or "" when there is none.
   function titleAttr(text) { return text ? ' title="' + esc(text) + '"' : ''; }
 
+  // A money stat names the Account currency it is denominated in — "Net profit (EUR)" — since the
+  // figures themselves carry no symbol. The description map is keyed by the plain label, so the
+  // suffixed one is registered against the same text and every row keeps its tooltip.
+  function money(label) {
+    if (!run.accountCurrency) { return label; }
+    var labelled = label + " (" + run.accountCurrency + ")";
+    descriptions[labelled] = descriptions[label];
+    return labelled;
+  }
+
   // value may carry an explicit css class for P&L colour-coding; the label carries its description as a
   // hover tooltip when one is known.
   function row(label, value, cls) {
@@ -340,7 +359,7 @@
     // Net profit and Net profit % both keep a sign colour (made / lost money) — the same measure in
     // currency and percent. Buy &amp; hold is left uncoloured (it's the benchmark, not the strategy).
     fill("headline-stats", headRow() +
-      dualRow("Net profit", fmtMoney(stats.netProfit), sel ? fmtMoney(sel.netProfit) : dash,
+      dualRow(money("Net profit"), fmtMoney(stats.netProfit), sel ? fmtMoney(sel.netProfit) : dash,
               signClass(stats.netProfit), sel ? signClass(sel.netProfit) : "") +
       dualRow("Net profit %", fmtPct(stats.netProfitPercent), sel ? fmtPct(sel.netProfitPercent) : dash,
               signClass(stats.netProfitPercent), sel ? signClass(sel.netProfitPercent) : "") +
@@ -368,24 +387,24 @@
       dualRow("Win rate", fmtPct(stats.winRate), sel ? fmtPct(sel.winRate) : dash) +
       dualRow("Profit factor", fmtNum(stats.profitFactor), sel ? fmtNum(sel.profitFactor) : dash,
               q("profitFactor"), qs("profitFactor"), "profitFactor") +
-      dualRow("Expectancy", fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
+      dualRow(money("Expectancy"), fmtMoney(stats.expectancy), sel ? fmtMoney(sel.expectancy) : dash,
               signClass(stats.expectancy), sel ? signClass(sel.expectancy) : "") +
       dualRow("Avg R", fmtNum(stats.avgRMultiple), sel ? fmtNum(sel.avgRMultiple) : dash,
               q("avgRMultiple"), qs("avgRMultiple"), "avgRMultiple") +
-      dualRow("Avg win", fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash) +
-      dualRow("Avg loss", fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash) +
-      dualRow("Median trade", fmtMoney(stats.medianTrade), sel ? fmtMoney(sel.medianTrade) : dash));
+      dualRow(money("Avg win"), fmtMoney(stats.avgWin), sel ? fmtMoney(sel.avgWin) : dash) +
+      dualRow(money("Avg loss"), fmtMoney(stats.avgLoss), sel ? fmtMoney(sel.avgLoss) : dash) +
+      dualRow(money("Median trade"), fmtMoney(stats.medianTrade), sel ? fmtMoney(sel.medianTrade) : dash));
 
     fill("win-loss-stats", headRow() +
-      dualRow("Largest win", fmtMoney(stats.largestWin), sel ? fmtMoney(sel.largestWin) : dash) +
-      dualRow("Largest loss", fmtMoney(stats.largestLoss), sel ? fmtMoney(sel.largestLoss) : dash) +
+      dualRow(money("Largest win"), fmtMoney(stats.largestWin), sel ? fmtMoney(sel.largestWin) : dash) +
+      dualRow(money("Largest loss"), fmtMoney(stats.largestLoss), sel ? fmtMoney(sel.largestLoss) : dash) +
       dualRow("Max consec. wins", fmtNum(stats.maxConsecWins, 0), sel ? fmtNum(sel.maxConsecWins, 0) : dash) +
       dualRow("Max consec. losses", fmtNum(stats.maxConsecLosses, 0), sel ? fmtNum(sel.maxConsecLosses, 0) : dash) +
       dualRow("Profitable long", fmtPct(stats.longWinRate), sel ? fmtPct(sel.longWinRate) : dash) +
       dualRow("Profitable short", fmtPct(stats.shortWinRate), sel ? fmtPct(sel.shortWinRate) : dash) +
-      dualRow("Net profit long", fmtMoney(stats.netProfitLong), sel ? fmtMoney(sel.netProfitLong) : dash,
+      dualRow(money("Net profit long"), fmtMoney(stats.netProfitLong), sel ? fmtMoney(sel.netProfitLong) : dash,
               signClass(stats.netProfitLong), sel ? signClass(sel.netProfitLong) : "") +
-      dualRow("Net profit short", fmtMoney(stats.netProfitShort), sel ? fmtMoney(sel.netProfitShort) : dash,
+      dualRow(money("Net profit short"), fmtMoney(stats.netProfitShort), sel ? fmtMoney(sel.netProfitShort) : dash,
               signClass(stats.netProfitShort), sel ? signClass(sel.netProfitShort) : ""));
 
     fill("duration-stats", headRow() +
@@ -396,8 +415,8 @@
 
     fill("exposure-stats", headRow() +
       dualRow("Market exposure", fmtPct(stats.marketExposure), sel ? fmtPct(sel.marketExposure) : dash) +
-      dualRow("Avg capital", fmtMoney(stats.avgCapitalInvested), sel ? fmtMoney(sel.avgCapitalInvested) : dash) +
-      dualRow("Max capital", fmtMoney(stats.maxCapitalInvested), sel ? fmtMoney(sel.maxCapitalInvested) : dash) +
+      dualRow(money("Avg capital"), fmtMoney(stats.avgCapitalInvested), sel ? fmtMoney(sel.avgCapitalInvested) : dash) +
+      dualRow(money("Max capital"), fmtMoney(stats.maxCapitalInvested), sel ? fmtMoney(sel.maxCapitalInvested) : dash) +
       dualRow("Avg leverage", fmtLev(stats.avgLeverage), sel ? fmtLev(sel.avgLeverage) : dash) +
       dualRow("Peak leverage", fmtLev(stats.peakLeverage), sel ? fmtLev(sel.peakLeverage) : dash) +
       dualRow("Avg margin", fmtPct(stats.avgMarginUtilization), sel ? fmtPct(sel.avgMarginUtilization) : dash) +
@@ -412,8 +431,8 @@
     row("Interval", run.interval || "–") +
     row("From", fmtDate(run.fromUtc)) +
     row("To", fmtDate(run.toUtc)) +
-    row("Starting equity", fmtMoney(run.startingEquity)) +
-    row("Final equity", fmtMoney(run.finalEquity)));
+    row(money("Starting equity"), fmtMoney(run.startingEquity)) +
+    row(money("Final equity"), fmtMoney(run.finalEquity)));
 
   document.getElementById("run-subtitle").textContent =
     symbols + " · " + (run.interval || "") + " · " + fmtDate(run.fromUtc) + " – " + fmtDate(run.toUtc);
@@ -531,6 +550,27 @@
 
   // --- Round-trips table ---
   var trips = (model.roundTrips || []).slice();
+  // Each trip states the currency its price columns are quoted in. A run whose trips share one is
+  // saying the same thing on every row, so that run drops the column and states it once in the
+  // footnote; only a mixed run earns a per-row column.
+  var tripCurrencies = trips.map(function (t) { return t.quoteCurrency; }).filter(Boolean);
+  var quoteCurrencies = tripCurrencies.filter(function (c, i) { return tripCurrencies.indexOf(c) === i; });
+  var showCcy = quoteCurrencies.length > 1;
+  if (!showCcy) {
+    var ccyHeader = document.querySelector('#round-trips thead th[data-key="quoteCurrency"]');
+    if (ccyHeader) { ccyHeader.parentNode.removeChild(ccyHeader); }
+  }
+  if (quoteCurrencies.length === 1) {
+    var tripsFootnote = document.getElementById("round-trips-footnote");
+    tripsFootnote.textContent = "Prices are quoted in " + quoteCurrencies[0] + ". " + tripsFootnote.textContent;
+  }
+  // The table's money columns are in the Account currency while its price columns stay native, so each
+  // money header names its currency — the same fact the Ccy column (or the footnote) gives the prices.
+  if (run.accountCurrency) {
+    document.querySelectorAll("#round-trips thead th[data-money]").forEach(function (th) {
+      th.textContent = th.textContent + " (" + run.accountCurrency + ")";
+    });
+  }
   // Orders the broker declined share the trade log as time-ordered "rejected" rows: they carry the
   // attempt's symbol, side, time, price, and size, but no exit, P&L, or holding time.
   var rejectedRows = (model.rejectedOrders || []).map(function (r) {
@@ -551,6 +591,8 @@
   var showAll = false;
 
   function cell(value, cls) { return '<td class="' + (cls || "") + '">' + value + "</td>"; }
+  // The quote-currency cell exists only while the column does, so every row keeps the same shape.
+  function ccyCell(value) { return showCcy ? cell(value, "ccy") : ""; }
   function directionBadge(d) {
     var isShort = String(d).toLowerCase() === "short";
     return '<span class="badge badge-' + (isShort ? "short" : "long") + '">' + (d || "Long") + "</span>";
@@ -566,14 +608,14 @@
         // A rejected attempt: no trade number, exit, P&L, return, or holding time — the dash columns
         // stay empty and the reason shows where the P&L would be.
         return '<tr data-number="" class="rejected">' +
-          cell("–") + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
+          cell("–") + cell(t.symbol) + ccyCell("–") + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell("–") +
           cell(fmtMoney(t.entryPrice)) + cell("–") + cell("–") + cell("–") + cell("–") + cell(t.quantity) +
           cell("–") + cell("–") +
           cell(rejectedBadge(t.reason)) + cell("–") + cell("–") + cell("–") +
           "</tr>";
       }
       return '<tr data-number="' + t.number + '">' +
-        cell(t.number) + cell(t.symbol) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
+        cell(t.number) + cell(t.symbol) + ccyCell(t.quoteCurrency) + cell(directionBadge(t.direction)) + cell(fmtDate(t.entryTime)) + cell(fmtDate(t.exitTime)) +
         cell(fmtMoney(t.entryPrice)) + cell(fmtMoney(t.exitPrice)) +
         cell(fmtMoney(t.entryStopPrice)) + cell(fmtMoney(t.entryTargetPrice)) +
         cell(t.exitReason) + cell(t.quantity) +

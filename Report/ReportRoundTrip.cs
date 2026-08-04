@@ -42,6 +42,14 @@ namespace Backtester.Report
         /// </summary>
         public decimal? EntryTargetPrice { get; set; }
 
+        /// <summary>
+        /// Gets or sets the ISO code the engine stamped as this trip's quote currency: the currency the
+        /// row's price columns — entry, exit, initial stop and initial target — are denominated in, while
+        /// every money column beside them is in the Account currency (ADR 0032). The Account currency
+        /// itself for a symbol that declared no Instrument, which is how such a symbol is converted.
+        /// </summary>
+        public string QuoteCurrency { get; set; }
+
         /// <summary>Gets or sets the number of shares exited.</summary>
         public int Quantity { get; set; }
 

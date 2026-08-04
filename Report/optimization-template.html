@@ -272,7 +272,9 @@
       function numCell(v, dp) { return Number(v).toFixed(dp); }
       function moneyCell(r) {
         var v = Number(r.netProfit);
-        var s = (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        // Unsymbolled, as in the backtest report: net profit is in the run's Account currency, whatever
+        // that is, and a hard-coded "$" would misname it for every other account.
+        var s = (v < 0 ? "-" : "") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return '<span class="' + (v >= 0 ? "pos" : "neg") + '">' + s + "</span>";
       }
       function pctCell(v) { return (Number(v) * 100).toFixed(1) + "%"; }

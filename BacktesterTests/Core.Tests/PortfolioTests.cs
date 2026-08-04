@@ -831,6 +831,36 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(2.78m, portfolio.RoundTrips[1].EntryMargin);
         }
 
+        // --- Quote currency (ADR 0032) ---
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyRoundTrip_CarriesTheInstrumentsQuoteCurrency()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. The trip's entry and exit prices stay native, so
+            // the trip states the currency they are in rather than leaving a reader to guess it is USD.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1));
+
+            Assert.Equal("JPY", Assert.Single(portfolio.RoundTrips).QuoteCurrency);
+        }
+
+        [Fact]
+        public void ApplyTrade_SymbolWithNoDeclaredInstrument_CarriesTheAccountCurrency()
+        {
+            // An undeclared symbol is converted by identity, so its prices are already in the account's own
+            // currency - here EUR, not the "USD" default, so the fallback is the account's and not a constant.
+            Portfolio portfolio = new(10_000m, "EUR");
+            portfolio.ApplyTrade(Buy("SAP", 100m, 10));
+
+            portfolio.ApplyTrade(Sell("SAP", 120m, 10));
+
+            Assert.Equal("EUR", Assert.Single(portfolio.RoundTrips).QuoteCurrency);
+        }
+
         [Fact]
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()
         {

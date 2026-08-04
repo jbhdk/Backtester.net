@@ -222,6 +222,16 @@ at all. Deliberately left room to carry other per-symbol execution config later 
 spread/commission).
 _Avoid_: symbol (a symbol is `Instrument.Symbol`, a bare identifier), ticker.
 
+**Quote currency**:
+The currency an Instrument's price is quoted in — what its candles, its fill prices, and a Round
+trip's entry, exit, initial stop and initial target levels are all denominated in. Declared on every
+Instrument and cross-checked against the Account currency at construction; a symbol trading without
+an Instrument quotes in the Account currency, which is exactly how it is already converted
+(identity). The Portfolio stamps it on each Round trip it emits, so a report holding both a
+USD-quoted stock and a JPY-quoted pair can say which currency each price column is in while every
+money figure beside it is in the Account currency.
+_Avoid_: native currency, local currency, instrument currency, counter currency.
+
 **Account currency**:
 The single currency Portfolio's cash and equity are denominated in, set once at construction. Every
 Instrument's quote currency is compared against it to decide whether conversion applies.

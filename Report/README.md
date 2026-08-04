@@ -13,14 +13,15 @@ which the `BacktestResult` now carries — is derived from the result alone:
 - **Stats** — net profit (currency and percent), net profit split by direction, CAGR, max drawdown,
   Sharpe, trades, win rate, profit factor, expectancy, average win/loss, max consecutive losses, and
   the leverage and margin utilization the run carried.
-- **Round trips** — number, symbol, entry/exit time and price, quantity, the trip's **Leverage** and
-  **Margin** (see below), P&L, plus derived
+- **Round trips** — number, symbol, the trip's **Quote currency** (see below), entry/exit time and
+  price, quantity, the trip's **Leverage** and **Margin** (see below), P&L, plus derived
   **Return %** `(Exit − Entry) / Entry`, the **Initial stop** and **Initial target** (the entry-time
   stop-loss and take-profit levels, frozen at entry and unaffected by later trailing; a dash when the
   entry declared no such leg — Initial stop shows exactly when **R** does, Initial target only when a
   bracket target armed), the **Exit reason** (`Take-profit`, `Stop-loss`, or `Signal`), and compact
   **Time Held** (e.g. `5d 6h`).
-- **Run** — symbols, interval, date range, starting equity, and derived final equity and total return %.
+- **Run** — symbols, interval, date range, the **Account currency** every money figure is denominated
+  in, starting equity, and derived final equity and total return %.
 - **Per-symbol candles**, **indicators** (each grouping one or more series in a shared pane), and the portfolio **equity curve**.
 
 ```csharp
@@ -134,6 +135,22 @@ The per-round-trip table also carries two entry-time columns derived from the sa
 
 - **Leverage** (round-trip column) — the trip's entry notional over the marked equity when it opened; a dash when that equity was non-positive. Both figures are in the account's currency: the engine stamps the notional on the round trip, accumulating each fill's converted cost as it fills, so a trip that scaled in across a rate move divides by the money that actually left the account.
 - **Margin** (round-trip column) — the initial margin the trip committed at entry, in the account's currency. The engine stamps it on the round trip, applying its own rate — the `Instrument`'s declared `MarginRate` when it has one (e.g. 2% for 50:1 forex leverage), else the Reg-T split (0.5 long / 1.5 short) — to the same converted entry notional the **Leverage** column divides by. The report displays that figure rather than re-deriving it, so a change to how margin is rated cannot leave this column describing a rule the engine no longer follows. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at entry rather than re-marked.
+
+### Currencies
+
+Amounts render without a currency symbol, because no single symbol is right for the whole page: a
+money figure is in the run's **Account currency**, while a price is in its `Instrument`'s own **Quote
+currency**. The page names both rather than leaving either assumed.
+
+- Every money stat label carries the account currency — **Net profit (EUR)**, **Expectancy (EUR)**,
+  **Starting equity (EUR)** — as do the round-trip table's **Margin** and **P&L** headers.
+- Each round trip carries the quote currency its **Entry price**, **Exit price**, **Initial stop**
+  and **Initial target** are in — the engine stamps it, taking the `Instrument`'s declared quote
+  currency, or the account currency for a symbol that declared no `Instrument` (which is exactly the
+  currency such a symbol is already converted as being in).
+- A run whose trips span more than one quote currency gets a **Ccy** column stating each row's; a run
+  where they all agree says it once in the table's footnote instead, so a single-currency run gains
+  no per-row noise for a constant.
 
 ### Run context
 
