@@ -202,13 +202,19 @@ neighbours reveal whether the peak is a plateau or a lucky spike — not by a tr
 search methods (random, coarse-to-fine, Bayesian) and the seam that would host them are deferred, added
 deliberately when a real second method lands.
 
-**Cross-currency Instruments are not supported yet.** Your `portfolioFactory` may hand each Trial's
-`Portfolio` an `Instrument[]`, and a per-instrument `MarginRate` works fine — but the Optimizer's
-fetch-once step pulls only the symbols you passed it, not the `ConversionSymbol`s the Portfolio
-declares, so no rate is ever observed and the first conversion throws a
-`MissingConversionRateException` that ends the sweep. It fails loudly rather than optimizing on
-unconverted numbers; sweeping a cross-currency strategy has to wait until the Optimizer shares the
-engine's run setup.
+**Cross-currency Instruments are supported.** Hand each Trial's `Portfolio` an `Instrument[]` from your
+`portfolioFactory` and the fetch-once step pulls the `ConversionSymbol`s that Portfolio declares
+alongside the symbols you passed, each over the same Data range — so every Trial reads the rate series
+an equivalent single run reads, and a conversion series never reaches the strategy's History or a
+Trial's reported symbols
+([ADR 0032](https://github.com/jbhdk/Backtester.net/blob/main/docs/adr/0032-round-trips-carry-account-currency-figures.md)).
+
+The series to fetch are read from **one** `Portfolio`, built at setup, so every call to your
+`portfolioFactory` must declare the same Instruments. A Trial whose `Portfolio` declares a
+`ConversionSymbol` that was never pre-fetched is refused with an
+`InconsistentPortfolioFactoryException` naming the symbol, before that Trial's engine runs. That ends
+the sweep rather than becoming a **Rejected trial**: it is a defect in the factory, not a Parameter set
+the code under test declined.
 
 ## Example
 

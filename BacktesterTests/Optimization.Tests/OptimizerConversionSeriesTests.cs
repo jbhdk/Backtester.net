@@ -232,6 +232,108 @@ namespace BacktesterTests.Optimization.Tests
             Assert.Equal(new[] { "EUR_JPY" }, backtest.CandleHistory.Keys);
         }
 
+        [Fact]
+        public async Task RunAsync_FactoryDeclaringAConversionSymbolTheSweepDidNotPreFetch_RefusesTheSweep()
+        {
+            // The setup probe saw USD_JPY, so only that rate series was pre-fetched; a later Trial declaring
+            // GBP_JPY would read an empty series and die on a missing rate blaming the data (issue #128).
+            Optimizer optimizer = InconsistentFactoryOptimizer();
+
+            await Assert.ThrowsAsync<InconsistentPortfolioFactoryException>(() => optimizer.RunAsync());
+        }
+
+        [Fact]
+        public async Task RunAsync_RefusingAnUnfetchedConversionSymbol_NamesTheSymbolAndThePortfolioFactory()
+        {
+            // The user must read "your factory returned inconsistent Instruments", not a data fault: the
+            // refusal carries the offending symbol and points at the factory as the cause (ADR 0032).
+            InconsistentPortfolioFactoryException refusal =
+                await Assert.ThrowsAsync<InconsistentPortfolioFactoryException>(() => InconsistentFactoryOptimizer().RunAsync());
+
+            Assert.Equal("GBP_JPY", refusal.ConversionSymbol);
+            Assert.Contains("GBP_JPY", refusal.Message);
+            Assert.Contains("portfolio factory", refusal.Message);
+        }
+
+        [Fact]
+        public async Task RunAsync_FactoryDeclaringAnUnfetchedConversionSymbol_RefusesBeforeTheTrialsEngineRuns()
+        {
+            // Refusing up front is the whole point: were the Trial allowed to start, its strategy would be
+            // warmed and the run would only fail once a bar needed the rate that was never fetched.
+            HistoryCapturingStrategy captured = new();
+
+            await Assert.ThrowsAsync<InconsistentPortfolioFactoryException>(
+                () => InconsistentFactoryOptimizer(captured).RunAsync());
+
+            Assert.Null(captured.ReceivedHistory);
+        }
+
+        [Fact]
+        public async Task RunAsync_OneTrialDeclaringAnUnfetchedConversionSymbol_EndsTheSweepRatherThanRankingRejectedTrials()
+        {
+            // A Rejected trial is for a configuration the code under test refused (ADR 0027). An inconsistent
+            // factory is a defect in the caller's setup, so it ends the sweep loudly even though the sweep's
+            // other Parameter sets would have scored perfectly well.
+            int calls = 0;
+            Portfolio Factory()
+            {
+                // The first call is the setup probe; one Trial after it declares a series never pre-fetched.
+                return Interlocked.Increment(ref calls) == 3
+                    ? PortfolioConvertingThrough("GBP_JPY")
+                    : PortfolioConvertingThrough("USD_JPY");
+            }
+
+            Optimizer optimizer = OptimizerOver(Factory, new ParameterSpace().AddInt("qty", from: 1, to: 3, step: 1));
+
+            await Assert.ThrowsAsync<InconsistentPortfolioFactoryException>(() => optimizer.RunAsync());
+        }
+
+        /// <summary>
+        /// A USD account whose only Instrument is the JPY-quoted EUR_JPY, converting through
+        /// <paramref name="conversionSymbol"/>.
+        /// </summary>
+        private static Portfolio PortfolioConvertingThrough(string conversionSymbol)
+        {
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = conversionSymbol } };
+            return new Portfolio(100_000m, "USD", instruments);
+        }
+
+        /// <summary>
+        /// Builds an Optimizer over a portfolio factory that declares USD_JPY on its first call — the setup
+        /// probe, whose declaration decides what is pre-fetched — and GBP_JPY on every call after it, the
+        /// inconsistency a <see cref="Func{Portfolio}"/> cannot promise away.
+        /// </summary>
+        private static Optimizer InconsistentFactoryOptimizer(IStrategy strategy = null)
+        {
+            int calls = 0;
+            Portfolio Factory()
+            {
+                return Interlocked.Increment(ref calls) == 1
+                    ? PortfolioConvertingThrough("USD_JPY")
+                    : PortfolioConvertingThrough("GBP_JPY");
+            }
+
+            return OptimizerOver(Factory, new ParameterSpace().AddInt("qty", from: 1, to: 1, step: 1), strategy);
+        }
+
+        /// <summary>
+        /// Builds an Optimizer over the single tradable EUR_JPY series and the given portfolio factory, so a
+        /// test decides for itself what each call to that factory declares.
+        /// </summary>
+        private static Optimizer OptimizerOver(Func<Portfolio> portfolioFactory, ParameterSpace space, IStrategy strategy = null)
+        {
+            return new Optimizer(
+                CrossCurrencyFetcher(),
+                new[] { "EUR_JPY" },
+                T0,
+                T0.AddYears(1),
+                "1d",
+                portfolioFactory,
+                space,
+                (parameters, portfolio) => (strategy ?? new BuySellQtyStrategy(parameters.Int("qty")), new BrokerSimulator(portfolio)),
+                minimumTrades: 0);
+        }
+
         /// <summary>Five daily bars from <paramref name="first"/>, each <paramref name="step"/> above the last.</summary>
         private static Candle[] DailySeries(decimal first, decimal step)
         {

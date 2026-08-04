@@ -341,7 +341,11 @@ namespace Backtester.Optimization
         /// </summary>
         public async Task<OptimizationResult> RunAsync(IProgress<OptimizationProgress> progress = null, CancellationToken ct = default)
         {
-            IHistoricalDataFetcher sharedFetcher = await FetchOnceAsync(ct).ConfigureAwait(false);
+            string[] fetchSymbols = BuildFetchSymbols();
+            IHistoricalDataFetcher sharedFetcher = await FetchOnceAsync(fetchSymbols, ct).ConfigureAwait(false);
+            // The series every Trial may read. Held as a local rather than a field so concurrent RunAsync
+            // calls on one Optimizer never share it.
+            HashSet<string> preFetched = new(fetchSymbols, StringComparer.Ordinal);
 
             IReadOnlyList<ParameterSet> parameterSets = _space.Expand();
             int total = parameterSets.Count;
@@ -364,6 +368,7 @@ namespace Backtester.Optimization
                     // A fresh Portfolio, strategy, and broker per Trial keep Trials independent; the shared fetcher
                     // is read-only, so parallel Trials over it are safe and see identical bars.
                     Portfolio portfolio = _portfolioFactory();
+                    RefuseUnfetchedConversionSymbols(portfolio, preFetched);
                     (IStrategy strategy, IBrokerSimulator broker) = _trialFactory(parameters, portfolio);
 
                     // The shared fetcher already holds the Data-range bars (warmup lead-in included), so a plain
@@ -430,11 +435,11 @@ namespace Backtester.Optimization
         /// run reads (ADR 0032). Bar-count warmup is resolved here, once per symbol, so its throw-if-short
         /// refusal fires a single time rather than per Trial (ADR 0022).
         /// </summary>
-        private async Task<IHistoricalDataFetcher> FetchOnceAsync(CancellationToken ct)
+        private async Task<IHistoricalDataFetcher> FetchOnceAsync(string[] fetchSymbols, CancellationToken ct)
         {
             // Key: symbol/ticker -> the Data-range bars fetched once for that symbol, shared by every Trial.
             Dictionary<string, IReadOnlyList<Candle>> series = new();
-            foreach (string symbol in BuildFetchSymbols())
+            foreach (string symbol in fetchSymbols)
             {
                 DateTime dataFromUtc = await _resolveDataStartAsync(symbol, _testFromUtc, _interval, ct).ConfigureAwait(false);
                 series[symbol] = await _fetcher.FetchAsync(symbol, dataFromUtc, _testToUtc, _interval, ct).ConfigureAwait(false);
@@ -460,6 +465,30 @@ namespace Backtester.Optimization
             }
 
             return _symbols.Concat(conversionSymbols).Distinct().ToArray();
+        }
+
+        /// <summary>
+        /// Throws unless every Conversion symbol <paramref name="portfolio"/> declares was pre-fetched. The
+        /// set comes from one portfolio-factory call at setup, which a <see cref="Func{Portfolio}"/> cannot
+        /// promise every Trial matches, so each Trial's Portfolio is checked before its Engine runs — the
+        /// refusal then names the factory rather than surfacing as a missing rate from inside a bar loop. A
+        /// Portfolio declaring no conversion returns immediately, so the common path costs one count check.
+        /// </summary>
+        private static void RefuseUnfetchedConversionSymbols(Portfolio portfolio, HashSet<string> preFetched)
+        {
+            IReadOnlyCollection<string> conversionSymbols = portfolio.ConversionSymbols;
+            if (conversionSymbols.Count == 0)
+            {
+                return;
+            }
+
+            foreach (string conversionSymbol in conversionSymbols)
+            {
+                if (!preFetched.Contains(conversionSymbol))
+                {
+                    throw new InconsistentPortfolioFactoryException(conversionSymbol);
+                }
+            }
         }
     }
 }
