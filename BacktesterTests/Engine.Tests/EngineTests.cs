@@ -611,6 +611,68 @@ namespace BacktesterTests.Engine.Tests
             Assert.DoesNotContain(portfolio.RoundTrips, trip => trip.Symbol == "USD_JPY");
         }
 
+        // --- Currency converter fill-timing invariant (ADR 0029) ---
+
+        /// <summary>
+        /// Runs the scenario the Currency converter's fill-timing invariant is pinned on: a USD account
+        /// trading JPY-quoted EUR_JPY through USD_JPY, whose rate moves from 100 to 125 on the very bar the
+        /// entry fills. A ten-unit Buy stop at 15,100 is submitted on the first bar; the second bar's open
+        /// (15,300) gapped past that trigger, so the fill is priced there. Returns the run's Portfolio.
+        /// </summary>
+        private static async Task<Portfolio> RunRateMovingOnFillBarAsync()
+        {
+            Candle[] eurJpyBars = { Bar(T0, 15_000m), Bar(T0.AddDays(1), 15_300m) };
+            Candle[] usdJpyBars = { Bar(T0, 100m), Bar(T0.AddDays(1), 125m) };
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(("EUR_JPY", eurJpyBars), ("USD_JPY", usdJpyBars));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", new BuyStopOnFirstBar(15_100m), broker, portfolio);
+            await engine.StartAsync();
+
+            return portfolio;
+        }
+
+        [Fact]
+        public async Task StartAsync_ConversionRateMovesOnTheFillBar_FillTranslatesAtThePreviousClose()
+        {
+            // The fill costs 15,300 * 10 = 153,000 JPY. USD_JPY's last completed close when that fill is
+            // applied is the first bar's 100 — the fill bar's own 125 was not knowable while the bar was
+            // trading — so cash pays 153,000/100 = 1,530 USD and lands at 8,470. Translating at the fill
+            // bar's own close would pay 153,000/125 = 1,224 and leave 8,776: lookahead, and the exact
+            // failure a reordering of the engine loop's fill and equity-snapshot statements would produce.
+            Portfolio portfolio = await RunRateMovingOnFillBarAsync();
+
+            Assert.Equal(8_470m, portfolio.Cash);
+        }
+
+        [Fact]
+        public async Task StartAsync_ConversionRateMovesOnTheFillBar_EndOfBarMarkUsesTheCurrentClose()
+        {
+            // The same bar, the other half of the rule: the mark is taken once the bar has completed, so it
+            // uses the freshest rate the bar printed. The position of 10 marks at EUR_JPY's close of 15,300
+            // = 153,000 JPY, translated at USD_JPY's own close of 125 = 1,224 USD. The previous close (100)
+            // would value it at 1,530 — stale by one bar for a figure nothing forbids being current.
+            Portfolio portfolio = await RunRateMovingOnFillBarAsync();
+
+            EquitySnapshot fillBar = portfolio.EquityHistory[1];
+            Assert.Equal(1_224m, fillBar.PositionValueBySymbol["EUR_JPY"]);
+        }
+
+        [Fact]
+        public async Task StartAsync_CrossCurrencyFill_RecordsTheNativeGapAwarePriceUnchangedByConversion()
+        {
+            // Currency translation moves money, never execution semantics: the recorded price is the
+            // gap-aware fill in EUR_JPY's own quote currency (ADR 0024). The bar opened at 15,300, above the
+            // 15,100 stop, so the fill is the open — not the trigger it gapped through, and not a figure
+            // either conversion rate would produce (153 at 100, 122.4 at 125).
+            Portfolio portfolio = await RunRateMovingOnFillBarAsync();
+
+            Trade fill = Assert.Single(portfolio.Trades);
+            Assert.Equal(15_300m, fill.Price);
+        }
+
         [Fact]
         public async Task StartAsync_PortfolioDeclaringNoConversion_FetchesExactlyTheGivenSymbolsAndNoMore()
         {
@@ -790,6 +852,32 @@ namespace BacktesterTests.Engine.Tests
                 {
                     broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 });
                 }
+            }
+        }
+
+        /// <summary>
+        /// Submits one ten-unit Buy stop at the given trigger the first time it sees any bar, then never
+        /// trades again — so the run's cash and marks after that single fill are attributable to it alone.
+        /// </summary>
+        private sealed class BuyStopOnFirstBar : StrategyBase
+        {
+            private readonly decimal _trigger;
+            private bool _submitted;
+
+            public BuyStopOnFirstBar(decimal trigger)
+            {
+                _trigger = trigger;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker)
+            {
+                if (_submitted)
+                {
+                    return;
+                }
+
+                _submitted = true;
+                broker.Submit(new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Stop, Price = _trigger, Quantity = 10 });
             }
         }
 

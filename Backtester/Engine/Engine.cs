@@ -291,6 +291,10 @@ namespace Backtester.Engine
         /// </summary>
         private void RunOnce(MarketSlice slice)
         {
+            // These two statements are ordered, not merely sequenced: filling first means a fill translates
+            // at the conversion pair's last completed close, and recording the snapshot second is what
+            // advances the Currency converter's rate to this bar's close for the end-of-bar mark. Swapping
+            // them introduces currency lookahead — see CurrencyConverter's fill-timing invariant.
             _broker.ProcessBar(slice);
             _portfolio.RecordEquitySnapshot(slice);
             DeliverClosedRoundTrips();

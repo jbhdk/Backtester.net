@@ -10,6 +10,28 @@ namespace Backtester.Core
     /// for an Instrument declaring no Conversion symbol, and a loud refusal for a declared conversion
     /// whose rate has never been observed.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Fill-timing invariant.</b> A fill translates at the conversion pair's <em>last completed
+    /// close</em> — never a rate that was not yet knowable while the fill's own bar was trading — while an
+    /// end-of-bar equity mark translates at the pair's <em>current</em> close, the freshest known rate.
+    /// The converter's rate state is what carries this: a caller stepping through bars must apply that
+    /// bar's fills before calling <see cref="ObserveRate"/> with the same bar's Conversion-symbol close,
+    /// so a fill converts against the prior observation and the mark that follows converts against the new
+    /// one. Reversing those two steps is currency lookahead. The engine's bar loop upholds this by
+    /// filling orders before recording the equity snapshot that feeds the rate.
+    /// </para>
+    /// <para>
+    /// Translation moves money, never execution semantics: the fill price recorded for an order stays
+    /// exactly the gap-aware fill price in the Instrument's own quote currency (ADR 0024), whatever the
+    /// rate does.
+    /// </para>
+    /// <para>
+    /// Intra-bar rate precision — translating a fill at the conversion bar's open rather than the previous
+    /// close — was considered and rejected: a negligible realism gain for extra per-bar state. It remains
+    /// revisitable, and this is the one place it would be revised.
+    /// </para>
+    /// </remarks>
     public class CurrencyConverter
     {
         private readonly string _accountCurrency;
@@ -117,7 +139,8 @@ namespace Backtester.Core
         /// <summary>
         /// Records <paramref name="close"/> as the latest rate for <paramref name="conversionSymbol"/>.
         /// The feed primitive: a caller stepping through bars calls this for each Conversion symbol that
-        /// printed, and the rate stands until the next observation.
+        /// printed, and the rate stands until the next observation. Call it <em>after</em> applying the
+        /// same bar's fills — that ordering is the fill-timing invariant documented on this class.
         /// </summary>
         public void ObserveRate(string conversionSymbol, decimal close)
         {
