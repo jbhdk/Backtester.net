@@ -937,6 +937,23 @@ namespace BacktesterTests.Report.Tests
         }
 
         [Fact]
+        public void Build_CrossCurrencyRoundTrip_DerivesLeverageFromTheStampedAccountCurrencyNotional()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. Buying 1 unit @ 15,000 JPY at USD_JPY 100 committed
+            // $150 against $10,000 of marked equity, so leverage is 0.015. Recomputing from the native entry
+            // price would read 1.5 — the same figure overstated by the exchange rate.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(Slice("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Buy, 15_000m, 1, T0));
+            portfolio.ApplyTrade(Trade("EUR_JPY", OrderSide.Sell, 15_200m, 1, T0.AddDays(2)));
+
+            ReportModel model = new ReportModelBuilder().Build(Result(NoCandles(), portfolio, NoIndicators()));
+
+            Assert.Equal(0.015m, Assert.Single(model.RoundTrips).Leverage);
+        }
+
+        [Fact]
         public void Build_RoundTrip_DerivesLongMarginAtHalfNotional()
         {
             // Long 10@100 → notional $1,000; Reg-T long rate 0.5 → margin $500.

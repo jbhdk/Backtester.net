@@ -132,8 +132,8 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 
 The per-round-trip table also carries two entry-time columns derived from the same idea:
 
-- **Leverage** (round-trip column) — the trip's entry notional (`EntryPrice × Quantity`) over the marked equity when it opened; a dash when that equity was non-positive.
-- **Margin** (round-trip column) — the Reg-T initial margin the trip committed at entry: its side's rate (0.5 long / 1.5 short) times its entry notional, in currency. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at the entry notional rather than re-marked.
+- **Leverage** (round-trip column) — the trip's entry notional over the marked equity when it opened; a dash when that equity was non-positive. Both figures are in the account's currency: the engine stamps the notional on the round trip, accumulating each fill's converted cost as it fills, so a trip that scaled in across a rate move divides by the money that actually left the account.
+- **Margin** (round-trip column) — the Reg-T initial margin the trip committed at entry: its side's rate (0.5 long / 1.5 short) times the trip's *native* entry notional (`EntryPrice × Quantity`), in currency. Unlike the aggregate **Avg/Peak margin**, this per-trip figure is frozen at entry rather than re-marked.
 
 > **The Margin column is not yet cross-currency-aware.** It recomputes from the account's Reg-T rates over the trip's *native* entry notional, so for an `Instrument` that declares its own `MarginRate` (e.g. 2% for 50:1 forex leverage) or quotes in another currency it is not the margin the account actually committed — the aggregate **Avg/Peak margin** stats, which come from the portfolio's own committed margin, are correct. Single-currency runs on Reg-T margin are unaffected; making the report consume the engine's stamped margin is a separate piece of work.
 

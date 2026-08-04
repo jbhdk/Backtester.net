@@ -46,9 +46,11 @@ namespace Backtester.Report
         public int Quantity { get; set; }
 
         /// <summary>
-        /// Gets or sets the trip's leverage at entry: its entry notional (<c>EntryPrice · Quantity</c>) over
-        /// the marked equity when it opened. Null when the entry equity was non-positive (no meaningful
-        /// ratio), in which case the report shows a dash.
+        /// Gets or sets the trip's leverage at entry: the Account-currency capital it committed — the
+        /// engine's stamped entry notional, accumulated fill by fill at each fill's own rate — over the
+        /// marked equity when it opened, so both sides are in the account's own currency (ADR 0032). Null
+        /// when the entry equity was non-positive (no meaningful ratio), in which case the report shows a
+        /// dash.
         /// </summary>
         public decimal? Leverage { get; set; }
 

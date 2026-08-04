@@ -51,6 +51,15 @@ namespace Backtester.Core
         public decimal? EntryTargetPrice { get; set; }
 
         /// <summary>
+        /// Gets or sets the Account-currency capital this round trip committed when it opened: its share of
+        /// the running cost basis its position accumulated fill by fill, each fill converted at the rate in
+        /// force as it filled (ADR 0032). A trip that scaled in across a rate move therefore carries what
+        /// actually left the account, not a blended entry price translated afterwards. The numerator of the
+        /// trip's leverage — divided by <see cref="EntryEquity"/>, two figures in the same currency.
+        /// </summary>
+        public decimal EntryNotional { get; set; }
+
+        /// <summary>
         /// Gets or sets the account's marked equity on the bar this round trip's position opened from flat.
         /// The denominator for the trip's leverage (its entry notional over this equity); preserved across
         /// same-direction adds and partial exits so each slice divides by the opening bar's equity.

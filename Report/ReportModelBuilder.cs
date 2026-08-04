@@ -70,8 +70,8 @@ namespace Backtester.Report
                 bool isShort = trip.Direction == PositionDirection.Short;
                 // A short profits when the price falls, so its return is the raw price move negated.
                 decimal directionSign = isShort ? -1m : 1m;
-                // The position put on at entry, and the margin it committed at its side's Reg-T rate.
-                decimal entryNotional = trip.EntryPrice * trip.Quantity;
+                // The native position put on at entry, still the base the Reg-T margin column is taken on.
+                decimal nativeEntryNotional = trip.EntryPrice * trip.Quantity;
                 decimal marginRate = isShort ? shortMarginRate : longMarginRate;
                 mapped.Add(new ReportRoundTrip
                 {
@@ -86,10 +86,11 @@ namespace Backtester.Report
                     EntryStopPrice = trip.EntryStopPrice,
                     EntryTargetPrice = trip.EntryTargetPrice,
                     Quantity = trip.Quantity,
-                    // Leverage divides the entry notional by the equity at entry; a dash when that equity was
-                    // non-positive. Margin is the committed initial margin at the side's rate.
-                    Leverage = trip.EntryEquity > 0m ? entryNotional / trip.EntryEquity : (decimal?)null,
-                    Margin = marginRate * entryNotional,
+                    // Leverage divides the engine's stamped Account-currency entry notional by the equity at
+                    // entry — two figures in the same currency (ADR 0032); a dash when that equity was
+                    // non-positive. Margin is still the committed initial margin at the side's Reg-T rate.
+                    Leverage = trip.EntryEquity > 0m ? trip.EntryNotional / trip.EntryEquity : (decimal?)null,
+                    Margin = marginRate * nativeEntryNotional,
                     RealizedPnL = trip.RealizedPnL,
                     ReturnPercent = trip.EntryPrice != 0m ? directionSign * (trip.ExitPrice - trip.EntryPrice) / trip.EntryPrice : 0m,
                     // Realized profit in units of initial risk; undefined when the entry declared no stop.

@@ -668,6 +668,86 @@ namespace BacktesterTests.Core.Tests
             Assert.Equal(10_020m, portfolio.EquityHistory.Last().EquityBySymbol["EUR_JPY"]);
         }
 
+        // --- Entry notional (ADR 0032) ---
+
+        [Fact]
+        public void ApplyTrade_SingleCurrencyRoundTrip_EntryNotionalIsTheCapitalTheEntryCommitted()
+        {
+            // Buy 10 @ $100 in a USD account: $1,000 left the account, and the round trip says so.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Buy("AAPL", 100m, 10));
+
+            portfolio.ApplyTrade(Sell("AAPL", 120m, 10));
+
+            Assert.Equal(1_000m, Assert.Single(portfolio.RoundTrips).EntryNotional);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyRoundTrip_EntryNotionalIsTranslatedAtTheEntryRate()
+        {
+            // EUR_JPY quotes in JPY, the account in USD. Buying 1 unit @ 15,000 JPY at USD_JPY 100 took
+            // $150 out of the account, so that — not the native 15,000 — is what the trip committed.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 15_200m, 1));
+
+            Assert.Equal(150m, Assert.Single(portfolio.RoundTrips).EntryNotional);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyScaleInAcrossARateMove_EntryNotionalIsTheMoneyThatLeftTheAccount()
+        {
+            // ADR 0032's worked example: 1 unit @ 15,000 JPY at USD_JPY 100 costs $150, then the rate moves
+            // to 125 and a second unit @ 16,000 JPY costs $128. The trip committed $278 — not $310 (both
+            // fills frozen at the opening rate) and not $248 (the blended price re-translated at the exit).
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 16_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 16_500m, 2));
+
+            Assert.Equal(278m, Assert.Single(portfolio.RoundTrips).EntryNotional);
+        }
+
+        [Fact]
+        public void ApplyTrade_CrossCurrencyPartialExit_EachSliceCarriesItsProRataShareOfTheEntryNotional()
+        {
+            // The same $278 scale-in, exited one unit at a time. Each half carries $139, so two halves of
+            // one position report comparable leverage instead of the first swallowing the whole notional.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 100m, T0));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 15_000m, 1));
+            portfolio.RecordEquitySnapshot(SliceWithBar("USD_JPY", 125m, T0.AddDays(1)));
+            portfolio.ApplyTrade(Buy("EUR_JPY", 16_000m, 1));
+
+            portfolio.ApplyTrade(Sell("EUR_JPY", 16_500m, 1));
+            portfolio.ApplyTrade(Sell("EUR_JPY", 16_700m, 1));
+
+            Assert.Equal(2, portfolio.RoundTrips.Count);
+            Assert.Equal(139m, portfolio.RoundTrips[0].EntryNotional);
+            Assert.Equal(139m, portfolio.RoundTrips[1].EntryNotional);
+        }
+
+        [Fact]
+        public void ApplyTrade_ShortRoundTrip_EntryNotionalIsTheGrossCapitalTheEntryCommitted()
+        {
+            // A short sale credits cash rather than spending it, but the position it puts on is still
+            // $1,500 of exposure, so the notional leverage divides is a gross positive amount.
+            Portfolio portfolio = new(10_000m);
+            portfolio.ApplyTrade(Sell("AAPL", 150m, 10));
+
+            portfolio.ApplyTrade(Buy("AAPL", 140m, 10));
+
+            Assert.Equal(1_500m, Assert.Single(portfolio.RoundTrips).EntryNotional);
+        }
+
         [Fact]
         public void ApplyTrade_Sell_AccumulatesRealizedPnL()
         {

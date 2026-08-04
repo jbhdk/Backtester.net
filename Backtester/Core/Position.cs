@@ -40,6 +40,15 @@ namespace Backtester.Core
         public decimal EntryEquity { get; set; }
 
         /// <summary>
+        /// Gets or sets the Account-currency capital the current lot has committed: the running sum of each
+        /// opening and adding fill's converted notional, taken at the rate in force as that fill filled
+        /// (ADR 0032). Reset when the position opens from flat, so a lot scaled in across a rate move
+        /// carries the money that actually left the account rather than a blended price translated after
+        /// the fact.
+        /// </summary>
+        public decimal EntryNotional { get; set; }
+
+        /// <summary>
         /// Gets or sets the per-share stop distance frozen when the current lot opened from flat
         /// (<c>|openingFillPrice − entryStopPrice|</c>), translated into the account's currency at the rate
         /// in force at that moment (ADR 0032) — the amount per share the account itself stood to lose.

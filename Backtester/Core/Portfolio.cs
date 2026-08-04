@@ -312,6 +312,13 @@ namespace Backtester.Core
                 _realizedPnLBySymbol[effective.Symbol] =
                     (_realizedPnLBySymbol.TryGetValue(effective.Symbol, out decimal prior) ? prior : 0m) + tradeRealized;
 
+                // This slice's share of the Account-currency capital the lot committed, accumulated fill by
+                // fill at each fill's own rate — the numerator for the trip's leverage (ADR 0032). Taken
+                // pro-rata and multiplied before dividing, so successive partial exits divide one lot's
+                // cost basis between them rather than each claiming the whole of it.
+                decimal exitedNotional = position.EntryNotional * executedQty / Math.Abs(currentQty);
+                position.EntryNotional -= exitedNotional;
+
                 _roundTrips.Add(new RoundTrip
                 {
                     Symbol      = effective.Symbol,
@@ -328,6 +335,7 @@ namespace Backtester.Core
                     EntryStopPrice   = position.EntryStopPrice,
                     EntryTargetPrice = position.EntryTargetPrice,
                     BarsHeld    = Math.Max(0, _equityHistory.Count - position.EntryBarIndex),
+                    EntryNotional = exitedNotional,
                     // The marked equity captured when this lot opened, the denominator for the trip's leverage.
                     EntryEquity = position.EntryEquity,
                     EntryTime   = position.EntryTime,
@@ -359,6 +367,16 @@ namespace Backtester.Core
                 // carries the entry setup (the levels before any trailing) for the report.
                 position.EntryStopPrice = effective.EntryStopPrice;
                 position.EntryTargetPrice = effective.EntryTargetPrice;
+                // Start the lot's cost basis from nothing: a reused position that had reduced to zero must
+                // not carry the previous lot's committed capital into this one.
+                position.EntryNotional = 0m;
+            }
+
+            if (!isReducing)
+            {
+                // An opening or adding fill commits capital, so the lot's cost basis grows by the very
+                // amount that just left Cash — already converted at this fill's own rate (ADR 0032).
+                position.EntryNotional += notionalAccountCurrency;
             }
 
             position.AddTrade(effective);
