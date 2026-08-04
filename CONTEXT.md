@@ -227,11 +227,39 @@ _Avoid_: base currency (a currency-pair term, not the account's), currency (unqu
 **Conversion symbol**:
 The exact symbol an Instrument declares for fetching the historical rate that converts its quote
 currency into the Account currency (e.g. an Instrument quoted in JPY names `USD_JPY` when the account
-is USD). Null when the Instrument's quote currency already equals the Account currency. Provider
+is USD). Null when the Instrument's quote currency already equals the Account currency. The named pair
+may be quoted in either direction; the Instrument's Conversion operation declares which. Provider
 symbol-naming is the caller's concern — the engine fetches whatever string it is given and stays
 ignorant of any provider's naming convention.
 _Avoid_: cross rate, conversion pair (that names the currency pair conceptually; Conversion symbol is
 the concrete fetch key).
+
+**Conversion operation**:
+Whether translating a native amount into the Account currency divides or multiplies by the Conversion
+symbol's rate, determined by which way that pair is quoted: a pair whose first currency is the Account
+currency divides (`USD_JPY` in a USD account — JPY per USD), one whose first currency is the quote
+currency multiplies (`GBP_USD` — USD per GBP). Declared on the Instrument alongside its Conversion
+symbol; Divide is the default. An Instrument factory sets it automatically, so a caller using one
+never chooses.
+_Avoid_: rate quotation, inversion, direction (unqualified).
+
+**Currency converter**:
+The module that translates quote-currency amounts into the Account currency: it holds each
+Instrument's conversion declaration, observes Conversion-symbol closes as bars arrive, and applies the
+Conversion operation. Identity for an Instrument declaring no conversion; a declared conversion with
+no observed rate is refused loudly, never silently left unconverted. Its timing rule: a fill
+translates at the conversion pair's previous close — the last rate honestly known without lookahead —
+while an end-of-bar mark uses the current close. Owned by the Portfolio, which is the single hand-off
+point for Instruments.
+_Avoid_: exchange (a venue), FX engine, rate service.
+
+**Instrument factory**:
+A Provider-package convenience that builds a fully-populated Instrument from that provider's own
+symbol naming — inferring the quote currency (the second currency of a forex pair), the Conversion
+symbol, and its Conversion operation — so a caller never hand-writes currency metadata. Each factory
+lives with its Provider because pair-naming conventions are provider-specific; the engine never parses
+a symbol.
+_Avoid_: symbol parser, instrument resolver.
 
 ### Risk & sizing
 
