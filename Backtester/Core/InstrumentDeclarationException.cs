@@ -3,11 +3,13 @@ using System;
 namespace Backtester.Core
 {
     /// <summary>
-    /// Thrown when an Instrument's currency declaration is internally inconsistent with the Account
-    /// currency: no quote currency at all, a quote currency differing from the Account currency with no
-    /// Conversion symbol, or a quote currency equal to the Account currency that nevertheless declares one.
-    /// The cross-check runs when the Currency converter is built, so a mis-declared Instrument fails the
-    /// run at construction rather than mid-way through it.
+    /// Thrown when an Instrument cannot be declared. Either its currency declaration is internally
+    /// inconsistent with the Account currency — no quote currency at all, a quote currency differing from
+    /// the Account currency with no Conversion symbol, or a quote currency equal to the Account currency
+    /// that nevertheless declares one — or a Provider's Instrument factory was handed a symbol it cannot
+    /// read as one of that provider's pairs. Either way the Instrument fails at declaration time rather
+    /// than mid-run: the cross-check runs when the Currency converter is built, and a factory rejects
+    /// before it returns anything at all.
     /// </summary>
     public class InstrumentDeclarationException : Exception
     {

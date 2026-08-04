@@ -90,19 +90,44 @@ many requests it took, matching `AlpacaHistoricalDataProvider`'s existing page-w
 
 ## Currency conversion
 
-This provider is pure acquisition — it has no concept of the engine's account currency and does not
-build `Instrument`s for you. A pair whose quote currency differs from your account's own currency
-(e.g. `USD_JPY` in a USD account is fine as-is, but a JPY account holding `EUR_USD` needs converting)
-needs its `Instrument` declared with a `ConversionSymbol` naming the exact Oanda pair to fetch for the
-conversion rate — you state it explicitly, since only you reliably know which direction Oanda lists a
-given pair:
+A pair whose quote currency differs from your account's own currency needs an `Instrument` declaring
+which Oanda pair carries the conversion rate and which way that pair is quoted. `OandaInstrument.For`
+works both out for you, so you never hand-write currency metadata and can never forget a
+`ConversionSymbol` or pick the wrong rate direction:
 
 ```csharp
-Instrument[] instruments = { new() { Symbol = "EUR_USD", QuoteCurrency = "USD", ConversionSymbol = "USD_JPY" } };
+Instrument[] instruments =
+{
+    OandaInstrument.For("EUR_USD", accountCurrency: "JPY"),   // -> ConversionSymbol USD_JPY, Multiply
+    OandaInstrument.For("EUR_GBP", accountCurrency: "JPY"),   // -> ConversionSymbol GBP_JPY, Multiply
+};
+
 Portfolio portfolio = new Portfolio(startingCash: 1_000_000m, accountCurrency: "JPY", instruments);
 ```
 
-See the root [README](../README.md#multi-currency--forex-accounting) and
+A pair that already quotes in your account currency (`USD_JPY` in a JPY account) comes back with no
+`ConversionSymbol` and nothing extra to fetch. A symbol that isn't an Oanda pair — `EURUSD`, `AAPL` —
+is rejected with an `InstrumentDeclarationException` naming it, at declaration time rather than
+mid-run.
+
+The factory knows Oanda's pair-ordering convention, which is what decides whether the rate is divided
+or multiplied by: Oanda names `GBP_USD` but `USD_JPY`, so a GBP-quoted symbol in a USD account
+multiplies while a JPY-quoted one divides. A currency the factory's ordering table doesn't list is
+assumed to be one Oanda quotes second (below every listed currency, above `JPY`, which Oanda quotes
+second against everything). That holds for every instrument Oanda lists today, but if you trade a
+newly-added exotic and the inferred pair looks wrong, declare that one `Instrument` by hand:
+
+```csharp
+Instrument instrument = new()
+{
+    Symbol = "USD_XYZ", QuoteCurrency = "XYZ", ConversionSymbol = "XYZ_USD",
+    ConversionOperation = ConversionOperation.Multiply
+};
+```
+
+The provider itself stays pure acquisition — it has no concept of the account currency, and the
+factory is a separate declaration-time helper that performs no I/O. See the root
+[README](../README.md#multi-currency--forex-accounting) and
 [ADR 0029](../docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) for how `Engine` fetches
 and `Portfolio` applies the conversion.
 
