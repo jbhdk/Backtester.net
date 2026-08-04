@@ -319,17 +319,29 @@ correctly instead of silently mixing units (see [ADR 0029](docs/adr/0029-instrum
 
 ## Multi-currency & forex accounting
 
-Every traded symbol is described by an `Instrument` — its `QuoteCurrency` and, when that differs from
-the account's own currency, a `ConversionSymbol` naming the exact series to fetch for converting it
-(e.g. an Instrument quoted in JPY names `USD_JPY` when the account is USD). A stock/ETF Instrument
-simply sets `QuoteCurrency` equal to the account's currency and leaves `ConversionSymbol` null, so no
-conversion machinery runs at all — every existing single-currency backtest is unaffected.
+Every traded symbol is described by an `Instrument` — its `QuoteCurrency` (required) and, when that
+differs from the account's own currency, a `ConversionSymbol` naming the exact series to fetch for
+converting it (e.g. an Instrument quoted in JPY names `USD_JPY` when the account is USD). A stock/ETF
+Instrument simply sets `QuoteCurrency` equal to the account's currency and leaves `ConversionSymbol`
+null, so no conversion machinery runs at all — every existing single-currency backtest is unaffected.
+
+The two declarations are cross-checked when the `Portfolio` is built: a quote currency differing from
+the account's **requires** a `ConversionSymbol`, one equal to it **forbids** one, and a missing quote
+currency is refused outright — each throws an `InstrumentDeclarationException` naming the symbol, so a
+forgotten `ConversionSymbol` is caught at construction rather than mid-run.
+
+`ConversionOperation` declares which way the conversion pair is quoted: `Divide` (the default) for an
+account-first pair such as `USD_JPY` in a USD account, `Multiply` for a quote-first one such as
+`GBP_USD`, which is what lets a GBP-quoted cross convert in a USD account where no USD-first pair
+exists.
 
 ```csharp
 Instrument[] instruments =
 {
     new() { Symbol = "EUR_USD", QuoteCurrency = "USD" },                                    // no conversion needed
-    new() { Symbol = "USD_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m }  // 50:1
+    new() { Symbol = "USD_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY", MarginRate = 0.02m },  // 50:1
+    new() { Symbol = "EUR_GBP", QuoteCurrency = "GBP", ConversionSymbol = "GBP_USD",
+            ConversionOperation = ConversionOperation.Multiply }                            // GBP-quoted cross
 };
 
 Portfolio portfolio = new Portfolio(startingCash: 100_000m, accountCurrency: "USD", instruments);
@@ -342,7 +354,9 @@ tradable symbol — the conversion series never triggers `OnBar` and never appea
 account never needs to know exists. Only the account-currency-denominated aggregates —
 `Portfolio.Cash`, `RealizedPnL`, `MarkedEquity`, and isolated equity — pass through the conversion
 rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
-quote currency, the real price a chart would show. See
+quote currency, the real price a chart would show. Converting a declared conversion before any rate has
+been observed throws a `MissingConversionRateException` naming both symbols — a mis-wired run fails
+loudly instead of presenting native-currency numbers as account currency. See
 [ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md) (currency conversion) and
 [ADR 0030](docs/adr/0030-forex-margin-via-per-instrument-leverage.md) (per-instrument margin) for the
 full design.

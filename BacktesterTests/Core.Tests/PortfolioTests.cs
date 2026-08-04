@@ -314,7 +314,7 @@ namespace BacktesterTests.Core.Tests
         public void InitialMarginForOrder_InstrumentWithMarginRate_AppliesSameRateToLongAndShort()
         {
             // 50:1 leverage (2%) on a 10,000-unit order @ 1.10: margin = 0.02 * 11,000 = 220, both directions.
-            Instrument[] instruments = { new() { Symbol = "EUR_USD", MarginRate = 0.02m } };
+            Instrument[] instruments = { new() { Symbol = "EUR_USD", QuoteCurrency = "USD", MarginRate = 0.02m } };
             Portfolio portfolio = new(10_000m, "USD", instruments);
             OrderRequest buy = new() { Symbol = "EUR_USD", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10_000, Price = 1.10m };
             OrderRequest sell = new() { Symbol = "EUR_USD", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10_000, Price = 1.10m };
@@ -330,7 +330,7 @@ namespace BacktesterTests.Core.Tests
         public void InitialMarginForOrder_InstrumentWithoutMarginRate_FallsBackToRegTSplit()
         {
             // No MarginRate override declared for AAPL → existing Reg-T split applies unchanged.
-            Instrument[] instruments = { new() { Symbol = "EUR_USD", MarginRate = 0.02m } };
+            Instrument[] instruments = { new() { Symbol = "EUR_USD", QuoteCurrency = "USD", MarginRate = 0.02m } };
             Portfolio portfolio = new(10_000m, "USD", instruments);
             OrderRequest buy = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 100, Price = 50m };
             OrderRequest sell = new() { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 100, Price = 50m };
@@ -347,7 +347,11 @@ namespace BacktesterTests.Core.Tests
         {
             // EUR_USD long 10,000 @ 1.10 at 2% → margin 220. AAPL long 100 @ 50 (no override) → Reg-T 0.5 * 5,000 = 2,500.
             // MarkedEquity stays at StartingCash (both marked at entry price, no P&L) → BuyingPower = 20,000 - 220 - 2,500 = 17,280.
-            Instrument[] instruments = { new() { Symbol = "EUR_USD", MarginRate = 0.02m }, new() { Symbol = "AAPL" } };
+            Instrument[] instruments =
+            {
+                new() { Symbol = "EUR_USD", QuoteCurrency = "USD", MarginRate = 0.02m },
+                new() { Symbol = "AAPL", QuoteCurrency = "USD" }
+            };
             Portfolio portfolio = new(20_000m, "USD", instruments);
             portfolio.ApplyTrade(Buy("EUR_USD", 1.10m, 10_000));
             portfolio.ApplyTrade(Buy("AAPL", 50m, 100));

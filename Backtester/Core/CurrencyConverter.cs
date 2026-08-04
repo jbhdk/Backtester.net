@@ -1,22 +1,27 @@
+using System;
 using System.Collections.Generic;
 
 namespace Backtester.Core
 {
     /// <summary>
     /// Translates quote-currency amounts into the account's own currency. It holds each Instrument's
-    /// conversion declaration, observes Conversion-symbol closes as bars arrive, and applies the
-    /// conversion — identity for an Instrument declaring no Conversion symbol.
+    /// conversion declaration, cross-checks it against the account currency at construction, observes
+    /// Conversion-symbol closes as bars arrive, and applies the declared Conversion operation — identity
+    /// for an Instrument declaring no Conversion symbol, and a loud refusal for a declared conversion
+    /// whose rate has never been observed.
     /// </summary>
     public class CurrencyConverter
     {
         private readonly string _accountCurrency;
 
-        // Key: symbol/ticker -> the exact provider symbol whose price converts that symbol's quote
-        // currency into the account currency. Entries exist only for Instruments declaring a Conversion
-        // symbol; a symbol absent here already quotes in the account currency.
-        private readonly Dictionary<string, string> _conversionSymbolBySymbol = new();
+        // Key: symbol/ticker -> the Conversion symbol whose price converts that symbol's quote currency
+        // into the account currency, paired with the operation to apply to that rate. Entries exist only
+        // for Instruments declaring a Conversion symbol; a symbol absent here already quotes in the
+        // account currency.
+        private readonly Dictionary<string, ConversionDeclaration> _declarationBySymbol = new();
 
-        // Key: Conversion symbol -> its most recently observed close, the rate conversion divides by.
+        // Key: Conversion symbol -> its most recently observed close, the rate conversion divides or
+        // multiplies by according to the converting symbol's declared Conversion operation.
         private readonly Dictionary<string, decimal> _rateByConversionSymbol = new();
 
         // The distinct Conversion symbols declared at construction, held apart from the observed rates so
@@ -25,10 +30,14 @@ namespace Backtester.Core
 
         /// <summary>
         /// Initializes a converter for an account denominated in <paramref name="accountCurrency"/>,
-        /// holding the conversion declarations of <paramref name="instruments"/>. Null or empty
-        /// instruments yield a converter that converts nothing, as every symbol then quotes in the
-        /// account's own currency.
+        /// holding the conversion declarations of <paramref name="instruments"/> after cross-checking each
+        /// against that currency. Null or empty instruments yield a converter that converts nothing, as
+        /// every symbol then quotes in the account's own currency.
         /// </summary>
+        /// <exception cref="InstrumentDeclarationException">
+        /// An Instrument declares no quote currency, or its quote currency and Conversion symbol
+        /// contradict each other against the account currency.
+        /// </exception>
         public CurrencyConverter(string accountCurrency, Instrument[] instruments)
         {
             _accountCurrency = accountCurrency;
@@ -40,12 +49,62 @@ namespace Backtester.Core
 
             foreach (Instrument instrument in instruments)
             {
+                ValidateDeclaration(instrument);
+
                 if (instrument.ConversionSymbol != null)
                 {
-                    _conversionSymbolBySymbol[instrument.Symbol] = instrument.ConversionSymbol;
+                    _declarationBySymbol[instrument.Symbol] =
+                        new ConversionDeclaration(instrument.ConversionSymbol, instrument.ConversionOperation);
                     _conversionSymbols.Add(instrument.ConversionSymbol);
                 }
             }
+        }
+
+        /// <summary>
+        /// Throws unless <paramref name="instrument"/>'s currency declaration is consistent with the account
+        /// currency: a quote currency is required, one differing from the account's requires a Conversion
+        /// symbol, and one equal to it forbids one. This is what turns the quote currency declaration into
+        /// a load-bearing cross-check rather than an unread annotation.
+        /// </summary>
+        private void ValidateDeclaration(Instrument instrument)
+        {
+            if (string.IsNullOrWhiteSpace(instrument.QuoteCurrency))
+            {
+                throw new InstrumentDeclarationException(
+                    instrument.Symbol,
+                    "no quote currency declared. Every Instrument must state the currency its price is " +
+                    "quoted in, so it can be checked against the account currency.");
+            }
+
+            if (QuotesInAccountCurrency(instrument))
+            {
+                if (instrument.ConversionSymbol != null)
+                {
+                    throw new InstrumentDeclarationException(
+                        instrument.Symbol,
+                        $"quote currency {instrument.QuoteCurrency} is already the account currency, so it must " +
+                        $"declare no Conversion symbol, but declares {instrument.ConversionSymbol}.");
+                }
+
+                return;
+            }
+
+            if (instrument.ConversionSymbol == null)
+            {
+                throw new InstrumentDeclarationException(
+                    instrument.Symbol,
+                    $"quote currency {instrument.QuoteCurrency} differs from the account currency " +
+                    $"{_accountCurrency}, so it must declare the Conversion symbol to translate through.");
+            }
+        }
+
+        /// <summary>
+        /// Returns whether <paramref name="instrument"/>'s price already quotes in the account's own
+        /// currency, compared case-insensitively so an ISO code's casing never decides the cross-check.
+        /// </summary>
+        private bool QuotesInAccountCurrency(Instrument instrument)
+        {
+            return string.Equals(instrument.QuoteCurrency, _accountCurrency, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -67,21 +126,36 @@ namespace Backtester.Core
 
         /// <summary>
         /// Returns <paramref name="nativeAmount"/> — denominated in <paramref name="symbol"/>'s own quote
-        /// currency — converted into the account currency by dividing by the latest observed close of the
-        /// symbol's declared Conversion symbol, which quotes quote-currency units per 1 account-currency
-        /// unit (e.g. <c>USD_JPY</c> for a JPY-quoted symbol in a USD account). Returns the amount
-        /// unchanged when the symbol declares no conversion.
+        /// currency — converted into the account currency by applying the symbol's Conversion operation to
+        /// the latest observed close of its declared Conversion symbol: dividing by an account-first rate
+        /// (e.g. <c>USD_JPY</c> for a JPY-quoted symbol in a USD account), multiplying by a quote-first one
+        /// (e.g. <c>GBP_USD</c> for a GBP-quoted symbol). Returns the amount unchanged when the symbol
+        /// declares no conversion.
         /// </summary>
+        /// <exception cref="MissingConversionRateException">
+        /// The symbol declares a Conversion symbol for which no rate has been observed.
+        /// </exception>
         public decimal ToAccountCurrency(string symbol, decimal nativeAmount)
         {
-            if (_conversionSymbolBySymbol.TryGetValue(symbol, out string conversionSymbol)
-                && _rateByConversionSymbol.TryGetValue(conversionSymbol, out decimal rate)
-                && rate != 0m)
+            if (!_declarationBySymbol.TryGetValue(symbol, out ConversionDeclaration declaration))
             {
-                return nativeAmount / rate;
+                return nativeAmount;
             }
 
-            return nativeAmount;
+            if (!_rateByConversionSymbol.TryGetValue(declaration.ConversionSymbol, out decimal rate))
+            {
+                throw new MissingConversionRateException(symbol, declaration.ConversionSymbol);
+            }
+
+            return declaration.Operation == ConversionOperation.Multiply
+                ? nativeAmount * rate
+                : nativeAmount / rate;
         }
+
+        /// <summary>
+        /// One Instrument's conversion declaration as the converter needs it: which series carries the rate
+        /// and which way that series is quoted. Kept together so the two can never drift apart.
+        /// </summary>
+        private sealed record ConversionDeclaration(string ConversionSymbol, ConversionOperation Operation);
     }
 }
