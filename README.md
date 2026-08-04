@@ -345,8 +345,15 @@ Instrument[] instruments =
 };
 
 Portfolio portfolio = new Portfolio(startingCash: 100_000m, accountCurrency: "USD", instruments);
-IEngine engine = new Engine(fetcher, instruments, testFrom, testTo, interval: "1h", strategy, broker, portfolio);
+IEngine engine = new Engine(fetcher, new[] { "EUR_USD", "USD_JPY", "EUR_GBP" }, testFrom, testTo,
+                            interval: "1h", strategy, broker, portfolio);
 ```
+
+The `Portfolio` is the **single hand-off point for Instruments**: it is the only collaborator that
+receives them, and the `Engine` takes just the tradable symbol list, deriving the conversion series to
+fetch from the Portfolio's own declarations. There is no Engine constructor taking an `Instrument[]`,
+so the Engine and the Portfolio cannot disagree about which symbols convert through what — the
+mis-wiring is unrepresentable rather than merely checked.
 
 `Engine` fetches a declared `ConversionSymbol` through the same `IHistoricalDataFetcher` seam as any
 tradable symbol — the conversion series never triggers `OnBar` and never appears in a

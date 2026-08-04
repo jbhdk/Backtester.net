@@ -18,12 +18,13 @@ namespace Backtester.Engine
     public class Engine : IEngine
     {
         private readonly IHistoricalDataFetcher _fetcher;
-        private readonly Instrument[] _instruments;
         private readonly string[] _symbols;
         private readonly HashSet<string> _tradableSymbols;
-        // The tradable symbols plus every declared ConversionSymbol, deduplicated: the full set Engine
-        // fetches and slices on. A ConversionSymbol never reaches _symbols/_tradableSymbols, so it never
-        // triggers strategy.OnBar and never surfaces in BacktestResult's symbol list or candle history.
+        // The tradable symbols plus every ConversionSymbol the Portfolio declares, deduplicated: the full
+        // set Engine fetches and slices on. A ConversionSymbol never reaches _symbols/_tradableSymbols, so
+        // it never triggers strategy.OnBar and never surfaces in BacktestResult's symbol list or candle
+        // history. A run whose Portfolio declares no conversion holds the caller's own array, so the
+        // non-forex path builds nothing.
         private readonly string[] _fetchSymbols;
         private readonly DateTime _testFromUtc;
         private readonly DateTime _testToUtc;
@@ -40,27 +41,9 @@ namespace Backtester.Engine
 
         /// <summary>
         /// Initializes a new engine over a Test range with no warmup, so the Data range equals the Test
-        /// range (ADR 0022). Market data for <paramref name="instruments"/> across the Test range and
-        /// interval is fetched (through the cache) when <see cref="StartAsync"/> is called.
-        /// </summary>
-        public Engine(
-            IHistoricalDataFetcher fetcher,
-            Instrument[] instruments,
-            DateTime testFrom,
-            DateTime testTo,
-            string interval,
-            IStrategy strategy,
-            IBrokerSimulator broker,
-            Portfolio portfolio)
-            : this(fetcher, instruments, testFrom, testTo, Warmup.None, interval, strategy, broker, portfolio)
-        {
-        }
-
-        /// <summary>
-        /// Convenience overload wrapping each ticker in <paramref name="symbols"/> into a trivial
-        /// <see cref="Instrument"/> (quoted in the portfolio's own <see cref="Portfolio.AccountCurrency"/>,
-        /// no conversion, default Reg-T margin) and delegating to the Instrument-based constructor above —
-        /// one implementation, not two paths to keep in sync.
+        /// range (ADR 0022). Market data for <paramref name="symbols"/> — plus any Conversion symbol
+        /// <paramref name="portfolio"/> declares — across the Test range and interval is fetched (through
+        /// the cache) when <see cref="StartAsync"/> is called.
         /// </summary>
         public Engine(
             IHistoricalDataFetcher fetcher,
@@ -71,7 +54,7 @@ namespace Backtester.Engine
             IStrategy strategy,
             IBrokerSimulator broker,
             Portfolio portfolio)
-            : this(fetcher, ToInstruments(symbols, portfolio), testFrom, testTo, interval, strategy, broker, portfolio)
+            : this(fetcher, symbols, testFrom, testTo, Warmup.None, interval, strategy, broker, portfolio)
         {
         }
 
@@ -83,24 +66,6 @@ namespace Backtester.Engine
         /// </summary>
         public Engine(
             IHistoricalDataFetcher fetcher,
-            Instrument[] instruments,
-            DateTime testFrom,
-            DateTime testTo,
-            TimeSpan warmup,
-            string interval,
-            IStrategy strategy,
-            IBrokerSimulator broker,
-            Portfolio portfolio)
-            : this(fetcher, instruments, testFrom, testTo, new PeriodWarmup(warmup), interval, strategy, broker, portfolio)
-        {
-        }
-
-        /// <summary>
-        /// Convenience overload wrapping <paramref name="symbols"/> into trivial Instruments and delegating
-        /// to the Instrument-based period-warmup constructor above.
-        /// </summary>
-        public Engine(
-            IHistoricalDataFetcher fetcher,
             string[] symbols,
             DateTime testFrom,
             DateTime testTo,
@@ -109,7 +74,7 @@ namespace Backtester.Engine
             IStrategy strategy,
             IBrokerSimulator broker,
             Portfolio portfolio)
-            : this(fetcher, ToInstruments(symbols, portfolio), testFrom, testTo, warmup, interval, strategy, broker, portfolio)
+            : this(fetcher, symbols, testFrom, testTo, new PeriodWarmup(warmup), interval, strategy, broker, portfolio)
         {
         }
 
@@ -122,24 +87,6 @@ namespace Backtester.Engine
         /// </summary>
         public Engine(
             IHistoricalDataFetcher fetcher,
-            Instrument[] instruments,
-            DateTime testFrom,
-            DateTime testTo,
-            DateTime warmupStart,
-            string interval,
-            IStrategy strategy,
-            IBrokerSimulator broker,
-            Portfolio portfolio)
-            : this(fetcher, instruments, testFrom, testTo, new AbsoluteWarmup(warmupStart, testFrom), interval, strategy, broker, portfolio)
-        {
-        }
-
-        /// <summary>
-        /// Convenience overload wrapping <paramref name="symbols"/> into trivial Instruments and delegating
-        /// to the Instrument-based absolute-warmup constructor above.
-        /// </summary>
-        public Engine(
-            IHistoricalDataFetcher fetcher,
             string[] symbols,
             DateTime testFrom,
             DateTime testTo,
@@ -148,7 +95,7 @@ namespace Backtester.Engine
             IStrategy strategy,
             IBrokerSimulator broker,
             Portfolio portfolio)
-            : this(fetcher, ToInstruments(symbols, portfolio), testFrom, testTo, warmupStart, interval, strategy, broker, portfolio)
+            : this(fetcher, symbols, testFrom, testTo, new AbsoluteWarmup(warmupStart, testFrom), interval, strategy, broker, portfolio)
         {
         }
 
@@ -163,24 +110,6 @@ namespace Backtester.Engine
         /// </summary>
         public Engine(
             IWarmupResolvingFetcher fetcher,
-            Instrument[] instruments,
-            DateTime testFrom,
-            DateTime testTo,
-            int warmupBars,
-            string interval,
-            IStrategy strategy,
-            IBrokerSimulator broker,
-            Portfolio portfolio)
-            : this(fetcher, instruments, testFrom, testTo, new BarCountWarmup(warmupBars, fetcher), interval, strategy, broker, portfolio)
-        {
-        }
-
-        /// <summary>
-        /// Convenience overload wrapping <paramref name="symbols"/> into trivial Instruments and delegating
-        /// to the Instrument-based bar-count-warmup constructor above.
-        /// </summary>
-        public Engine(
-            IWarmupResolvingFetcher fetcher,
             string[] symbols,
             DateTime testFrom,
             DateTime testTo,
@@ -189,7 +118,7 @@ namespace Backtester.Engine
             IStrategy strategy,
             IBrokerSimulator broker,
             Portfolio portfolio)
-            : this(fetcher, ToInstruments(symbols, portfolio), testFrom, testTo, warmupBars, interval, strategy, broker, portfolio)
+            : this(fetcher, symbols, testFrom, testTo, new BarCountWarmup(warmupBars, fetcher), interval, strategy, broker, portfolio)
         {
         }
 
@@ -199,7 +128,7 @@ namespace Backtester.Engine
         /// </summary>
         private Engine(
             IHistoricalDataFetcher fetcher,
-            Instrument[] instruments,
+            string[] symbols,
             DateTime testFrom,
             DateTime testTo,
             Warmup warmup,
@@ -209,13 +138,9 @@ namespace Backtester.Engine
             Portfolio portfolio)
         {
             _fetcher = fetcher;
-            _instruments = instruments;
-            _symbols = instruments.Select(instrument => instrument.Symbol).ToArray();
-            _tradableSymbols = new HashSet<string>(_symbols);
-            _fetchSymbols = _symbols
-                .Concat(instruments.Where(instrument => instrument.ConversionSymbol != null).Select(instrument => instrument.ConversionSymbol))
-                .Distinct()
-                .ToArray();
+            _symbols = symbols;
+            _tradableSymbols = new HashSet<string>(symbols);
+            _fetchSymbols = BuildFetchSymbols(symbols, portfolio);
             _testFromUtc = testFrom;
             _testToUtc = testTo;
             _warmup = warmup;
@@ -226,15 +151,22 @@ namespace Backtester.Engine
         }
 
         /// <summary>
-        /// Wraps each ticker into a trivial Instrument quoted in the portfolio's own
-        /// <see cref="Portfolio.AccountCurrency"/>, with no conversion and no margin-rate override — the
-        /// convenience overloads' one shared translation into the Instrument-based canonical constructors.
+        /// Returns the series the run must fetch: the tradable <paramref name="symbols"/> plus every
+        /// Conversion symbol <paramref name="portfolio"/> declares, deduplicated. Taking the conversion
+        /// series from the Portfolio — the single hand-off point for Instruments — is what makes an
+        /// Engine/Portfolio disagreement about which symbols convert through what unrepresentable rather
+        /// than merely checked. A Portfolio declaring no conversion yields the caller's own array
+        /// untouched, so a plain symbol-list run builds no conversion machinery at all.
         /// </summary>
-        private static Instrument[] ToInstruments(string[] symbols, Portfolio portfolio)
+        private static string[] BuildFetchSymbols(string[] symbols, Portfolio portfolio)
         {
-            return symbols
-                .Select(symbol => new Instrument { Symbol = symbol, QuoteCurrency = portfolio.AccountCurrency, ConversionSymbol = null, MarginRate = null })
-                .ToArray();
+            IReadOnlyCollection<string> conversionSymbols = portfolio.ConversionSymbols;
+            if (conversionSymbols.Count == 0)
+            {
+                return symbols;
+            }
+
+            return symbols.Concat(conversionSymbols).Distinct().ToArray();
         }
 
         /// <summary>

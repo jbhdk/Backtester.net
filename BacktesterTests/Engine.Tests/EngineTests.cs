@@ -50,7 +50,7 @@ namespace BacktesterTests.Engine.Tests
         }
 
         [Fact]
-        public async Task StartAsync_InstrumentArrayConstructor_SameCurrencyProducesIdenticalResultToStringArrayConstructor()
+        public async Task StartAsync_PortfolioCarryingSameCurrencyInstrument_ProducesIdenticalResultToPlainSymbolPortfolio()
         {
             Candle[] bars = { Bar(T0, 100m), Bar(T0.AddDays(1), 101m), Bar(T0.AddDays(2), 102m) };
             IHistoricalDataFetcher fetcherForStrings = FetcherReturning(("AAPL", bars));
@@ -60,10 +60,10 @@ namespace BacktesterTests.Engine.Tests
             BrokerSimulator stringBroker = new(stringPortfolio);
             BacktestEngine stringEngine = new(fetcherForStrings, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), stringBroker, stringPortfolio);
 
-            Portfolio instrumentPortfolio = new(10_000m);
+            Instrument[] instruments = { new() { Symbol = "AAPL", QuoteCurrency = "USD", ConversionSymbol = null, MarginRate = null } };
+            Portfolio instrumentPortfolio = new(10_000m, "USD", instruments);
             BrokerSimulator instrumentBroker = new(instrumentPortfolio);
-            Instrument[] instruments = { new() { Symbol = "AAPL", QuoteCurrency = instrumentPortfolio.AccountCurrency, ConversionSymbol = null, MarginRate = null } };
-            BacktestEngine instrumentEngine = new(fetcherForInstruments, instruments, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), instrumentBroker, instrumentPortfolio);
+            BacktestEngine instrumentEngine = new(fetcherForInstruments, new[] { "AAPL" }, T0, T0.AddYears(1), "1d", new AlwaysBuyOneShare(), instrumentBroker, instrumentPortfolio);
 
             Backtester.Engine.BacktestResult stringResult = await stringEngine.StartAsync();
             Backtester.Engine.BacktestResult instrumentResult = await instrumentEngine.StartAsync();
@@ -508,8 +508,11 @@ namespace BacktesterTests.Engine.Tests
         // --- Multi-currency conversion (ADR 0029) ---
 
         [Fact]
-        public async Task StartAsync_ConversionSymbolDeclared_FetchesItAlongsideTradableSymbols()
+        public async Task StartAsync_PortfolioDeclaringConversionSymbol_FetchesItAlongsideTradableSymbols()
         {
+            // The Engine is handed only the tradable symbol; the conversion series it must additionally
+            // fetch comes from the Portfolio alone, so the two can never disagree about what converts
+            // through what.
             Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
             IHistoricalDataFetcher fetcher = FetcherReturning(
                 ("EUR_JPY", new[] { Bar(T0, 15_000m) }),
@@ -517,7 +520,7 @@ namespace BacktesterTests.Engine.Tests
             Portfolio portfolio = new(10_000m, "USD", instruments);
             BrokerSimulator broker = new(portfolio);
 
-            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
             await engine.StartAsync();
 
             A.CallTo(() => fetcher.FetchAsync("USD_JPY", A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._)).MustHaveHappened();
@@ -534,11 +537,30 @@ namespace BacktesterTests.Engine.Tests
             BrokerSimulator broker = new(portfolio);
             BarRecordingStrategy strategy = new();
 
-            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
             await engine.StartAsync();
 
             Assert.DoesNotContain(strategy.Calls, call => call.Symbol == "USD_JPY");
             Assert.Contains(strategy.Calls, call => call.Symbol == "EUR_JPY");
+        }
+
+        [Fact]
+        public async Task StartAsync_ConversionSymbol_NeverAppearsInOnStartHistory()
+        {
+            // The conversion series is plumbing: it is fetched so positions can be valued, but a strategy
+            // trading EUR_JPY never declared USD_JPY tradable and must not see it when precomputing.
+            Instrument[] instruments = { new() { Symbol = "EUR_JPY", QuoteCurrency = "JPY", ConversionSymbol = "USD_JPY" } };
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("EUR_JPY", new[] { Bar(T0, 15_000m) }),
+                ("USD_JPY", new[] { Bar(T0, 150m) }));
+            Portfolio portfolio = new(10_000m, "USD", instruments);
+            BrokerSimulator broker = new(portfolio);
+            HistoryCapturingStrategy strategy = new();
+
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            await engine.StartAsync();
+
+            Assert.Equal(new[] { "EUR_JPY" }, strategy.ReceivedHistory.Keys);
         }
 
         [Fact]
@@ -551,7 +573,7 @@ namespace BacktesterTests.Engine.Tests
             Portfolio portfolio = new(10_000m, "USD", instruments);
             BrokerSimulator broker = new(portfolio);
 
-            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
             Backtester.Engine.BacktestResult result = await engine.StartAsync();
 
             Assert.Equal(new[] { "EUR_JPY" }, result.Symbols);
@@ -573,7 +595,7 @@ namespace BacktesterTests.Engine.Tests
             BrokerSimulator broker = new(portfolio);
             RoundTripRecordingStrategy strategy = new();
 
-            BacktestEngine engine = new(fetcher, instruments, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
+            BacktestEngine engine = new(fetcher, new[] { "EUR_JPY" }, T0, T0.AddYears(1), "1d", strategy, broker, portfolio);
             Backtester.Engine.BacktestResult result = await engine.StartAsync();
 
             Assert.Equal(10_010m, portfolio.Cash);
@@ -587,6 +609,24 @@ namespace BacktesterTests.Engine.Tests
 
             Assert.Equal(new[] { "EUR_JPY" }, result.Symbols);
             Assert.DoesNotContain(portfolio.RoundTrips, trip => trip.Symbol == "USD_JPY");
+        }
+
+        [Fact]
+        public async Task StartAsync_PortfolioDeclaringNoConversion_FetchesExactlyTheGivenSymbolsAndNoMore()
+        {
+            // A stock/ETF run never touches the conversion machinery: with no Instruments declared, the
+            // Portfolio names no conversion series and the fetch set is exactly the symbol list.
+            IHistoricalDataFetcher fetcher = FetcherReturning(
+                ("AAPL", new[] { Bar(T0, 100m) }),
+                ("MSFT", new[] { Bar(T0, 200m) }));
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+
+            BacktestEngine engine = new(fetcher, new[] { "AAPL", "MSFT" }, T0, T0.AddYears(1), "1d", new DoNothingStrategy(), broker, portfolio);
+            await engine.StartAsync();
+
+            A.CallTo(() => fetcher.FetchAsync(A<string>._, A<DateTime>._, A<DateTime>._, A<string>._, A<CancellationToken>._))
+                .MustHaveHappened(2, Times.Exactly);
         }
 
         [Fact]
@@ -709,6 +749,19 @@ namespace BacktesterTests.Engine.Tests
                     broker.Submit(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 1 });
                 }
             }
+        }
+
+        /// <summary>Captures the history handed to OnStart so a test can assert which symbols it spans.</summary>
+        private sealed class HistoryCapturingStrategy : StrategyBase
+        {
+            public IReadOnlyDictionary<string, IReadOnlyList<Candle>> ReceivedHistory { get; private set; }
+
+            public override void OnStart(IReadOnlyDictionary<string, IReadOnlyList<Candle>> history)
+            {
+                ReceivedHistory = history;
+            }
+
+            public override void OnBar(string symbol, Candle bar, PortfolioSnapshot snapshot, IBroker broker) { }
         }
 
         /// <summary>Records every (symbol, bar timestamp) pair it is invoked with, so a test can assert the OnBar cadence.</summary>
