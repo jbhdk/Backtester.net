@@ -166,7 +166,8 @@ essentials:
   arms no stop, so it carries no initial risk and reports no R. Each leg is given either as an
   absolute price or as a fill-relative **offset** — a distance the engine resolves against the actual
   fill on the protective side, so the stop lands the intended distance from the fill regardless of any
-  gap between decision and fill.
+  gap between decision and fill. A bracket has a **state** the strategy reads from its handle: pending
+  while its entry works, armed while its legs rest, retired once the position is resolved.
 - **Position** — the net holding in a symbol, as a **signed** quantity: positive is long, negative is
   short, zero is flat. No single fill flips the sign — an opposing order reduces the position and
   clamps at zero, so reversing direction takes a second order from flat.
@@ -222,18 +223,32 @@ public class BreakoutStrategy : StrategyBase
 }
 ```
 
-The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. A
+The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. It never mutates
+a request you hand it — the sized quantity and a bracket's stop offset land on the broker's own copy —
+so an `OrderRequest` a strategy holds and resubmits across bars stays exactly as it was built. A
 `BracketRequest` attaches a stop-loss and/or a take-profit, each described by a `BracketLegSpec` built
 either as an absolute price (`BracketLegSpec.AtPrice(95m)`) or as a fill-relative offset
 (`BracketLegSpec.OffsetFromFill(2m)`, resolved against the actual fill on the protective side) —
 leave a leg out to arm just one leg (at least one is required, and a request with neither throws):
 
 ```csharp
-broker.SubmitBracket(new BracketRequest(
+BracketHandle handle = broker.SubmitBracket(new BracketRequest(
     new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market },
     stopLeg:   BracketLegSpec.OffsetFromFill(2m),
     targetLeg: BracketLegSpec.AtPrice(120m)));
 ```
+
+The returned `BracketHandle` is the strategy's view onto that bracket. Its `State` says where the
+bracket stands — `Pending` while the entry works, `Armed` once the entry has filled and its legs
+rest, `Retired` once the position is resolved and nothing rests — and its `StopOrderId` /
+`TargetOrderId` are the ids to `Modify` when trailing a leg. Ask `State` the lifecycle question;
+never infer it from a leg id being populated, because a target-only bracket arms no stop and so
+carries a null `StopOrderId` for the whole life of its position.
+
+A symbol may carry several live brackets at once — a strategy can scale in with a second bracketed
+entry while the first still rests. Each answers only for its own legs (a leg filling cancels its own
+sibling, not another bracket's), and a signal exit that flattens the position cancels the resting
+legs of all of them.
 
 When a strategy submits several orders that fill on
 the same bar, set `OrderRequest.Priority` (higher fills sooner) to control the order they are applied
