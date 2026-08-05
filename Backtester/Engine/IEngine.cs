@@ -6,7 +6,7 @@ namespace Backtester.Engine
     /// <summary>
     /// Controls the execution lifecycle of a backtest run.
     /// </summary>
-    public interface IEngine
+    internal interface IEngine
     {
         /// <summary>
         /// Fetches market data for the configured symbols, then processes bars in a loop until the data is

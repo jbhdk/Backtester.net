@@ -81,7 +81,7 @@ namespace AnalysisSample
                 Path.Combine(AppContext.BaseDirectory, DataFolder));
             IStrategy strategy = new MovingAverageCrossStrategy(settings.FastPeriod, settings.SlowPeriod);
 
-            IEngine engine = new Engine(
+            Engine engine = new(
                 fetcher,
                 symbols: new[] { "SPY", "QQQ", "GLD", "TLT" },
                 testFrom: new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc),

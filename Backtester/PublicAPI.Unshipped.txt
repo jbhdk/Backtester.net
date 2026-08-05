@@ -24,3 +24,29 @@ Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher,
 *REMOVED*Backtester.Core.Portfolio.ToAccountCurrency(string symbol, decimal nativeAmount) -> decimal
 *REMOVED*Backtester.Core.Portfolio.Trades.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Trade>
 *REMOVED*Backtester.Core.Portfolio.ValuationPriceForOrder(Backtester.Core.OrderRequest request) -> decimal
+*REMOVED*Backtester.Core.MarketSlice
+*REMOVED*Backtester.Core.MarketSlice.BarsBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.Candle>
+*REMOVED*Backtester.Core.MarketSlice.BarsBySymbol.set -> void
+*REMOVED*Backtester.Core.MarketSlice.HasBar(string symbol) -> bool
+*REMOVED*Backtester.Core.MarketSlice.HasRealBar(string symbol) -> bool
+*REMOVED*Backtester.Core.MarketSlice.MarketSlice() -> void
+*REMOVED*Backtester.Core.MarketSlice.Timestamp.get -> System.DateTime
+*REMOVED*Backtester.Core.MarketSlice.Timestamp.set -> void
+*REMOVED*Backtester.Core.PerformanceCalculator
+*REMOVED*static Backtester.Core.PerformanceCalculator.Calculate(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> Backtester.Core.PerformanceStats
+*REMOVED*static Backtester.Core.PerformanceCalculator.CalculateBySymbol(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
+*REMOVED*Backtester.Data.CoverageFloorLoader
+*REMOVED*Backtester.Data.CoverageFloorLoader.CoverageFloorLoader() -> void
+*REMOVED*Backtester.Data.CoverageFloorLoader.FileName(string symbol, string interval) -> string
+*REMOVED*Backtester.Data.CoverageFloorLoader.Lower(string path, System.DateTime candidateFromUtc) -> void
+*REMOVED*Backtester.Data.CoverageFloorLoader.Read(string path) -> System.DateTime?
+*REMOVED*Backtester.Data.CoverageFloorLoader.Write(string path, System.DateTime floorUtc) -> void
+*REMOVED*Backtester.Engine.IEngine
+*REMOVED*Backtester.Engine.IEngine.StartAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Backtester.Engine.BacktestResult>
+*REMOVED*Backtester.Engine.IEngine.Stop() -> void
+*REMOVED*Backtester.ExecutionModels.Sizing.OrderStopDistance
+*REMOVED*static Backtester.ExecutionModels.Sizing.OrderStopDistance.For(Backtester.Core.OrderRequest request) -> decimal
+*REMOVED*Backtester.Strategies.AtrBracketStrategy
+*REMOVED*Backtester.Strategies.AtrBracketStrategy.AtrBracketStrategy(int atrPeriod = 14, decimal stopAtrMultiple = 1, decimal targetAtrMultiple = 2) -> void
+*REMOVED*override Backtester.Strategies.AtrBracketStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
+*REMOVED*override Backtester.Strategies.AtrBracketStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void

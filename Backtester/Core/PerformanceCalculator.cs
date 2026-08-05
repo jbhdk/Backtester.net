@@ -7,7 +7,7 @@ namespace Backtester.Core
     /// <summary>
     /// Computes aggregate performance metrics from round trips and the equity curve.
     /// </summary>
-    public static class PerformanceCalculator
+    internal static class PerformanceCalculator
     {
         /// <summary>
         /// Computes aggregate performance statistics from round trips and the marked equity curve.

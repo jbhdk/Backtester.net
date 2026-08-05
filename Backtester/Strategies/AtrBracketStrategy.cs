@@ -11,7 +11,7 @@ namespace Backtester.Strategies
     /// and trails its stop upward via Modify on each subsequent bar. Re-enters after each round trip.
     /// ATR is pre-computed from the first <see cref="_atrPeriod"/> bars of history in OnStart.
     /// </summary>
-    public class AtrBracketStrategy : StrategyBase
+    internal class AtrBracketStrategy : StrategyBase
     {
         private readonly int _atrPeriod;
         private readonly decimal _stopAtrMultiple;

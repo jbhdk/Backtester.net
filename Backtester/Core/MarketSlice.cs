@@ -6,7 +6,7 @@ namespace Backtester.Core
     /// <summary>
     /// Represents a single point-in-time cross-section of market data across all tracked symbols.
     /// </summary>
-    public class MarketSlice
+    internal class MarketSlice
     {
         /// <summary>Gets or sets the UTC timestamp for this slice.</summary>
         public required DateTime Timestamp { get; set; }

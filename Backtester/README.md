@@ -38,7 +38,7 @@ BrokerSimulator broker = new BrokerSimulator(
 IHistoricalDataFetcher fetcher = new CsvHistoricalDataFetcher(dataFolder: "data");
 
 // 4. Run — the engine fetches the data, synchronizes it, and steps through it bar by bar
-IEngine engine = new Engine(
+Engine engine = new Engine(
     fetcher,
     symbols: new[] { "AAPL" },
     testFrom: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -62,11 +62,11 @@ PerformanceStats stats = result.Portfolio.GetPerformanceStats();
 
 | Namespace | Contents |
 |---|---|
-| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `Instrument`, `ConversionOperation`, `CurrencyConverter`, `PortfolioSnapshot`, `PerformanceStats`, `MarketSlice`, `BracketRequest`, `BracketLegSpec`, `BracketHandle`, `BracketState`, `BracketLeg`, `Indicator`, `IndicatorSeries`, `IndicatorShape`, `IndicatorPoint`, `IndicatorPane` |
-| `Backtester.Engine` | `Engine`, `IEngine`, `BacktestResult` |
+| `Backtester.Core` | `Candle`, `Order`, `Trade`, `Position`, `Portfolio`, `Instrument`, `ConversionOperation`, `CurrencyConverter`, `PortfolioSnapshot`, `PerformanceStats`, `BracketRequest`, `BracketLegSpec`, `BracketHandle`, `BracketState`, `BracketLeg`, `Indicator`, `IndicatorSeries`, `IndicatorShape`, `IndicatorPoint`, `IndicatorPane` |
+| `Backtester.Engine` | `Engine`, `BacktestResult` |
 | `Backtester.Broker` | `IBroker`, `BrokerSimulator`, `IFillModel`, `FillModel_OHLCHeuristic` |
-| `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader`, `IDataPrimer`, `CoverageFloorLoader`, `DataCoverageException` |
-| `Backtester.Strategies` | `IStrategy`, `IIndicatorSource`, `StrategyBase`, `MovingAverageCrossStrategy`, `AtrBracketStrategy` |
+| `Backtester.Data` | `IHistoricalDataProvider`, `IHistoricalDataFetcher`, `HistoricalDataFetcher`, `CsvHistoricalDataFetcher`, `CsvBarLoader`, `IDataPrimer`, `DataCoverageException` |
+| `Backtester.Strategies` | `IStrategy`, `IIndicatorSource`, `StrategyBase`, `MovingAverageCrossStrategy` |
 | `Backtester.ExecutionModels.*` | Commission, slippage, sizing, and risk model interfaces and built-in implementations |
 
 ## Requirements

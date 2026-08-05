@@ -3,6 +3,11 @@ namespace Backtester.Broker
     /// <summary>
     /// Describes a single fill produced by the fill model for a pending order.
     /// </summary>
+    /// <remarks>
+    /// Public by reachability, not by allowlist (ADR 0034): it is the element type returned by
+    /// <see cref="IFillModel.DetermineFills"/>, so a strategy author supplying their own Fill
+    /// Execution model has to name it. Narrowing it would drag <see cref="IFillModel"/> internal too.
+    /// </remarks>
     public class FillResult
     {
         /// <summary>Gets or sets the identifier of the order that was filled.</summary>

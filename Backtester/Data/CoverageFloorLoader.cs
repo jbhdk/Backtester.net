@@ -10,7 +10,7 @@ namespace Backtester.Data
     /// beside the Cache CSV, recording the earliest range start ever requested from the Provider.
     /// The Cache CSV format is untouched; the floor lives here so the CSV stays a clean OHLCV file.
     /// </summary>
-    public class CoverageFloorLoader
+    internal class CoverageFloorLoader
     {
         private const string FloorProperty = "coverageFloorUtc";
 

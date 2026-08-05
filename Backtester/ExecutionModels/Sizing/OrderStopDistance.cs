@@ -7,7 +7,7 @@ namespace Backtester.ExecutionModels.Sizing
     /// Resolves the per-share stop distance a risk-based sizing model divides its budget into, shared by
     /// the risk sizing models so the offset-first, absolute-fallback, else-zero rule lives in one place.
     /// </summary>
-    public static class OrderStopDistance
+    internal static class OrderStopDistance
     {
         /// <summary>
         /// Returns the per-share stop distance for an order: the fill-relative

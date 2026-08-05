@@ -100,7 +100,7 @@ IHistoricalDataFetcher fetcher = new HistoricalDataFetcher(new YahooHistoricalDa
 
 // 4. Run the engine. It fetches each symbol, synchronizes them into slices,
 //    and steps bar by bar.
-IEngine engine = new Engine(
+Engine engine = new Engine(
     fetcher,
     symbols:  new[] { "AAPL", "MSFT" },
     testFrom: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -384,8 +384,8 @@ Instrument[] instruments =
 };
 
 Portfolio portfolio = new Portfolio(startingCash: 100_000m, accountCurrency: "USD", instruments);
-IEngine engine = new Engine(fetcher, new[] { "EUR_USD", "USD_JPY", "EUR_GBP" }, testFrom, testTo,
-                            interval: "1h", strategy, broker, portfolio);
+Engine engine = new Engine(fetcher, new[] { "EUR_USD", "USD_JPY", "EUR_GBP" }, testFrom, testTo,
+                           interval: "1h", strategy, broker, portfolio);
 ```
 
 The `Portfolio` is the **single hand-off point for Instruments**: it is the only collaborator that
