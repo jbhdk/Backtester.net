@@ -57,6 +57,10 @@
     Applies the current (already-incremented) build number as the version. Runs in
     every build and pack pass so the compiled assembly and the generated NuGet
     package always share the same version. Read-only: it never mutates the counter.
+
+    Major is 2 because the trial-factory delegate changed shape when IBrokerSimulator
+    was internalized from backtester.net — a binary break that callers should be told
+    about by the version rather than discover at compile time.
   -->
   <Target Name="SetVersionFromBuildNumber" BeforeTargets="BeforeCompile;GenerateNuspec;Pack">
     <ReadLinesFromFile File="$(BuildNumberFile)" Condition="Exists('$(BuildNumberFile)')">
@@ -65,7 +69,7 @@
 
     <PropertyGroup>
       <CurrentBuildNumber Condition="'$(CurrentBuildNumber)' == ''">0</CurrentBuildNumber>
-      <Version>1.0.$(CurrentBuildNumber)</Version>
+      <Version>2.0.$(CurrentBuildNumber)</Version>
       <PackageVersion>$(Version)</PackageVersion>
       <AssemblyVersion>$(Version).0</AssemblyVersion>
       <FileVersion>$(Version).0</FileVersion>

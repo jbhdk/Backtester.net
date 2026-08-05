@@ -3,11 +3,9 @@ Backtester.Broker.BrokerSimulator.BracketLevelChanges.get -> System.Collections.
 Backtester.Broker.BrokerSimulator.BrokerSimulator(Backtester.Core.Portfolio portfolio, Backtester.Broker.IFillModel fillModel = null, Backtester.ExecutionModels.Commission.ICommissionModel commissionModel = null, Backtester.ExecutionModels.Slippage.ISlippageModel slippageModel = null, Backtester.ExecutionModels.Sizing.ISizingModel sizingModel = null) -> void
 Backtester.Broker.BrokerSimulator.Cancel(string orderId) -> void
 Backtester.Broker.BrokerSimulator.Modify(string orderId, decimal newPrice) -> void
-Backtester.Broker.BrokerSimulator.ProcessBar(Backtester.Core.MarketSlice slice) -> System.Collections.Generic.IEnumerable<Backtester.Core.Trade>
 Backtester.Broker.BrokerSimulator.RejectedOrders.get -> System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder>
 Backtester.Broker.BrokerSimulator.Submit(Backtester.Core.OrderRequest request) -> string
 Backtester.Broker.BrokerSimulator.SubmitBracket(Backtester.Core.BracketRequest request) -> Backtester.Core.BracketHandle
-Backtester.Broker.BrokerSimulator.SubmitOrder(Backtester.Core.OrderRequest request) -> string
 Backtester.Broker.FillModel_OHLCHeuristic
 Backtester.Broker.FillModel_OHLCHeuristic.DetermineFills(System.Collections.Generic.IEnumerable<Backtester.Core.Order> orders, Backtester.Core.Candle bar) -> System.Collections.Generic.IEnumerable<Backtester.Broker.FillResult>
 Backtester.Broker.FillModel_OHLCHeuristic.FillModel_OHLCHeuristic() -> void
@@ -26,11 +24,6 @@ Backtester.Broker.IBroker.Cancel(string orderId) -> void
 Backtester.Broker.IBroker.Modify(string orderId, decimal newPrice) -> void
 Backtester.Broker.IBroker.Submit(Backtester.Core.OrderRequest request) -> string
 Backtester.Broker.IBroker.SubmitBracket(Backtester.Core.BracketRequest request) -> Backtester.Core.BracketHandle
-Backtester.Broker.IBrokerSimulator
-Backtester.Broker.IBrokerSimulator.BracketLevelChanges.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.BracketLevelChange>
-Backtester.Broker.IBrokerSimulator.ProcessBar(Backtester.Core.MarketSlice slice) -> System.Collections.Generic.IEnumerable<Backtester.Core.Trade>
-Backtester.Broker.IBrokerSimulator.RejectedOrders.get -> System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder>
-Backtester.Broker.IBrokerSimulator.SubmitOrder(Backtester.Core.OrderRequest request) -> string
 Backtester.Broker.IFillModel
 Backtester.Broker.IFillModel.DetermineFills(System.Collections.Generic.IEnumerable<Backtester.Core.Order> orders, Backtester.Core.Candle bar) -> System.Collections.Generic.IEnumerable<Backtester.Broker.FillResult>
 Backtester.Broker.RejectedOrder
@@ -168,14 +161,6 @@ Backtester.Core.Instrument.Symbol.set -> void
 Backtester.Core.InstrumentDeclarationException
 Backtester.Core.InstrumentDeclarationException.InstrumentDeclarationException(string symbol, string problem) -> void
 Backtester.Core.InstrumentDeclarationException.Symbol.get -> string
-Backtester.Core.MarketSlice
-Backtester.Core.MarketSlice.BarsBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.Candle>
-Backtester.Core.MarketSlice.BarsBySymbol.set -> void
-Backtester.Core.MarketSlice.HasBar(string symbol) -> bool
-Backtester.Core.MarketSlice.HasRealBar(string symbol) -> bool
-Backtester.Core.MarketSlice.MarketSlice() -> void
-Backtester.Core.MarketSlice.Timestamp.get -> System.DateTime
-Backtester.Core.MarketSlice.Timestamp.set -> void
 Backtester.Core.MissingConversionRateException
 Backtester.Core.MissingConversionRateException.ConversionSymbol.get -> string
 Backtester.Core.MissingConversionRateException.MissingConversionRateException(string symbol, string conversionSymbol) -> void
@@ -228,7 +213,6 @@ Backtester.Core.OrderType
 Backtester.Core.OrderType.Limit = 1 -> Backtester.Core.OrderType
 Backtester.Core.OrderType.Market = 0 -> Backtester.Core.OrderType
 Backtester.Core.OrderType.Stop = 2 -> Backtester.Core.OrderType
-Backtester.Core.PerformanceCalculator
 Backtester.Core.PerformanceStats
 Backtester.Core.PerformanceStats.AvgCapitalInvested.get -> decimal
 Backtester.Core.PerformanceStats.AvgCapitalInvested.set -> void
@@ -319,34 +303,19 @@ Backtester.Core.PerformanceStats.Winners.get -> int
 Backtester.Core.PerformanceStats.Winners.set -> void
 Backtester.Core.Portfolio
 Backtester.Core.Portfolio.AccountCurrency.get -> string
-Backtester.Core.Portfolio.ApplyTrade(Backtester.Core.Trade trade) -> void
 Backtester.Core.Portfolio.BuyingPower.get -> decimal
 Backtester.Core.Portfolio.Cash.get -> decimal
 Backtester.Core.Portfolio.CommittedMargin.get -> decimal
-Backtester.Core.Portfolio.ConversionSymbols.get -> System.Collections.Generic.IReadOnlyCollection<string>
-Backtester.Core.Portfolio.EquityHistory.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot>
-Backtester.Core.Portfolio.GetPerformanceStats() -> Backtester.Core.PerformanceStats
-Backtester.Core.Portfolio.GetPerformanceStatsBySymbol() -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
-Backtester.Core.Portfolio.InitialMarginForOrder(Backtester.Core.OrderRequest request) -> decimal
 Backtester.Core.Portfolio.LongInitialMarginRate.get -> decimal
 Backtester.Core.Portfolio.LongInitialMarginRate.set -> void
 Backtester.Core.Portfolio.MarkedEquity.get -> decimal
-Backtester.Core.Portfolio.OpenQuantity(string symbol) -> int
 Backtester.Core.Portfolio.Portfolio(decimal startingCash, string accountCurrency = "USD", Backtester.Core.Instrument[] instruments = null) -> void
-Backtester.Core.Portfolio.Positions.get -> System.Collections.Generic.List<Backtester.Core.Position>
 Backtester.Core.Portfolio.RealizedEquity.get -> decimal
 Backtester.Core.Portfolio.RealizedPnL.get -> decimal
-Backtester.Core.Portfolio.RecordEquitySnapshot(Backtester.Core.MarketSlice slice) -> void
-Backtester.Core.Portfolio.ReducesOpenPosition(Backtester.Core.OrderRequest request) -> bool
 Backtester.Core.Portfolio.ReservedCash.get -> decimal
-Backtester.Core.Portfolio.RoundTrips.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip>
 Backtester.Core.Portfolio.ShortInitialMarginRate.get -> decimal
 Backtester.Core.Portfolio.ShortInitialMarginRate.set -> void
-Backtester.Core.Portfolio.SnapshotAt(System.DateTime timestamp) -> Backtester.Core.PortfolioSnapshot
 Backtester.Core.Portfolio.StartingCash.get -> decimal
-Backtester.Core.Portfolio.ToAccountCurrency(string symbol, decimal nativeAmount) -> decimal
-Backtester.Core.Portfolio.Trades.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Trade>
-Backtester.Core.Portfolio.ValuationPriceForOrder(Backtester.Core.OrderRequest request) -> decimal
 Backtester.Core.PortfolioSnapshot
 Backtester.Core.PortfolioSnapshot.Cash.get -> decimal
 Backtester.Core.PortfolioSnapshot.Cash.set -> void
@@ -377,8 +346,6 @@ Backtester.Core.Position.EntryTime.get -> System.DateTime
 Backtester.Core.Position.EntryTime.set -> void
 Backtester.Core.Position.Id.get -> string
 Backtester.Core.Position.Id.set -> void
-Backtester.Core.Position.Metadata.get -> Backtester.Core.PositionMetadata
-Backtester.Core.Position.Metadata.set -> void
 Backtester.Core.Position.Position() -> void
 Backtester.Core.Position.Quantity.get -> int
 Backtester.Core.Position.Quantity.set -> void
@@ -388,8 +355,6 @@ Backtester.Core.Position.Trades.get -> System.Collections.Generic.List<Backteste
 Backtester.Core.PositionDirection
 Backtester.Core.PositionDirection.Long = 0 -> Backtester.Core.PositionDirection
 Backtester.Core.PositionDirection.Short = 1 -> Backtester.Core.PositionDirection
-Backtester.Core.PositionMetadata
-Backtester.Core.PositionMetadata.PositionMetadata() -> void
 Backtester.Core.RoundTrip
 Backtester.Core.RoundTrip.BarsHeld.get -> int
 Backtester.Core.RoundTrip.BarsHeld.set -> void
@@ -454,12 +419,6 @@ Backtester.Core.Trade.Symbol.set -> void
 Backtester.Core.Trade.Timestamp.get -> System.DateTime
 Backtester.Core.Trade.Timestamp.set -> void
 Backtester.Core.Trade.Trade() -> void
-Backtester.Data.CoverageFloorLoader
-Backtester.Data.CoverageFloorLoader.CoverageFloorLoader() -> void
-Backtester.Data.CoverageFloorLoader.FileName(string symbol, string interval) -> string
-Backtester.Data.CoverageFloorLoader.Lower(string path, System.DateTime candidateFromUtc) -> void
-Backtester.Data.CoverageFloorLoader.Read(string path) -> System.DateTime?
-Backtester.Data.CoverageFloorLoader.Write(string path, System.DateTime floorUtc) -> void
 Backtester.Data.CsvBarLoader
 Backtester.Data.CsvBarLoader.AppendAndMerge(string path, System.Collections.Generic.IEnumerable<Backtester.Core.Candle> additional) -> void
 Backtester.Data.CsvBarLoader.CsvBarLoader() -> void
@@ -480,8 +439,6 @@ Backtester.Data.HistoricalDataFetcher.FetchAsync(string symbol, System.DateTime 
 Backtester.Data.HistoricalDataFetcher.HistoricalDataFetcher(Backtester.Data.IHistoricalDataProvider provider, string dataFolder = null) -> void
 Backtester.Data.HistoricalDataFetcher.PrimeAsync(string[] symbols, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task
 Backtester.Data.HistoricalDataFetcher.ResolveWarmupStartAsync(string symbol, System.DateTime testFrom, int warmupBars, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTime>
-Backtester.Data.IDataPrimer
-Backtester.Data.IDataPrimer.PrimeAsync(string[] symbols, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task
 Backtester.Data.IHistoricalDataFetcher
 Backtester.Data.IHistoricalDataFetcher.FetchAsync(string symbol, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>>
 Backtester.Data.IHistoricalDataProvider
@@ -507,15 +464,12 @@ Backtester.Engine.BacktestResult.StartingEquity.get -> decimal
 Backtester.Engine.BacktestResult.Symbols.get -> System.Collections.Generic.IReadOnlyList<string>
 Backtester.Engine.BacktestResult.ToUtc.get -> System.DateTime
 Backtester.Engine.Engine
-Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.DateTime warmupStart, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
-Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.TimeSpan warmup, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
-Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
-Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, int warmupBars, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.DateTime warmupStart, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.BrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.TimeSpan warmup, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.BrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.BrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, int warmupBars, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.BrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
 Backtester.Engine.Engine.StartAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Backtester.Engine.BacktestResult>
 Backtester.Engine.Engine.Stop() -> void
-Backtester.Engine.IEngine
-Backtester.Engine.IEngine.StartAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Backtester.Engine.BacktestResult>
-Backtester.Engine.IEngine.Stop() -> void
 Backtester.ExecutionModels.Commission.FixedCommission
 Backtester.ExecutionModels.Commission.FixedCommission.Amount.get -> decimal
 Backtester.ExecutionModels.Commission.FixedCommission.Amount.set -> void
@@ -545,7 +499,6 @@ Backtester.ExecutionModels.Sizing.FixedSizeModel.FixedSizeModel() -> void
 Backtester.ExecutionModels.Sizing.FixedSizeModel.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
 Backtester.ExecutionModels.Sizing.ISizingModel
 Backtester.ExecutionModels.Sizing.ISizingModel.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
-Backtester.ExecutionModels.Sizing.OrderStopDistance
 Backtester.ExecutionModels.Sizing.PercentNotionalSizing
 Backtester.ExecutionModels.Sizing.PercentNotionalSizing.Percent.get -> decimal
 Backtester.ExecutionModels.Sizing.PercentNotionalSizing.Percent.set -> void
@@ -568,8 +521,6 @@ Backtester.ExecutionModels.Slippage.PercentSlippage.Apply(decimal price, Backtes
 Backtester.ExecutionModels.Slippage.PercentSlippage.Percent.get -> decimal
 Backtester.ExecutionModels.Slippage.PercentSlippage.Percent.set -> void
 Backtester.ExecutionModels.Slippage.PercentSlippage.PercentSlippage() -> void
-Backtester.Strategies.AtrBracketStrategy
-Backtester.Strategies.AtrBracketStrategy.AtrBracketStrategy(int atrPeriod = 14, decimal stopAtrMultiple = 1, decimal targetAtrMultiple = 2) -> void
 Backtester.Strategies.IIndicatorSource
 Backtester.Strategies.IIndicatorSource.Indicators.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Indicator>
 Backtester.Strategies.IRoundTripObserver
@@ -586,15 +537,10 @@ Backtester.Strategies.StrategyBase.RecordIndicator(string name, Backtester.Core.
 Backtester.Strategies.StrategyBase.RecordIndicator(string name, string symbol, Backtester.Core.IndicatorPane pane, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorPoint> points) -> void
 Backtester.Strategies.StrategyBase.StrategyBase() -> void
 abstract Backtester.Strategies.StrategyBase.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
-override Backtester.Strategies.AtrBracketStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
-override Backtester.Strategies.AtrBracketStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
 override Backtester.Strategies.MovingAverageCrossStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
 override Backtester.Strategies.MovingAverageCrossStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
 static Backtester.Core.BracketLegSpec.AtPrice(decimal price) -> Backtester.Core.BracketLegSpec
 static Backtester.Core.BracketLegSpec.OffsetFromFill(decimal offset) -> Backtester.Core.BracketLegSpec
-static Backtester.Core.PerformanceCalculator.Calculate(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> Backtester.Core.PerformanceStats
-static Backtester.Core.PerformanceCalculator.CalculateBySymbol(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
 static Backtester.Data.CsvBarLoader.FileName(string symbol, string interval) -> string
-static Backtester.ExecutionModels.Sizing.OrderStopDistance.For(Backtester.Core.OrderRequest request) -> decimal
 virtual Backtester.Strategies.StrategyBase.OnRoundTripClosed(Backtester.Core.RoundTrip roundTrip) -> void
 virtual Backtester.Strategies.StrategyBase.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
