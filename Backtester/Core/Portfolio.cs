@@ -227,7 +227,7 @@ namespace Backtester.Core
         internal List<Position> Positions { get; } = new();
 
         /// <summary>Gets the chronological series of equity snapshots recorded after each bar.</summary>
-        public IReadOnlyList<EquitySnapshot> EquityHistory => _equityHistory;
+        internal IReadOnlyList<EquitySnapshot> EquityHistory => _equityHistory;
 
         /// <summary>Gets the complete trade history in submission order.</summary>
         internal IReadOnlyList<Trade> Trades => _trades;
@@ -271,7 +271,7 @@ namespace Backtester.Core
         /// run must fetch on top of its tradable symbols so every cross-currency position can be valued in
         /// <see cref="AccountCurrency"/>. Empty when every traded symbol already quotes in that currency.
         /// </summary>
-        public IReadOnlyCollection<string> ConversionSymbols => _currencyConverter.ConversionSymbols;
+        internal IReadOnlyCollection<string> ConversionSymbols => _currencyConverter.ConversionSymbols;
 
         /// <summary>
         /// Returns <paramref name="nativeAmount"/> (denominated in <paramref name="symbol"/>'s own quote
@@ -437,7 +437,7 @@ namespace Backtester.Core
         /// <summary>
         /// Computes performance statistics by pairing trades into round trips and analysing the equity curve.
         /// </summary>
-        public PerformanceStats GetPerformanceStats()
+        internal PerformanceStats GetPerformanceStats()
         {
             return PerformanceCalculator.Calculate(_roundTrips, _equityHistory, StartingCash);
         }
@@ -445,7 +445,7 @@ namespace Backtester.Core
         /// <summary>
         /// Computes performance statistics for each traded symbol independently, keyed by symbol.
         /// </summary>
-        public IReadOnlyDictionary<string, PerformanceStats> GetPerformanceStatsBySymbol()
+        internal IReadOnlyDictionary<string, PerformanceStats> GetPerformanceStatsBySymbol()
         {
             return PerformanceCalculator.CalculateBySymbol(_roundTrips, _equityHistory, StartingCash);
         }

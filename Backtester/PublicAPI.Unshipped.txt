@@ -54,3 +54,7 @@ Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher,
 *REMOVED*Backtester.Core.Position.Metadata.set -> void
 *REMOVED*Backtester.Core.PositionMetadata
 *REMOVED*Backtester.Core.PositionMetadata.PositionMetadata() -> void
+*REMOVED*Backtester.Core.Portfolio.ConversionSymbols.get -> System.Collections.Generic.IReadOnlyCollection<string>
+*REMOVED*Backtester.Core.Portfolio.EquityHistory.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot>
+*REMOVED*Backtester.Core.Portfolio.GetPerformanceStats() -> Backtester.Core.PerformanceStats
+*REMOVED*Backtester.Core.Portfolio.GetPerformanceStatsBySymbol() -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
