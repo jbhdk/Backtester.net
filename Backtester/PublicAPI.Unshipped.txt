@@ -11,3 +11,16 @@ Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher,
 *REMOVED*Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.TimeSpan warmup, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
 *REMOVED*Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
 *REMOVED*Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, int warmupBars, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+*REMOVED*Backtester.Broker.BrokerSimulator.ProcessBar(Backtester.Core.MarketSlice slice) -> System.Collections.Generic.IEnumerable<Backtester.Core.Trade>
+*REMOVED*Backtester.Broker.BrokerSimulator.SubmitOrder(Backtester.Core.OrderRequest request) -> string
+*REMOVED*Backtester.Core.Portfolio.ApplyTrade(Backtester.Core.Trade trade) -> void
+*REMOVED*Backtester.Core.Portfolio.InitialMarginForOrder(Backtester.Core.OrderRequest request) -> decimal
+*REMOVED*Backtester.Core.Portfolio.OpenQuantity(string symbol) -> int
+*REMOVED*Backtester.Core.Portfolio.Positions.get -> System.Collections.Generic.List<Backtester.Core.Position>
+*REMOVED*Backtester.Core.Portfolio.RecordEquitySnapshot(Backtester.Core.MarketSlice slice) -> void
+*REMOVED*Backtester.Core.Portfolio.ReducesOpenPosition(Backtester.Core.OrderRequest request) -> bool
+*REMOVED*Backtester.Core.Portfolio.RoundTrips.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip>
+*REMOVED*Backtester.Core.Portfolio.SnapshotAt(System.DateTime timestamp) -> Backtester.Core.PortfolioSnapshot
+*REMOVED*Backtester.Core.Portfolio.ToAccountCurrency(string symbol, decimal nativeAmount) -> decimal
+*REMOVED*Backtester.Core.Portfolio.Trades.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Trade>
+*REMOVED*Backtester.Core.Portfolio.ValuationPriceForOrder(Backtester.Core.OrderRequest request) -> decimal

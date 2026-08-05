@@ -72,7 +72,7 @@ namespace Backtester.Broker
         /// Applies sizing and risk checks, then queues the order for fill processing on the next bar.
         /// Returns the assigned order ID, or null if the order was rejected.
         /// </summary>
-        public string SubmitOrder(OrderRequest request)
+        internal string SubmitOrder(OrderRequest request)
         {
             return SubmitOwnedOrder(request.Copy());
         }
@@ -206,7 +206,7 @@ namespace Backtester.Broker
         /// Filled orders are removed from the book; unfilled orders remain working (GTC).
         /// Records the bar timestamp so subsequent <see cref="SubmitOrder"/> calls can stamp orders with simulation time.
         /// </summary>
-        public IEnumerable<Trade> ProcessBar(MarketSlice slice)
+        internal IEnumerable<Trade> ProcessBar(MarketSlice slice)
         {
             _currentBarTimestamp = slice.Timestamp;
 

@@ -93,7 +93,7 @@ namespace Backtester.Core
         /// its own price or, lacking one, the symbol's latest close. Returns zero when the order cannot be
         /// valued, so it is not gated.
         /// </summary>
-        public decimal InitialMarginForOrder(OrderRequest request)
+        internal decimal InitialMarginForOrder(OrderRequest request)
         {
             Position position = Positions.FirstOrDefault(p => p.Symbol == request.Symbol);
             int currentQty = position?.Quantity ?? 0;
@@ -116,7 +116,7 @@ namespace Backtester.Core
         /// Returns the signed quantity of the open position for a symbol — positive long, negative short,
         /// zero when flat — so a caller can size a closing order to the position it closes.
         /// </summary>
-        public int OpenQuantity(string symbol)
+        internal int OpenQuantity(string symbol)
         {
             Position position = Positions.FirstOrDefault(p => p.Symbol == symbol);
             return position?.Quantity ?? 0;
@@ -127,7 +127,7 @@ namespace Backtester.Core
         /// reduce or close that position rather than open or add to one. Classified by side alone, so a
         /// not-yet-sized flatten (quantity zero) is still recognised as reducing.
         /// </summary>
-        public bool ReducesOpenPosition(OrderRequest request)
+        internal bool ReducesOpenPosition(OrderRequest request)
         {
             int currentQuantity = OpenQuantity(request.Symbol);
             return currentQuantity != 0
@@ -138,7 +138,7 @@ namespace Backtester.Core
         /// Returns the price used to value an order: the order's own price, or the symbol's latest close
         /// when it has none, or zero when neither is known (so the order cannot be valued).
         /// </summary>
-        public decimal ValuationPriceForOrder(OrderRequest request)
+        internal decimal ValuationPriceForOrder(OrderRequest request)
         {
             return request.Price
                 ?? (_lastCloseBySymbol.TryGetValue(request.Symbol, out decimal close) ? close : 0m);
@@ -224,19 +224,19 @@ namespace Backtester.Core
         }
 
         /// <summary>Gets the list of all open positions.</summary>
-        public List<Position> Positions { get; } = new();
+        internal List<Position> Positions { get; } = new();
 
         /// <summary>Gets the chronological series of equity snapshots recorded after each bar.</summary>
         public IReadOnlyList<EquitySnapshot> EquityHistory => _equityHistory;
 
         /// <summary>Gets the complete trade history in submission order.</summary>
-        public IReadOnlyList<Trade> Trades => _trades;
+        internal IReadOnlyList<Trade> Trades => _trades;
 
         /// <summary>
         /// Gets the round trips realized so far, in the order they closed. Each reducing fill that closes
         /// or partially closes a position appends one; the Portfolio is their single source of truth.
         /// </summary>
-        public IReadOnlyList<RoundTrip> RoundTrips => _roundTrips;
+        internal IReadOnlyList<RoundTrip> RoundTrips => _roundTrips;
 
         /// <summary>
         /// Initializes a new portfolio with the given starting cash balance, denominated in
@@ -277,11 +277,11 @@ namespace Backtester.Core
         /// Returns <paramref name="nativeAmount"/> (denominated in <paramref name="symbol"/>'s own quote
         /// currency) converted into <see cref="AccountCurrency"/> by the portfolio's
         /// <see cref="CurrencyConverter"/>, which owns the conversion rule and its rate state.
-        /// A public seam for callers outside Portfolio (e.g. risk-based sizing models) that must convert
-        /// a quote-currency-denominated amount, such as a stop distance, into the same units as an
-        /// account-currency-denominated budget before dividing (ADR 0029).
+        /// A seam for callers outside Portfolio but inside the engine (e.g. risk-based sizing models) that
+        /// must convert a quote-currency-denominated amount, such as a stop distance, into the same units
+        /// as an account-currency-denominated budget before dividing (ADR 0029).
         /// </summary>
-        public decimal ToAccountCurrency(string symbol, decimal nativeAmount)
+        internal decimal ToAccountCurrency(string symbol, decimal nativeAmount)
         {
             return _currencyConverter.ToAccountCurrency(symbol, nativeAmount);
         }
@@ -289,7 +289,7 @@ namespace Backtester.Core
         /// <summary>
         /// Returns a snapshot of the portfolio's state at the given timestamp using cost-basis equity.
         /// </summary>
-        public PortfolioSnapshot SnapshotAt(DateTime timestamp)
+        internal PortfolioSnapshot SnapshotAt(DateTime timestamp)
         {
             return new PortfolioSnapshot
             {
@@ -307,7 +307,7 @@ namespace Backtester.Core
         /// clamped at zero (overshoot discarded) so a single fill never flips the position's sign; on a
         /// reduction it realizes <c>(price − averagePrice) · sign(quantity) · closedQuantity</c>.
         /// </summary>
-        public void ApplyTrade(Trade trade)
+        internal void ApplyTrade(Trade trade)
         {
             Position position = Positions.FirstOrDefault(p => p.Symbol == trade.Symbol);
             int currentQty = position?.Quantity ?? 0;
@@ -454,7 +454,7 @@ namespace Backtester.Core
         /// Records a mark-to-market equity snapshot using closing prices from the provided market slice.
         /// Falls back to average entry price for symbols not present in the slice.
         /// </summary>
-        public void RecordEquitySnapshot(MarketSlice slice)
+        internal void RecordEquitySnapshot(MarketSlice slice)
         {
             // The one place the two stores are fed, each from the same bars but for its own purpose: every
             // close becomes the symbol's mark price, and a close on a declared Conversion symbol is also
