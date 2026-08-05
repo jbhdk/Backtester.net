@@ -15,11 +15,11 @@ which the `BacktestResult` now carries — is derived from the result alone:
   the leverage and margin utilization the run carried.
 - **Round trips** — number, symbol, the trip's **Quote currency** (see below), entry/exit time and
   price, quantity, the trip's **Leverage** and **Margin** (see below), P&L, plus derived
-  **Return %** `(Exit − Entry) / Entry`, the **Initial stop** and **Initial target** (the entry-time
-  stop-loss and take-profit levels, frozen at entry and unaffected by later trailing; a dash when the
-  entry declared no such leg — Initial stop shows exactly when **R** does, Initial target only when a
-  bracket target armed), the **Exit reason** (`Take-profit`, `Stop-loss`, or `Signal`), and compact
-  **Time Held** (e.g. `5d 6h`).
+  **Return %** `(Exit − Entry) / Entry` and the trip's own **R** (see below), the **Initial stop** and
+  **Initial target** (the entry-time stop-loss and take-profit levels, frozen at entry and unaffected
+  by later trailing; a dash when the entry declared no such leg — Initial stop shows exactly when
+  **R** does, Initial target only when a bracket target armed), the **Exit reason** (`Take-profit`,
+  `Stop-loss`, or `Signal`), and compact **Time Held** (e.g. `5d 6h`).
 - **Run** — symbols, interval, date range, the **Account currency** every money figure is denominated
   in, starting equity, and derived final equity and total return %.
 - **Per-symbol candles**, **indicators** (each grouping one or more series in a shared pane), and the portfolio **equity curve**.
@@ -97,6 +97,7 @@ portfolio) and, when a symbol is selected on the chart, that symbol alone.
 - **Profit factor** — gross profit divided by absolute gross loss; zero when there are no losses.
 - **Expectancy** — expected value per trade: the mean realized P&L across all round trips (`NetProfit ÷ Trades`). This equals `WinRate × AvgWin + (1 − WinRate) × AvgLoss` only when there are no break-even trades; otherwise that formula over-weights the average loss, because `1 − WinRate` includes the break-even trips while `AvgLoss` is averaged over losers only.
 - **Avg R** — average R multiple: the mean of per-trade R (`RealizedPnL ÷ InitialRisk`, both account-currency figures — risk translated at the entry rate, profit at the exit rate, so a cross-currency rate move between the two shows up in R) across the round trips that declared an entry stop. No-stop trips carry no R and are excluded from both the sum and the count (not counted as 0R, which would drag the mean toward zero); the value is a dash when no trip has a defined initial risk. _This meaning changed from prior reports_, where "Avg R" was a proxy — expectancy expressed in units of the average losing trade.
+- **R** (round-trip column) — that one trip's R multiple: its realized profit over its initial risk. Both are account-currency figures the engine stamped on the round trip, each translated at its own moment — risk at the rate in force as the trip opened, profit at the rate as it closed — so the column is a plain division of like units, and a rate move between entry and exit shows up in R instead of cancelling out. A trip that risked 100 JPY at `USD_JPY` 100 and made 200 JPY at 125 reads **1.6R** (risk $1.00, profit $1.60), not the 2.0R a single-rate translation would give. A dash when the entry declared no protective stop — exactly the trips **Avg R** excludes.
 - **Avg win** — average profit of winning round trips.
 - **Avg loss** — average loss of losing round trips (negative).
 - **Median trade** — median realized P&L across all round trips.

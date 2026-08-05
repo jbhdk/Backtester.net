@@ -179,10 +179,14 @@ The record of one fill (the `Trade` type). NOT a complete trade in the trader's 
 _Avoid_: using "trade" for an entry-to-exit cycle — that is a Round trip.
 
 **Round trip**:
-A complete entry-to-exit cycle for a position, carrying realized PnL and bars held. The unit
-of per-trade performance analytics. Either direction: a long round trip pairs a Buy entry with a
-Sell exit; a short round trip pairs a Sell entry with a Buy exit. A round trip is **realized the
-moment a fill reduces or closes the position** — a partial exit realizes a round trip for the closed
+A complete entry-to-exit cycle for a position, carrying its realized outcome and bars held. The unit
+of per-trade performance analytics. Its money figures — realized PnL, **Initial risk**, **Entry
+notional**, **Entry margin** — are in the Account currency, each translated at the rate in force at
+its own moment, while its prices — entry, exit, **Initial stop**, **Initial target** — are in the
+Instrument's own **Quote currency**, which it also stamps so a consumer can say which currency each
+column is in. Either direction: a long round trip pairs a Buy entry with a Sell exit; a short round
+trip pairs a Sell entry with a Buy exit. A round trip is **realized the moment a fill reduces or
+closes the position** — a partial exit realizes a round trip for the closed
 portion and the position lives on. The Portfolio is its source: it emits each round trip as it
 closes, and a strategy may **observe** them live to react to its own results (e.g. pause after a run
 of losses). What a strategy does with that result is its own decision; the engine carries on either
@@ -327,17 +331,28 @@ drive marked equity negative and the run simply reports it.
 _Avoid_: cash account, leverage (as the model name).
 
 **Initial margin**:
-The equity an order must commit to open or add to a position: `rate · |price · quantity|`, at the
-Instrument's own symmetric rate when it declares one, else the Reg-T split (0.5 long / 1.5 short). A
-reducing order commits none and releases the closed portion's margin.
+The equity an order must commit to open or add to a position: `rate · |price · quantity|` with that
+notional translated into the Account currency, at the Instrument's own symmetric rate when it declares
+one, else the Reg-T split (0.5 long / 1.5 short). A reducing order commits none and releases the closed
+portion's margin.
 _Avoid_: margin requirement (unqualified), maintenance margin.
 
 **Entry notional**:
 The capital a round trip committed when it opened, in the Account currency at the rates in force as it
 filled — so a trip that scaled in across a rate move carries what actually left the account, not a
-blended price re-translated afterwards. The numerator of the trip's **Leverage** and the base its
-**Initial margin** was taken on.
+blended price re-translated afterwards. Accumulated fill by fill on the position and split pro-rata as
+the position exits, so successive partial exits divide one lot's committed capital between them rather
+than each claiming the whole of it. The numerator of the trip's **Leverage** and the base its **Entry
+margin** was taken on.
 _Avoid_: exposure (that is Market exposure, a time fraction), position size, entry cost.
+
+**Entry margin**:
+The **Initial margin** a round trip committed as it opened, in the Account currency: the account's own
+rate for that symbol and side applied to the trip's **Entry notional**, and so already translated at
+the rates in force as it filled. Frozen at entry rather than re-marked — the live committed figure is
+**Margin utilization**'s business — and stamped by the Portfolio, so a consumer displays the account's
+margin decision instead of re-deriving a rule it would then own.
+_Avoid_: margin (unqualified), required margin, Reg-T margin (the rate may be the Instrument's own).
 
 **Buying power**:
 Marked equity above the initial margin already committed by open positions
@@ -362,9 +377,8 @@ Aggregated as **Peak margin** and **Avg margin** (the latter over exposed bars o
 It climbs toward and past 100% as open positions consume the account; its currency complement — the
 head-room left — is **Buying power**. Reads the same committed margin the account holds to gate buying
 power: the initial-margin rate applied to each position's *current* marked value (the engine models no
-separate maintenance margin). Its per-**Round trip** sibling column instead freezes the margin at the
-trip's **Entry notional**, taken at that Instrument's own rate — the margin the trade committed when it
-opened.
+separate maintenance margin). Its per-**Round trip** sibling column is the trip's **Entry margin**
+instead — frozen at entry rather than re-marked.
 _Avoid_: margin (unqualified), leverage (that is notional-to-equity), buying power (the currency head-room,
 not the used fraction).
 

@@ -314,6 +314,11 @@ IBrokerSimulator broker = new BrokerSimulator(
 Both risk-based models convert the stop distance through the instrument's conversion rate before
 dividing, so a cross-currency instrument (e.g. a JPY-quoted pair in a USD account) still sizes
 correctly instead of silently mixing units (see [ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md)).
+`RiskPerTradeSizing` takes its budget from `Portfolio.RealizedEquity`, which translates each open
+position's cost basis into the account's currency — the same figure `SnapshotAt` reports as
+`CostBasisEquity`. Both sides of the division are therefore in the account's own currency, so an open
+cross-currency position cannot inflate the equity the next trade is sized against
+(see [ADR 0032](docs/adr/0032-round-trips-carry-account-currency-figures.md)).
 
 ---
 
@@ -369,12 +374,24 @@ mis-wiring is unrepresentable rather than merely checked.
 `Engine` fetches a declared `ConversionSymbol` through the same `IHistoricalDataFetcher` seam as any
 tradable symbol — the conversion series never triggers `OnBar` and never appears in a
 `BacktestResult`'s symbol list or any `RoundTrip`; it is plumbing a strategy trading `EUR_USD` in a JPY
-account never needs to know exists. Only the account-currency-denominated aggregates —
-`Portfolio.Cash`, `RealizedPnL`, `MarkedEquity`, `RealizedEquity`, and isolated equity — pass through
-the conversion rate; `Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
+account never needs to know exists. The account-currency-denominated aggregates — `Portfolio.Cash`,
+`RealizedPnL`, `MarkedEquity`, `RealizedEquity`, and isolated equity — pass through the conversion rate;
+`Position.AveragePrice` and `RoundTrip.EntryPrice`/`ExitPrice` stay in the instrument's native
 quote currency, the real price a chart would show. Converting a declared conversion before any rate has
 been observed throws a `MissingConversionRateException` naming both symbols — a mis-wired run fails
 loudly instead of presenting native-currency numbers as account currency.
+
+Each `RoundTrip` the Portfolio emits carries **both** denominations, stamped as it closes. Its
+`InitialRisk`, `EntryNotional`, `EntryMargin` and `RealizedPnL` are in the account's currency, each
+translated at the rate in force at **its own moment** — risk, notional and margin as the trip opened,
+P&L as it closed — so a consumer only ever divides like units and never re-translates a historical
+entry at the run's final rate. Its `EntryPrice`, `ExitPrice`, `EntryStopPrice` and `EntryTargetPrice`
+stay in the instrument's own quote currency, which the trip also stamps as its `QuoteCurrency`, so a
+mixed-currency report can say which currency each price column is in rather than formatting two of them
+alike. A rate move between a trip's entry and its exit therefore shows up in its **R-multiple** exactly
+as it did in the account: a trip that risked 100 JPY at `USD_JPY` 100 and made 200 JPY at 125 reports
+risk **$1.00**, profit **$1.60** and **1.6R** — not the 2.0R any single-rate translation produces (see
+[ADR 0032](docs/adr/0032-round-trips-carry-account-currency-figures.md)).
 
 All of that lives in one place: `CurrencyConverter`, built and owned by the `Portfolio`. It holds every
 conversion declaration, observes each Conversion symbol's closes as bars arrive, and applies the

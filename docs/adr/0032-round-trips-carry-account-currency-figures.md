@@ -92,5 +92,6 @@ inside a bar loop. A conversion series resolves its warmup exactly as a tradable
   pro-rata on partial exits.
 - An Optimization over a cross-currency Portfolio works. A `portfolioFactory` that returns *varying*
   Instruments is now refused rather than silently under-fetched.
-- `ReportModelBuilder.MapRoundTrips` no longer takes margin rates — a signature change to a public
-  report seam.
+- `ReportModelBuilder.MapRoundTrips` no longer takes margin rates. _Corrected against what shipped:_
+  that mapper is `private`, so this changed no public seam — `Build(BacktestResult)` is the report's
+  only entry point and is untouched. The narrowing is real, but it cost callers nothing.
