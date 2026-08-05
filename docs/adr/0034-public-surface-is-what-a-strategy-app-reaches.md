@@ -77,9 +77,18 @@ interface-typed local, which becomes `Engine engine = new(…)` as all five real
   (ADR [0029](0029-instrument-and-multi-currency-forex-accounting.md),
   [0030](0030-forex-margin-via-per-instrument-leverage.md)) that none of the five apps happens to use;
   `CsvBarLoader` and `CsvHistoricalDataFetcher` stay because offline runs are a real capability.
-  `PerformanceCalculator`, `FillResult`, `PositionMetadata`, `OrderStopDistance`, `IEngine`,
-  `CoverageFloorLoader` and `AtrBracketStrategy` have no such sentence and go `internal`. The burden
-  of proof is on staying public.
+  `PerformanceCalculator`, `OrderStopDistance`, `IEngine`, `CoverageFloorLoader` and
+  `AtrBracketStrategy` have no such sentence and go `internal`. The burden of proof is on staying
+  public.
+- Two of the closure's named types resisted, and the compiler settled both — as this ADR said it
+  would. `FillResult` **stays public**: it is the element type of `IFillModel.DetermineFills`, so
+  narrowing it is a `CS0050` that would take the Fill Execution model's own interface internal with
+  it. That is reachability, the rule above, arriving at the opposite answer from the closure — and
+  reachability wins. `PositionMetadata` was **deleted instead**: an empty class with no members,
+  reachable only through `Position.Metadata`, a property no strategy app, sibling package, sample or
+  test ever read or wrote. `OrderRequest.ClientMetadata` is the strategy-metadata seam that actually
+  works. Internalizing an empty unused type would only have hidden dead code behind a keyword; the
+  2.0 major was already being taken, so removal cost no extra signal.
 - Two seams survive on reachability rather than on the allowlist, and both are easy to get wrong.
   `IWarmupResolvingFetcher` is a parameter type on `Engine`'s *public* constructor — an app passing a
   `HistoricalDataFetcher` into it needs the parameter type accessible — so it stays public despite no

@@ -50,3 +50,7 @@ Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher,
 *REMOVED*Backtester.Strategies.AtrBracketStrategy.AtrBracketStrategy(int atrPeriod = 14, decimal stopAtrMultiple = 1, decimal targetAtrMultiple = 2) -> void
 *REMOVED*override Backtester.Strategies.AtrBracketStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
 *REMOVED*override Backtester.Strategies.AtrBracketStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
+*REMOVED*Backtester.Core.Position.Metadata.get -> Backtester.Core.PositionMetadata
+*REMOVED*Backtester.Core.Position.Metadata.set -> void
+*REMOVED*Backtester.Core.PositionMetadata
+*REMOVED*Backtester.Core.PositionMetadata.PositionMetadata() -> void

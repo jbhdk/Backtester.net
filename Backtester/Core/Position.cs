@@ -75,9 +75,6 @@ namespace Backtester.Core
         /// <summary>Gets the list of all trades that have affected this position.</summary>
         public List<Trade> Trades { get; } = new();
 
-        /// <summary>Gets or sets the strategy-supplied metadata attached to this position.</summary>
-        public PositionMetadata Metadata { get; set; }
-
         /// <summary>
         /// Applies a trade to this position, updating signed quantity and average price. A fill in the
         /// position's own direction (or from flat) grows the magnitude and recomputes the volume-weighted
