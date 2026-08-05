@@ -7,6 +7,12 @@ namespace Backtester.Core
     /// overriding Portfolio's Reg-T default. The currency declaration is cross-checked against the account
     /// currency when the <see cref="CurrencyConverter"/> is built.
     /// </summary>
+    /// <remarks>
+    /// Public because it is a strategy app's entry point into multi-currency forex accounting
+    /// (ADR 0029, ADR 0030): an app trading a symbol quoted outside its account currency constructs
+    /// these and hands them to the engine. That shipped capability is what keeps the type public, not
+    /// any app currently known to name it.
+    /// </remarks>
     public class Instrument
     {
         /// <summary>Gets or sets the ticker symbol this Instrument describes.</summary>

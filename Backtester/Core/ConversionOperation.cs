@@ -4,6 +4,11 @@ namespace Backtester.Core
     /// Whether translating a native amount into the Account currency divides or multiplies by the
     /// Conversion symbol's rate, determined by which way that pair is quoted.
     /// </summary>
+    /// <remarks>
+    /// Public because it is how an <see cref="Instrument"/> states its conversion direction, part of the
+    /// shipped multi-currency forex accounting capability (ADR 0029, ADR 0030) that keeps that type
+    /// public.
+    /// </remarks>
     public enum ConversionOperation
     {
         /// <summary>

@@ -12,6 +12,11 @@ namespace Backtester.Data
     /// symbol and interval from a local folder. Backed entirely by a committed file: no network and
     /// no cache, so a backtest driven by this fetcher runs the same way every time.
     /// </summary>
+    /// <remarks>
+    /// Public because running a backtest offline from local CSV bars is a shipped capability: an app
+    /// hands this fetcher to the engine to drive a run entirely from committed files, without a data
+    /// provider or network access.
+    /// </remarks>
     public class CsvHistoricalDataFetcher : IHistoricalDataFetcher
     {
         private readonly CsvBarLoader _csv;

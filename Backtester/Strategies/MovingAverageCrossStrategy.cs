@@ -11,6 +11,11 @@ namespace Backtester.Strategies
     /// on a death cross (fast MA crosses below slow MA), provided a position exists.
     /// All crossover signals are pre-computed in <see cref="OnStart"/> from the full bar history.
     /// </summary>
+    /// <remarks>
+    /// Public because it is the documented example Strategy — the starting point the samples and the
+    /// package READMEs point a new strategy author at. Nothing in the engine needs it; being the worked
+    /// example is the whole of its claim on the surface.
+    /// </remarks>
     public class MovingAverageCrossStrategy : StrategyBase
     {
         private readonly int _fastPeriod;

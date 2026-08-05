@@ -12,6 +12,13 @@ namespace Backtester.Core
     /// </summary>
     /// <remarks>
     /// <para>
+    /// Public because multi-currency forex accounting (ADR 0029, ADR 0030) is a shipped, documented
+    /// capability whose rate state an app can own directly — constructing the converter from its
+    /// Instruments, feeding it closes through <see cref="ObserveRate"/> and translating with
+    /// <see cref="ToAccountCurrency"/>. That capability is what keeps the type public, not any app
+    /// currently known to name it.
+    /// </para>
+    /// <para>
     /// <b>Fill-timing invariant.</b> A fill translates at the conversion pair's <em>last completed
     /// close</em> — never a rate that was not yet knowable while the fill's own bar was trading — while an
     /// end-of-bar equity mark translates at the pair's <em>current</em> close, the freshest known rate.

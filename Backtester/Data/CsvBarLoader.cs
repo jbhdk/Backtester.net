@@ -10,6 +10,11 @@ namespace Backtester.Data
     /// <summary>
     /// Reads and writes OHLCV candle data in a simple CSV format.
     /// </summary>
+    /// <remarks>
+    /// Public because running a backtest offline from local CSV bars is a shipped capability: an app
+    /// writes bars to the canonical file with this loader and reads them back through
+    /// <see cref="CsvHistoricalDataFetcher"/>, with no data provider and no network involved.
+    /// </remarks>
     public class CsvBarLoader
     {
         private const string Header = "Timestamp,Open,High,Low,Close,Volume";
