@@ -54,8 +54,13 @@
     Applies the current (already-incremented) build number as the version. Runs in
     every build and pack pass so the compiled assembly and the generated NuGet
     package always share the same version. Read-only: it never mutates the counter.
+
+    _GetProjectVersion is in the list because that is the target NuGet calls on a
+    referenced project when it writes a sibling package's dependency version. Without
+    the hook PackageVersion is empty in that pass and the SDK substitutes its literal
+    1.0.0 fallback, so the sibling would depend on 1.0.0 rather than the version built.
   -->
-  <Target Name="SetVersionFromBuildNumber" BeforeTargets="BeforeCompile;GenerateNuspec;Pack">
+  <Target Name="SetVersionFromBuildNumber" BeforeTargets="BeforeCompile;GenerateNuspec;Pack;_GetProjectVersion">
     <ReadLinesFromFile File="$(BuildNumberFile)" Condition="Exists('$(BuildNumberFile)')">
       <Output TaskParameter="Lines" PropertyName="CurrentBuildNumber" />
     </ReadLinesFromFile>
