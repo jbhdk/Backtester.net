@@ -33,11 +33,11 @@ code here:
 
 - Use FakeItEasy for fakes and mocks.
 - Never mock code whose implementation is part of the solution under test.
+- Prefer testing through public APIs; internal machinery may be tested via `InternalsVisibleTo` (ADR 0033).
 - One behavior per test.
 - Follow the Arrange-Act-Assert (AAA) pattern.
 - Use clear assertions that verify the outcome expressed by the test name.
 - Tests should be able to run in any order or in parallel.
-- Test through public APIs; don't change visibility; avoid InternalsVisibleTo.
 - Assert specific values and edge cases, not vague outcomes.
 
 ## Build & test
