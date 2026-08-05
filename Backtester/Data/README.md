@@ -7,11 +7,11 @@ Summary
 - Key components:
   - `IHistoricalDataProvider` — provider contract for fetching candles.
   - `CsvBarLoader` — local CSV read/write/append+merge utilities.
-  - `HistoricalDataFetcher` — orchestrator that decides whether to use cached data or fetch missing ranges. Also implements `IDataPrimer`.
+  - `HistoricalDataFetcher` — orchestrator that decides whether to use cached data or fetch missing ranges. Also carries the public `PrimeAsync` (see **Priming** below).
   - `CsvHistoricalDataFetcher` — offline `IHistoricalDataFetcher` that reads candles straight from a committed `{SYMBOL}_{interval}.csv` file (no provider, no cache logic) for deterministic, repeatable runs.
-  - `IDataPrimer` — a separate seam (kept off `IHistoricalDataFetcher` for ISP) for **priming**: warming the cache for a wide range up front so later runs over sub-ranges never touch the network.
+  - `IDataPrimer` (internal) — the **priming** seam, deliberately kept off `IHistoricalDataFetcher` so the engine's fetch seam stays `FetchAsync` alone (ISP). An app never names the interface: it calls `HistoricalDataFetcher.PrimeAsync` on the concrete fetcher it already constructed.
   - `IWarmupResolvingFetcher` — a warmup-capable fetcher (extends `IHistoricalDataFetcher`) exposing `ResolveWarmupStartAsync(symbol, testFrom, warmupBars, interval, ct)`: resolves a bar-count warmup ("N bars before the Test start") to an exact per-symbol Data start from the cache and coverage floor — no provider call. Implemented by `HistoricalDataFetcher` and the Optimizer's in-memory fetcher.
-  - `CoverageFloorLoader` — reads/writes the per-symbol+interval **coverage-floor** sidecar (`{SYMBOL}_{interval}.meta.json`).
+  - `CoverageFloorLoader` (internal) — reads/writes the per-symbol+interval **coverage-floor** sidecar (`{SYMBOL}_{interval}.meta.json`).
   - `DataCoverageException` — thrown when a run's start precedes the coverage floor (see below).
   - `InsufficientWarmupBarsException` — thrown when a bar-count warmup asks for more lead-in bars than a symbol has above its coverage floor; mirrors `DataCoverageException`'s refuse-don't-serve-short stance.
 
@@ -38,7 +38,7 @@ Behavior & policy
 Coverage floor & priming
 - **Coverage floor** — the earliest range start ever asked of the provider for a symbol+interval, recorded in the `.meta.json` sidecar. It records what was *asked*, not what was *returned*, so it distinguishes a late listing (data legitimately starts after `from`) from an under-fetch (that window was never requested). See [ADR 0021](../../docs/adr/0021-coverage-floor-and-priming.md).
 - **Front-edge guard** — a run whose `from` precedes an existing floor is refused with a `DataCoverageException` (carrying the symbol, requested `from`, floor, and interval) rather than served a silently short slice. A legacy cache with **no** sidecar is trusted as before; it gains a floor the next time the fetcher calls the provider.
-- **Priming** — `IDataPrimer.PrimeAsync(symbols, from, to, interval)` warms the cache for a wide range **without running a backtest**, sharing `FetchAsync`'s caching policy: it fetches wholesale only when the cache is empty or `from` reaches below the covered front (which alone may honestly lower the floor), and otherwise extends only a stale tail — so a re-prime of an already-warm range makes no provider call. It merges into the cache (concurrently per symbol) and lowers the floor. Prime the wide range once, then run in-sample and out-of-sample sub-ranges served entirely from the cache — no network, no coverage exception.
+- **Priming** — `HistoricalDataFetcher.PrimeAsync(symbols, from, to, interval)` warms the cache for a wide range **without running a backtest**, sharing `FetchAsync`'s caching policy: it fetches wholesale only when the cache is empty or `from` reaches below the covered front (which alone may honestly lower the floor), and otherwise extends only a stale tail — so a re-prime of an already-warm range makes no provider call. It merges into the cache (concurrently per symbol) and lowers the floor. Prime the wide range once, then run in-sample and out-of-sample sub-ranges served entirely from the cache — no network, no coverage exception.
 
 ```csharp
 // Warm 2020→now once, then run sub-ranges offline against the cache.

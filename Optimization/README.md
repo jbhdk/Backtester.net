@@ -91,7 +91,7 @@ configuration, never a swept Parameter — only strategy Parameters vary across 
 A single sweep already fetches each symbol once — priming is not needed *within* a sweep. It pays off
 across **several** sweeps over the same instruments: run an in-sample sweep and then a separate
 out-of-sample sweep (or re-run with different ranges) without re-hitting the network for each. Pass a
-cache-aware `HistoricalDataFetcher`, **prime** the wide range once up front with `IDataPrimer`, then run
+cache-aware `HistoricalDataFetcher`, **prime** the wide range once up front with its `PrimeAsync`, then run
 each window over sub-ranges served entirely from the warm Cache:
 
 ```csharp

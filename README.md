@@ -112,12 +112,13 @@ Engine engine = new Engine(
 
 BacktestResult result = await engine.StartAsync();
 
-// 5. Inspect the numbers...
-PerformanceStats stats = result.Portfolio.GetPerformanceStats();
+// 5. Inspect the numbers. The report package computes the stats block from the result;
+//    the portfolio itself answers the account questions (Cash, MarkedEquity, RealizedPnL).
+ReportStats stats = new ReportModelBuilder().Build(result).Stats;
 Console.WriteLine($"Net profit:   {stats.NetProfit:C}");
 Console.WriteLine($"Win rate:     {stats.WinRate:P1}");
 Console.WriteLine($"Profit factor:{stats.ProfitFactor:F2}");
-Console.WriteLine($"Max drawdown: {stats.MaxDrawdown:C}");
+Console.WriteLine($"Max drawdown: {stats.MaxDrawdown:P1}");
 
 // 6. ...and write an interactive HTML report you can open in any browser.
 new HtmlReportWriter().Write(result, "report.html");
@@ -254,7 +255,8 @@ When a strategy submits several orders that fill on
 the same bar, set `OrderRequest.Priority` (higher fills sooner) to control the order they are applied
 — for a single-bar reversal, give the flatten a higher priority than the reversing entry so the entry
 opens from flat with its stop attached. For a worked example of bracket orders and a trailing
-stop, see [`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs); for pre-computed signals from
+stop, read the source of [`AtrBracketStrategy`](Backtester/Strategies/AtrBracketStrategy.cs) (internal to the
+package — a worked example to copy from, not a type an app constructs); for pre-computed signals from
 history and long/short reversal (going short on a death cross, long on a golden cross), see
 [`MovingAverageCrossStrategy`](Backtester/Strategies/MovingAverageCrossStrategy.cs).
 
@@ -338,9 +340,9 @@ Both risk-based models convert the stop distance through the instrument's conver
 dividing, so a cross-currency instrument (e.g. a JPY-quoted pair in a USD account) still sizes
 correctly instead of silently mixing units (see [ADR 0029](docs/adr/0029-instrument-and-multi-currency-forex-accounting.md)).
 `RiskPerTradeSizing` takes its budget from `Portfolio.RealizedEquity`, which translates each open
-position's cost basis into the account's currency — the same figure `SnapshotAt` reports as
-`CostBasisEquity`. Both sides of the division are therefore in the account's own currency, so an open
-cross-currency position cannot inflate the equity the next trade is sized against
+position's cost basis into the account's currency — the same figure a strategy reads off its
+`PortfolioSnapshot` as `CostBasisEquity`. Both sides of the division are therefore in the account's
+own currency, so an open cross-currency position cannot inflate the equity the next trade is sized against
 (see [ADR 0032](docs/adr/0032-round-trips-carry-account-currency-figures.md)).
 
 ---
@@ -419,7 +421,7 @@ risk **$1.00**, profit **$1.60** and **1.6R** — not the 2.0R any single-rate t
 All of that lives in one place: `CurrencyConverter`, built and owned by the `Portfolio`. It holds every
 conversion declaration, observes each Conversion symbol's closes as bars arrive, and applies the
 declared operation; `Portfolio.ToAccountCurrency(symbol, nativeAmount)` is a one-line delegation to it,
-and is the same public seam the risk-based sizing models use. Its timing rule is an invariant of the
+and is the same seam the risk-based sizing models translate through. Its timing rule is an invariant of the
 module, not an accident of the engine loop: **a fill translates at the conversion pair's previous
 close** — the last rate honestly knowable while that bar was trading — **while an end-of-bar equity
 mark translates at its current close**, the freshest known rate. Translation moves money and never
@@ -685,8 +687,8 @@ A complete, offline example lives in
 
 ```
 Backtester/            The engine (backtester.net)
-  Core/                Candle, Order, Trade, Position, Portfolio, PerformanceStats, MarketSlice, …
-  Engine/              Engine, IEngine, BacktestResult
+  Core/                Candle, Order, Trade, Position, Portfolio, PerformanceStats, …
+  Engine/              Engine, BacktestResult
   Broker/              BrokerSimulator, IFillModel, FillModel_OHLCHeuristic
   Data/                Data seams, HistoricalDataFetcher, CSV provider/fetcher, CsvBarLoader
   Strategies/          IStrategy, StrategyBase, reference strategies
