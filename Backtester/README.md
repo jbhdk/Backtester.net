@@ -26,7 +26,7 @@ IStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 10, slowPeriod: 
 // 2. Wire up the broker and portfolio
 //    Risk sizing uses realized equity (cash + cost basis of open positions, excluding unrealized PnL)
 Portfolio portfolio = new Portfolio(initialCash: 100_000m);
-IBrokerSimulator broker = new BrokerSimulator(
+BrokerSimulator broker = new BrokerSimulator(
     portfolio,
     commissionModel: new FixedCommission { Amount = 1m },
     slippageModel: new FixedSlippage { Amount = 0.05m },

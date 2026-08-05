@@ -11,7 +11,7 @@ namespace Backtester.Broker
     /// <summary>
     /// Simulates order execution against historical bar data, applying sizing, risk, slippage, and commission models.
     /// </summary>
-    public class BrokerSimulator : IBrokerSimulator, IBroker
+    public class BrokerSimulator : IBroker
     {
         private readonly Portfolio _portfolio;
         private readonly IFillModel _fillModel;

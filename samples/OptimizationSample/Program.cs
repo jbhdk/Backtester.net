@@ -84,10 +84,10 @@ namespace OptimizationSample
         /// cross strategy from the swept clone's Fast and Slow periods, over a broker with the fixed execution
         /// models every Trial shares.
         /// </summary>
-        private static (IStrategy Strategy, IBrokerSimulator Broker) CreateTrial(
+        private static (IStrategy Strategy, BrokerSimulator Broker) CreateTrial(
             MovingAverageCrossParameters parameters, Portfolio portfolio)
         {
-            IBrokerSimulator broker = new BrokerSimulator(
+            BrokerSimulator broker = new(
                 portfolio,
                 commissionModel: new PerShareCommission { PerShare = 0.005m },
                 slippageModel: new FixedSlippage { Amount = 0.01m },

@@ -32,7 +32,7 @@ namespace Backtester.Optimization
         private readonly string _interval;
         private readonly Func<Portfolio> _portfolioFactory;
         private readonly ParameterSpace _space;
-        private readonly Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> _trialFactory;
+        private readonly Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> _trialFactory;
         private readonly bool _retainAllBacktestResults;
         private readonly Objective _objective;
         private readonly int _minimumTrades;
@@ -55,7 +55,7 @@ namespace Backtester.Optimization
             string interval,
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults = false,
             Objective objective = null,
             int minimumTrades = 30)
@@ -78,7 +78,7 @@ namespace Backtester.Optimization
             string interval,
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults = false,
             Objective objective = null,
             int minimumTrades = 30)
@@ -100,7 +100,7 @@ namespace Backtester.Optimization
             string interval,
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults = false,
             Objective objective = null,
             int minimumTrades = 30)
@@ -123,7 +123,7 @@ namespace Backtester.Optimization
             string interval,
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults = false,
             Objective objective = null,
             int minimumTrades = 30)
@@ -271,7 +271,7 @@ namespace Backtester.Optimization
             string interval,
             Func<Portfolio> portfolioFactory,
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory,
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory,
             bool retainAllBacktestResults,
             Objective objective,
             int minimumTrades)
@@ -369,7 +369,7 @@ namespace Backtester.Optimization
                     // is read-only, so parallel Trials over it are safe and see identical bars.
                     Portfolio portfolio = _portfolioFactory();
                     RefuseUnfetchedConversionSymbols(portfolio, preFetched);
-                    (IStrategy strategy, IBrokerSimulator broker) = _trialFactory(parameters, portfolio);
+                    (IStrategy strategy, BrokerSimulator broker) = _trialFactory(parameters, portfolio);
 
                     // The shared fetcher already holds the Data-range bars (warmup lead-in included), so a plain
                     // Test-range engine warms OnStart on the full series yet loops and measures only the Test range.

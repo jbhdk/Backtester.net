@@ -31,7 +31,7 @@ namespace Backtester.Engine
         private readonly Warmup _warmup;
         private readonly string _interval;
         private readonly IStrategy _strategy;
-        private readonly IBrokerSimulator _broker;
+        private readonly BrokerSimulator _broker;
         private readonly Portfolio _portfolio;
         private bool _stopRequested;
 
@@ -52,7 +52,7 @@ namespace Backtester.Engine
             DateTime testTo,
             string interval,
             IStrategy strategy,
-            IBrokerSimulator broker,
+            BrokerSimulator broker,
             Portfolio portfolio)
             : this(fetcher, symbols, testFrom, testTo, Warmup.None, interval, strategy, broker, portfolio)
         {
@@ -72,7 +72,7 @@ namespace Backtester.Engine
             TimeSpan warmup,
             string interval,
             IStrategy strategy,
-            IBrokerSimulator broker,
+            BrokerSimulator broker,
             Portfolio portfolio)
             : this(fetcher, symbols, testFrom, testTo, new PeriodWarmup(warmup), interval, strategy, broker, portfolio)
         {
@@ -93,7 +93,7 @@ namespace Backtester.Engine
             DateTime warmupStart,
             string interval,
             IStrategy strategy,
-            IBrokerSimulator broker,
+            BrokerSimulator broker,
             Portfolio portfolio)
             : this(fetcher, symbols, testFrom, testTo, new AbsoluteWarmup(warmupStart, testFrom), interval, strategy, broker, portfolio)
         {
@@ -116,7 +116,7 @@ namespace Backtester.Engine
             int warmupBars,
             string interval,
             IStrategy strategy,
-            IBrokerSimulator broker,
+            BrokerSimulator broker,
             Portfolio portfolio)
             : this(fetcher, symbols, testFrom, testTo, new BarCountWarmup(warmupBars, fetcher), interval, strategy, broker, portfolio)
         {
@@ -134,7 +134,7 @@ namespace Backtester.Engine
             Warmup warmup,
             string interval,
             IStrategy strategy,
-            IBrokerSimulator broker,
+            BrokerSimulator broker,
             Portfolio portfolio)
         {
             _fetcher = fetcher;

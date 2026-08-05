@@ -22,7 +22,7 @@ namespace Backtester.Optimization
     public class OptimizeBuilder<TParameters>
     {
         private readonly TParameters _instance;
-        private readonly Func<TParameters, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> _factory;
+        private readonly Func<TParameters, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> _factory;
 
         // The axes accumulated by fluent .Vary() calls, in call order. Each pairs the selected property with
         // the action that adds its range to a ParameterSpace; Build() bundles them into the setup.
@@ -31,7 +31,7 @@ namespace Backtester.Optimization
         /// <summary>Initializes a new builder over the bound parameters instance and Trial factory.</summary>
         public OptimizeBuilder(
             TParameters instance,
-            Func<TParameters, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> factory)
+            Func<TParameters, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> factory)
         {
             _instance = instance;
             _factory = factory;
@@ -101,7 +101,7 @@ namespace Backtester.Optimization
 
             RejectUnconsumedParameters(axes);
 
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory =
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory =
                 (parameters, portfolio) => _factory(Realize(axes, parameters), portfolio);
 
             return new OptimizationSetup(space, trialFactory);
@@ -237,8 +237,8 @@ namespace Backtester.Optimization
 
                 // One shared Portfolio so the two builds differ only by the axis under test, not by their broker's portfolio.
                 Portfolio portfolio = new(100_000m);
-                (IStrategy Strategy, IBrokerSimulator Broker) low = _factory(ProbeClone(axes, axis.Property, first), portfolio);
-                (IStrategy Strategy, IBrokerSimulator Broker) high = _factory(ProbeClone(axes, axis.Property, last), portfolio);
+                (IStrategy Strategy, BrokerSimulator Broker) low = _factory(ProbeClone(axes, axis.Property, first), portfolio);
+                (IStrategy Strategy, BrokerSimulator Broker) high = _factory(ProbeClone(axes, axis.Property, last), portfolio);
 
                 if (Fingerprint(low.Strategy, low.Broker) == Fingerprint(high.Strategy, high.Broker))
                 {

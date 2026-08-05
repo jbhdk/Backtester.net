@@ -87,7 +87,7 @@ IStrategy strategy = new MovingAverageCrossStrategy(fastPeriod: 10, slowPeriod: 
 // 2. Wire up the portfolio and broker. Every execution model is optional;
 //    omit one and the broker applies a sensible default (or none).
 Portfolio portfolio = new Portfolio(100_000m);
-IBrokerSimulator broker = new BrokerSimulator(
+BrokerSimulator broker = new BrokerSimulator(
     portfolio,
     commissionModel: new PerShareCommission { PerShare = 0.005m },
     slippageModel:   new FixedSlippage { Amount = 0.01m },
@@ -319,7 +319,7 @@ without one falls back to the Reg-T default unchanged (see [ADR 0030](docs/adr/0
 Set both `Price` and `StopPrice` on the order so it can compute the stop distance:
 
 ```csharp
-IBrokerSimulator broker = new BrokerSimulator(
+BrokerSimulator broker = new BrokerSimulator(
     portfolio,
     sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });  // risk 1% per trade
 ```
@@ -329,7 +329,7 @@ fraction of equity, so the risk does not scale with the account. It reads the sa
 (`Price`/`StopPrice`, or a bracket's fill-relative offset) and sizes nothing when no stop is declared:
 
 ```csharp
-IBrokerSimulator broker = new BrokerSimulator(
+BrokerSimulator broker = new BrokerSimulator(
     portfolio,
     sizingModel: new FixedRiskSizing { RiskAmount = 500m });  // risk $500 per trade
 ```

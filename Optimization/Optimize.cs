@@ -21,7 +21,7 @@ namespace Backtester.Optimization
         /// <param name="factory">Builds a Trial's strategy and broker from a swept clone and its Portfolio.</param>
         public static OptimizeBuilder<TParameters> For<TParameters>(
             TParameters instance,
-            Func<TParameters, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> factory)
+            Func<TParameters, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> factory)
         {
             return new OptimizeBuilder<TParameters>(instance, factory);
         }

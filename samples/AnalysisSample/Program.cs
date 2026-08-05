@@ -69,7 +69,7 @@ namespace AnalysisSample
         private static async Task<BacktestResult> RunBacktestAsync(SampleSettings settings)
         {
             Portfolio portfolio = new(settings.StartingEquity);
-            IBrokerSimulator broker = new BrokerSimulator(
+            BrokerSimulator broker = new(
                 portfolio,
                 commissionModel: new PerShareCommission { PerShare = settings.CommissionPerShare },
                 slippageModel: new FixedSlippage { Amount = settings.SlippagePerShare },

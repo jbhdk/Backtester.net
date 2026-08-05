@@ -16,7 +16,7 @@ namespace Backtester.Optimization
         /// <summary>Initializes a new setup over the Parameter space and the Trial factory that realizes each set.</summary>
         public OptimizationSetup(
             ParameterSpace space,
-            Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> trialFactory)
+            Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> trialFactory)
         {
             Space = space;
             TrialFactory = trialFactory;
@@ -26,6 +26,6 @@ namespace Backtester.Optimization
         public ParameterSpace Space { get; }
 
         /// <summary>Gets the factory that builds a Trial's strategy and broker from a Parameter set.</summary>
-        public Func<ParameterSet, Portfolio, (IStrategy Strategy, IBrokerSimulator Broker)> TrialFactory { get; }
+        public Func<ParameterSet, Portfolio, (IStrategy Strategy, BrokerSimulator Broker)> TrialFactory { get; }
     }
 }
