@@ -243,8 +243,9 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Applies one fill to the portfolio: cancels its OCO sibling if any, stamps the entry stop/target,
-        /// records the trade, cancels resting legs left by a Signal exit, and arms any pending bracket's
-        /// protective legs. When a bracket entry arms legs, immediately attempts a same-bar fill of any leg
+        /// records the trade, cancels the legs left resting by a fill that flattened the position, and arms
+        /// any pending bracket's protective legs. When a bracket entry arms legs, immediately attempts a
+        /// same-bar fill of any leg
         /// already marketable at the bar's open (see <see cref="TryFillMarketableLegsAtArm"/>).
         /// </summary>
         private void ProcessFill(FillResult fill, Candle candle, DateTime timestamp, List<Trade> trades)
@@ -315,10 +316,12 @@ namespace Backtester.Broker
             _portfolio.ApplyTrade(trade);
             trades.Add(trade);
 
-            // A fill that is not itself a protective leg but flattens the position (a strategy
-            // Signal exit) leaves the bracket's stop and target resting; cancel them so they can
-            // never fill from flat on a later bar and open a phantom position.
-            if (leg == BracketLeg.None && IsFlat(symbol))
+            // Any fill that flattens the position — a strategy Signal exit, or a protective leg closing the
+            // last of a position several brackets guarded — can leave another bracket's legs resting; cancel
+            // them so they can never fill from flat on a later bar and open a phantom position. A leg fill
+            // needs no special case: its own bracket retired and released its legs above, so it is already
+            // past answering for anything here.
+            if (IsFlat(symbol))
             {
                 CancelRestingLegs(symbol, bracket);
             }
@@ -347,35 +350,38 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Cancels whatever protective legs still rest against a symbol whose position has just been closed
-        /// by something that was not one of those legs. The bracket guarding the symbol is the one that knows
-        /// them, and releasing its last leg retires it, so no separate per-symbol tracking is kept.
+        /// by something that was not one of those legs. Each bracket knows its own legs, and releasing a
+        /// bracket's last leg retires it, so no separate per-symbol tracking is kept.
+        ///
+        /// The close flattens the whole position, so it flattens what *every* bracket on the symbol was
+        /// guarding — a strategy may scale in with several brackets, and a leg left resting by any of them
+        /// could fill from flat on a later bar and open a phantom position (#132).
         ///
         /// <paramref name="arming"/> is the bracket whose entry just filled, if any: its legs are only now
         /// being armed and guard the position that fill opened, so it is never the one being closed out.
         /// </summary>
         private void CancelRestingLegs(string symbol, Bracket arming)
         {
-            Bracket bracket = ArmedBracketOn(symbol, arming);
-            if (bracket == null)
+            foreach (Bracket bracket in ArmedBracketsOn(symbol, arming))
             {
-                return;
-            }
-
-            foreach (string legOrderId in bracket.RestingLegOrderIds)
-            {
-                Cancel(legOrderId);
+                foreach (string legOrderId in bracket.RestingLegOrderIds)
+                {
+                    Cancel(legOrderId);
+                }
             }
         }
 
         /// <summary>
-        /// Returns the bracket whose legs currently guard the given symbol, or null when none does. The most
-        /// recently armed one answers: an earlier bracket whose legs still rest on the same symbol was already
-        /// orphaned when this one armed, and stays orphaned (#132).
+        /// Returns every bracket whose legs currently guard the given symbol, oldest first. More than one can:
+        /// a strategy is free to scale into a symbol with a second bracket while the first still rests, and
+        /// each keeps answering for its own legs. Materialized, because cancelling a leg retires its bracket
+        /// out of the live list.
         /// </summary>
-        private Bracket ArmedBracketOn(string symbol, Bracket excluded)
+        private IReadOnlyList<Bracket> ArmedBracketsOn(string symbol, Bracket excluded)
         {
-            return _brackets.LastOrDefault(candidate =>
-                candidate != excluded && candidate.State == BracketState.Armed && candidate.Symbol == symbol);
+            return _brackets
+                .Where(candidate => candidate != excluded && candidate.State == BracketState.Armed && candidate.Symbol == symbol)
+                .ToList();
         }
 
         /// <summary>

@@ -123,13 +123,17 @@ no sibling to cancel and the lone leg simply rests until filled or the position 
 A Bracket must have at least one leg — an entry with neither is a plain Order, not a Bracket. Each
 leg is expressed either as an **absolute** price or as a fill-relative **offset** (a Stop distance /
 target offset the engine resolves against the actual fill when the entry fills) — one form per leg;
-setting both for the same leg is caller misuse.
+setting both for the same leg is caller misuse. A symbol may carry several live Brackets at once — a
+strategy can scale in with a second bracketed entry while the first still rests — and each answers
+only for its own legs; a Signal exit that flattens the position cancels the resting legs of all of
+them.
 _Avoid_: OTO, parent/child order.
 
 **OCO** (one-cancels-other):
 A group of orders in which one filling automatically cancels the siblings. Prevents the
 stop-loss and take-profit both filling in the same bar. Applies only to a two-legged Bracket; a
-single-leg Bracket forms no OCO group.
+single-leg Bracket forms no OCO group. The group is per Bracket, not per symbol: where several
+Brackets are live on one symbol, a leg filling cancels only its own sibling.
 _Avoid_: bracket-cancel, linked orders.
 
 **Bracket level**:

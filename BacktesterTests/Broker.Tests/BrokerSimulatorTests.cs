@@ -814,6 +814,107 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void SubmitBracket_SecondBracketOnSameSymbol_FlattenedBySignalOrder_NoLegRests()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+            // Bar 1: the first bracket's entry fills at Open=100 and its legs (90/120) arm.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // A second bracket scales into the same symbol; its legs arm alongside the first bracket's.
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 92m,
+                TargetPrice = 118m
+            });
+            // Bar 2: the second entry fills at Open=100; Low=99/High=105 trigger no leg of either bracket.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
+
+            // A Signal exit flattens all 20 shares, so every resting leg of both brackets must be cancelled.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 20 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(2)));
+
+            // Bar 4 spans every former leg (Low=80 < both stops, High=130 > both targets) — nothing must fill.
+            List<Trade> laterTrades = broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 80m, 110m, T0.AddHours(3))).ToList();
+
+            Assert.Empty(laterTrades);
+        }
+
+        [Fact]
+        public void SubmitBracket_SecondBracketOnSameSymbol_FlattenedBySignalOrder_OpensNoPhantomPosition()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 92m,
+                TargetPrice = 118m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 20 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(2)));
+
+            broker.ProcessBar(SliceAt("AAPL", 100m, 130m, 80m, 110m, T0.AddHours(3)));
+
+            // An orphaned leg filling from flat would open a position the strategy never asked for.
+            Assert.Equal(0, Assert.Single(portfolio.Positions).Quantity);
+        }
+
+        [Fact]
+        public void SubmitBracket_SecondBracketOnSameSymbol_FlattenedByOtherBracketsLeg_NoLegRests()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 90m,
+                TargetPrice = 120m
+            });
+            // Bar 1: the first bracket's entry fills at Open=100 and its legs (90/120) arm.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            // A second bracket scales in, with wider legs so one bar can trigger the first bracket's stop alone.
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                StopPrice = 85m,
+                TargetPrice = 130m
+            });
+            // Bar 2: the second entry fills at Open=100; the position is 20 shares under two brackets.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
+
+            // A plain partial exit halves the position to 10 shares. Both brackets still rest against it.
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 101m, T0.AddHours(2)));
+
+            // Bar 4: Low=88 fills the first bracket's stop (90) but not the second's (85). Those 10 shares are
+            // the whole remaining position, so this leg fill flattens the symbol — and the second bracket's
+            // legs are now what rests against flat.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 88m, 95m, T0.AddHours(3)));
+
+            // Bar 5 spans the second bracket's legs (Low=80 < 85, High=140 > 130) — nothing must fill.
+            List<Trade> laterTrades = broker.ProcessBar(SliceAt("AAPL", 100m, 140m, 80m, 110m, T0.AddHours(4))).ToList();
+
+            Assert.Empty(laterTrades);
+        }
+
+        [Fact]
         public void ProcessBar_PlainMarketOrderFill_LeavesLegNone()
         {
             Portfolio portfolio = new(10_000m);
