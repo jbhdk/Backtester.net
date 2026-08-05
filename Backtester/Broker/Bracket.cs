@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Backtester.Core;
 
 namespace Backtester.Broker
@@ -13,7 +14,8 @@ namespace Backtester.Broker
     /// The bracket decides and the broker executes: <see cref="Arm"/> resolves each leg to an absolute price,
     /// mints the leg order IDs and completes the <see cref="BracketHandle"/>, but never touches the order
     /// book. Turning each placement into a working order is the broker's job, which is what lets a bracket be
-    /// driven with no broker, no portfolio and no market data.
+    /// driven with no broker, no portfolio and no market data. Once armed the bracket keeps answering for its
+    /// legs — their roles, and which sibling a fill cancels — until none is left resting.
     /// </summary>
     internal sealed class Bracket
     {
@@ -21,6 +23,10 @@ namespace Backtester.Broker
         private readonly decimal? _targetPrice;
         private readonly decimal? _stopOffset;
         private readonly decimal? _targetOffset;
+        // key: order ID of a protective leg that is still resting → the role it plays. Holds the legs this
+        // bracket armed and that have neither filled nor been cancelled, so it is at most two entries, and
+        // one leg's sibling is simply the other one still in here.
+        private readonly Dictionary<string, BracketLeg> _restingLegs = new();
         private string _entryOrderId;
         private int _quantity;
         private bool _armed;
@@ -40,6 +46,12 @@ namespace Backtester.Broker
         /// stays null for a leg this bracket was never given.
         /// </summary>
         internal BracketHandle Handle { get; }
+
+        /// <summary>
+        /// Gets whether this bracket still has an order in play — an entry that has not filled, or at least
+        /// one protective leg still resting. A bracket that has neither can answer for nothing more.
+        /// </summary>
+        internal bool IsLive => (!_armed && _entryOrderId != null) || _restingLegs.Count > 0;
 
         /// <summary>
         /// Creates the bracket a request describes, rejecting a request that cannot form a legal bracket:
@@ -89,13 +101,57 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Returns true when the given order ID is one this bracket is currently waiting on: the entry, while
-        /// the bracket is still pending. An armed bracket has consumed its entry and owns it no longer, so
-        /// the broker can find the bracket a fill belongs to without keeping an index in step.
+        /// Returns true when the given order ID is one this bracket is currently waiting on: its entry while
+        /// the bracket is still pending, or one of its resting protective legs once it has armed. An armed
+        /// bracket has consumed its entry and owns it no longer, and a leg that filled or was cancelled drops
+        /// out, so the broker can find the bracket an order belongs to without keeping an index in step.
         /// </summary>
         internal bool Owns(string orderId)
         {
-            return !_armed && _entryOrderId != null && _entryOrderId == orderId;
+            return (!_armed && _entryOrderId != null && _entryOrderId == orderId) || _restingLegs.ContainsKey(orderId);
+        }
+
+        /// <summary>
+        /// Returns the protective role of one of this bracket's resting legs — what a fill from it means and
+        /// which line of the level ledger a modify moves. None for anything that is not a resting leg: the
+        /// entry, or a leg that has already filled or been cancelled.
+        /// </summary>
+        internal BracketLeg RoleOf(string orderId)
+        {
+            return _restingLegs.TryGetValue(orderId, out BracketLeg leg) ? leg : BracketLeg.None;
+        }
+
+        /// <summary>
+        /// Reports that one of this bracket's orders filled, and answers what that means. The entry fill
+        /// leaves the bracket ready to <see cref="Arm"/>. A protective leg fill closes the position both legs
+        /// protected, so it takes the other one with it — one-cancels-the-other — and a bracket that armed a
+        /// single leg answers with no sibling rather than needing a path of its own (ADR 0002). Either way
+        /// the bracket stops answering for the orders involved. Call only for an order it <see cref="Owns"/>.
+        /// </summary>
+        internal BracketFillOutcome Fill(string orderId)
+        {
+            if (_restingLegs.TryGetValue(orderId, out BracketLeg leg))
+            {
+                // At most one other leg can be resting, so the sibling is whatever remains once the filled
+                // leg is taken out — and nothing rests afterwards either way.
+                _restingLegs.Remove(orderId);
+                string siblingOrderId = _restingLegs.Keys.FirstOrDefault();
+                _restingLegs.Clear();
+
+                return new BracketFillOutcome { Leg = leg, SiblingOrderId = siblingOrderId };
+            }
+
+            // Not a leg, so it is the entry — the only other order a bracket ever owns.
+            return new BracketFillOutcome { IsEntry = true };
+        }
+
+        /// <summary>
+        /// Drops a leg the broker cancelled: it can no longer fill, and it is no longer a sibling for the
+        /// remaining leg to cancel. A bracket's entry is not a leg, so cancelling that leaves it pending.
+        /// </summary>
+        internal void Release(string orderId)
+        {
+            _restingLegs.Remove(orderId);
         }
 
         /// <summary>
@@ -133,11 +189,13 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Describes one leg to place, minting the order ID the broker will book it under.
+        /// Describes one leg to place, minting the order ID the broker will book it under and taking the leg
+        /// on as this bracket's own: from here it answers for the leg's role and for whether a fill on the
+        /// other leg cancels it.
         /// </summary>
         private BracketLegPlacement NewPlacement(OrderSide side, OrderType type, decimal price, BracketLeg leg)
         {
-            return new BracketLegPlacement
+            BracketLegPlacement placement = new()
             {
                 OrderId = Guid.NewGuid().ToString(),
                 Side = side,
@@ -146,6 +204,9 @@ namespace Backtester.Broker
                 Quantity = _quantity,
                 Leg = leg
             };
+            _restingLegs[placement.OrderId] = leg;
+
+            return placement;
         }
 
         /// <summary>

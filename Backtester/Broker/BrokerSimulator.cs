@@ -21,17 +21,14 @@ namespace Backtester.Broker
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
         // The live brackets, in submission order. Each Bracket answers whether it owns a given order ID out
-        // of its own state, so there is no index to keep in step with the order IDs a bracket mints.
+        // of its own state — its pending entry, or a protective leg it armed and that still rests — so there
+        // is no index to keep in step with the order IDs a bracket mints, and the leg roles and OCO pairings
+        // live with the bracket that decided them rather than in maps kept in step by hand.
         private readonly List<Bracket> _brackets = new();
-        // key: order ID → sibling order ID for OCO pairs (stop ↔ target)
-        private readonly Dictionary<string, string> _ocoLinks = new();
         // key: symbol → the OCO protective legs (stop + target order IDs) currently resting against that
         // symbol's open bracketed position. Lets the broker cancel them when the position is closed by an
         // order that is not itself a leg (e.g. a strategy Signal exit), not only when a sibling fills.
         private readonly Dictionary<string, (string stopOrderId, string targetOrderId)> _bracketLegsBySymbol = new();
-        // key: order ID → its bracket leg role, recorded when a protective leg is armed so the fill it
-        // produces can be stamped (the round trip's exit reason is derived from this).
-        private readonly Dictionary<string, BracketLeg> _legRoles = new();
         // key: entry order ID → the sizing stop (OrderRequest.StopPrice) a risk-sized entry declared but
         // did not arm as a bracket. Stamped onto the entry fill as its EntryStopPrice when the entry armed
         // no bracket, so a signal-exit strategy that risk-sizes still reports R (ADR 0023).
@@ -263,23 +260,24 @@ namespace Backtester.Broker
 
             string symbol = filledOrder.Symbol;
             _orderBook.Remove(fill.OrderId);
-            BracketLeg leg = _legRoles.TryGetValue(fill.OrderId, out BracketLeg filledLeg) ? filledLeg : BracketLeg.None;
-            _legRoles.Remove(fill.OrderId);
 
-            if (_ocoLinks.TryGetValue(fill.OrderId, out string siblingId))
+            // The bracket this order belongs to, if any — the pending bracket whose entry just filled, or the
+            // live bracket whose protective leg it is — and what the fill means to it. One answer covers both
+            // the leg role stamped onto the trade and the sibling one-cancels-the-other takes out; a
+            // single-leg bracket answers "no sibling" rather than needing a branch of its own.
+            Bracket bracket = BracketOwning(fill.OrderId);
+            BracketFillOutcome outcome = bracket?.Fill(fill.OrderId) ?? BracketFillOutcome.None;
+            BracketLeg leg = outcome.Leg;
+            if (outcome.SiblingOrderId != null)
             {
-                _ocoLinks.Remove(fill.OrderId);
-                _ocoLinks.Remove(siblingId);
-                _orderBook.Remove(siblingId);
-                _legRoles.Remove(siblingId);
-                _bracketLegsBySymbol.Remove(symbol);
+                _orderBook.Remove(outcome.SiblingOrderId);
             }
-            else if (leg != BracketLeg.None)
+            if (leg != BracketLeg.None)
             {
-                // A single-leg bracket's lone protective leg just filled: it has no OCO sibling, so
-                // the block above did not run. Clear the per-symbol tracking anyway so a later fill
-                // never tries to cancel an already-filled leg.
+                // A protective leg filled and closed the position it guarded, so this bracket has nothing
+                // resting against the symbol any more and nothing left to answer for at all.
                 _bracketLegsBySymbol.Remove(symbol);
+                RetireIfDone(bracket);
             }
 
             decimal rawPrice = fill.Price;
@@ -290,11 +288,10 @@ namespace Backtester.Broker
             // The sizing stop (OrderRequest.StopPrice) is a fill-time leftover whether or not it is used, so
             // it is consumed here.
             decimal? sizingStop = _sizingStops.Remove(fill.OrderId, out decimal declaredStop) ? declaredStop : (decimal?)null;
-            // The bracket this fill completes, if the filled order was a bracket entry. It resolves its own
-            // legs against the actual (slippage-adjusted) fill, mints their order IDs and completes its
-            // handle; the broker books them further down, once the entry trade has been applied.
-            Bracket bracket = _brackets.FirstOrDefault(candidate => candidate.Owns(fill.OrderId));
-            IReadOnlyList<BracketLegPlacement> armedLegs = bracket?.Arm(adjustedPrice, filledOrder.Side);
+            // A bracket entry fill completes its bracket: the bracket resolves its own legs against the actual
+            // (slippage-adjusted) fill, mints their order IDs and completes its handle; the broker books them
+            // further down, once the entry trade has been applied.
+            IReadOnlyList<BracketLegPlacement> armedLegs = outcome.IsEntry ? bracket.Arm(adjustedPrice, filledOrder.Side) : null;
             BracketLegPlacement stopLeg = FindLeg(armedLegs, BracketLeg.StopLoss);
             BracketLegPlacement targetLeg = FindLeg(armedLegs, BracketLeg.TakeProfit);
 
@@ -303,7 +300,7 @@ namespace Backtester.Broker
             // has a stop: a bracketed entry stamps its armed bracket stop, which is null for a target-only
             // bracket (no stop, so no initial risk). Only a non-bracketed entry falls back to the sizing stop
             // a risk-sized signal-exit entry carried (ADR 0023 amendment).
-            decimal? entryStopPrice = bracket != null ? stopLeg?.Price : sizingStop;
+            decimal? entryStopPrice = outcome.IsEntry ? stopLeg?.Price : sizingStop;
             // The initial target is the armed bracket's take-profit level; a target exists only
             // through a bracket (there is no sizing target), so a non-bracketed entry has none.
             decimal? entryTargetPrice = targetLeg?.Price;
@@ -336,23 +333,38 @@ namespace Backtester.Broker
                 CancelBracketLegs(symbol, restingLegs);
             }
 
-            if (bracket != null)
+            if (outcome.IsEntry)
             {
-                // The bracket has armed and owns its entry no longer; drop it from the live list. Book the
-                // legs it decided on — a single-leg bracket placed only the leg it declared, so the absent
-                // leg's order ID stays null.
-                _brackets.Remove(bracket);
+                // Book the legs the bracket decided on — a single-leg bracket placed only the leg it
+                // declared, so the absent leg's order ID stays null. The bracket stays live and holds the
+                // legs itself, so the OCO pairing needs no map: whichever leg fills, the sibling is the
+                // other one the bracket still has resting.
                 string stopId = stopLeg != null ? PlaceLeg(symbol, stopLeg) : null;
                 string targetId = targetLeg != null ? PlaceLeg(symbol, targetLeg) : null;
-                // Only a two-legged bracket forms an OCO group; a single leg has no sibling to cancel.
-                if (stopId != null && targetId != null)
-                {
-                    _ocoLinks[stopId] = targetId;
-                    _ocoLinks[targetId] = stopId;
-                }
                 _bracketLegsBySymbol[symbol] = (stopId, targetId);
 
                 TryFillMarketableLegsAtArm(stopId, targetId, candle, timestamp, trades);
+            }
+        }
+
+        /// <summary>
+        /// Returns the live bracket that answers for the given order — the one whose entry is still pending
+        /// or whose protective leg is still resting — or null when the order belongs to no bracket.
+        /// </summary>
+        private Bracket BracketOwning(string orderId)
+        {
+            return _brackets.FirstOrDefault(candidate => candidate.Owns(orderId));
+        }
+
+        /// <summary>
+        /// Drops a bracket that has no order left in play, so the live list holds only brackets that can
+        /// still answer for one.
+        /// </summary>
+        private void RetireIfDone(Bracket bracket)
+        {
+            if (!bracket.IsLive)
+            {
+                _brackets.Remove(bracket);
             }
         }
 
@@ -412,8 +424,8 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Books one armed bracket leg as a working order. The bracket already decided the order ID, side,
-        /// type, price and quantity, so this only records the order, its leg role and its initial level;
-        /// the broker owns the submission sequence and the bar timestamp.
+        /// type, price and quantity and keeps the leg's role itself, so this only records the order and its
+        /// initial level; the broker owns the submission sequence and the bar timestamp.
         /// </summary>
         private string PlaceLeg(string symbol, BracketLegPlacement placement)
         {
@@ -429,7 +441,6 @@ namespace Backtester.Broker
                 Sequence = _submissionSequence++
             };
             _orderBook[order.Id] = order;
-            _legRoles[order.Id] = placement.Leg;
             RecordLevelChange(symbol, placement.Leg, placement.Price, order.Id);
 
             return order.Id;
@@ -445,21 +456,19 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Cancels a bracket's resting protective legs and forgets the OCO pairing and per-symbol
-        /// tracking, used when the position they protected was closed by an order that is not a leg. A
-        /// single-leg bracket leaves the absent leg's order ID null, so each leg is guarded.
+        /// Cancels a bracket's resting protective legs and forgets the per-symbol tracking, used when the
+        /// position they protected was closed by an order that is not a leg. A single-leg bracket leaves the
+        /// absent leg's order ID null, so each leg is guarded.
         /// </summary>
         private void CancelBracketLegs(string symbol, (string stopOrderId, string targetOrderId) legs)
         {
             if (legs.stopOrderId != null)
             {
                 Cancel(legs.stopOrderId);
-                _ocoLinks.Remove(legs.stopOrderId);
             }
             if (legs.targetOrderId != null)
             {
                 Cancel(legs.targetOrderId);
-                _ocoLinks.Remove(legs.targetOrderId);
             }
             _bracketLegsBySymbol.Remove(symbol);
         }
@@ -486,7 +495,15 @@ namespace Backtester.Broker
         public void Cancel(string orderId)
         {
             _orderBook.Remove(orderId);
-            _legRoles.Remove(orderId);
+            // A cancelled protective leg stops being its bracket's to answer for: it can no longer fill, and
+            // it is no longer the sibling the remaining leg would cancel. Cancelling a bracket's entry
+            // releases nothing, so the bracket stays pending exactly as it did before.
+            Bracket bracket = BracketOwning(orderId);
+            if (bracket != null)
+            {
+                bracket.Release(orderId);
+                RetireIfDone(bracket);
+            }
             _sizingStops.Remove(orderId);
         }
 
@@ -499,9 +516,11 @@ namespace Backtester.Broker
             if (_orderBook.TryGetValue(orderId, out Order order))
             {
                 order.Price = newPrice;
-                // Record the moved level only for a known protective leg (a trailed stop or a moved
-                // target); a plain working order carries no leg role and is not part of the ledger.
-                if (_legRoles.TryGetValue(orderId, out BracketLeg leg))
+                // Record the moved level only for a protective leg (a trailed stop or a moved target). The
+                // owning bracket is the one that knows the role; a plain working order belongs to no bracket
+                // and is not part of the ledger.
+                BracketLeg leg = BracketOwning(orderId)?.RoleOf(orderId) ?? BracketLeg.None;
+                if (leg != BracketLeg.None)
                 {
                     RecordLevelChange(order.Symbol, leg, newPrice, orderId);
                 }

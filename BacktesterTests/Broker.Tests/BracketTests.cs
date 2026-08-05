@@ -21,6 +21,13 @@ namespace BacktesterTests.Broker.Tests
             return placements.FirstOrDefault(placement => placement.Leg == leg);
         }
 
+        private static Bracket ArmedBracket(BracketRequest request)
+        {
+            Bracket bracket = AttachedBracket(request);
+            bracket.Arm(100m, OrderSide.Buy);
+            return bracket;
+        }
+
         [Fact]
         public void Arm_AbsoluteStopLeg_RestsAtItsOwnPrice()
         {
@@ -204,6 +211,252 @@ namespace BacktesterTests.Broker.Tests
             bracket.Arm(100m, OrderSide.Buy);
 
             Assert.False(bracket.Owns("entry-1"));
+        }
+
+        [Fact]
+        public void Owns_ArmedBracket_OwnsTheStopLegItPlaced()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.True(bracket.Owns(bracket.Handle.StopOrderId));
+        }
+
+        [Fact]
+        public void Owns_ArmedBracket_OwnsTheTargetLegItPlaced()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.True(bracket.Owns(bracket.Handle.TargetOrderId));
+        }
+
+        [Fact]
+        public void Owns_FilledLeg_IsNoLongerOwned()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.False(bracket.Owns(bracket.Handle.StopOrderId));
+        }
+
+        [Fact]
+        public void Owns_SiblingOfAFilledLeg_IsNoLongerOwned()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.False(bracket.Owns(bracket.Handle.TargetOrderId));
+        }
+
+        [Fact]
+        public void Owns_ReleasedLeg_IsNoLongerOwned()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Release(bracket.Handle.StopOrderId);
+
+            Assert.False(bracket.Owns(bracket.Handle.StopOrderId));
+        }
+
+        [Fact]
+        public void Fill_TheEntryOrder_IsReportedAsTheEntry()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill("entry-1");
+
+            Assert.True(outcome.IsEntry);
+        }
+
+        [Fact]
+        public void Fill_TheEntryOrder_CarriesNoLegRole()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill("entry-1");
+
+            Assert.Equal(BracketLeg.None, outcome.Leg);
+        }
+
+        [Fact]
+        public void Fill_TheEntryOrder_CancelsNothing()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill("entry-1");
+
+            Assert.Null(outcome.SiblingOrderId);
+        }
+
+        [Fact]
+        public void Fill_StopLegOfATwoLeggedBracket_CancelsTheTargetLeg()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Equal(bracket.Handle.TargetOrderId, outcome.SiblingOrderId);
+        }
+
+        [Fact]
+        public void Fill_TargetLegOfATwoLeggedBracket_CancelsTheStopLeg()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.TargetOrderId);
+
+            Assert.Equal(bracket.Handle.StopOrderId, outcome.SiblingOrderId);
+        }
+
+        [Fact]
+        public void Fill_LoneLegOfASingleLegBracket_CancelsNothing()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Null(outcome.SiblingOrderId);
+        }
+
+        [Fact]
+        public void Fill_LegWhoseSiblingWasAlreadyReleased_CancelsNothing()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            bracket.Release(bracket.Handle.TargetOrderId);
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Null(outcome.SiblingOrderId);
+        }
+
+        [Fact]
+        public void Fill_StopLeg_ReportsTheStopLossRole()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Equal(BracketLeg.StopLoss, outcome.Leg);
+        }
+
+        [Fact]
+        public void Fill_TargetLeg_ReportsTheTakeProfitRole()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.TargetOrderId);
+
+            Assert.Equal(BracketLeg.TakeProfit, outcome.Leg);
+        }
+
+        [Fact]
+        public void Fill_AProtectiveLeg_IsNotReportedAsTheEntry()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.False(outcome.IsEntry);
+        }
+
+        [Fact]
+        public void RoleOf_StopLeg_IsStopLoss()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.Equal(BracketLeg.StopLoss, bracket.RoleOf(bracket.Handle.StopOrderId));
+        }
+
+        [Fact]
+        public void RoleOf_TargetLeg_IsTakeProfit()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.Equal(BracketLeg.TakeProfit, bracket.RoleOf(bracket.Handle.TargetOrderId));
+        }
+
+        [Fact]
+        public void RoleOf_TheEntryOrder_IsNone()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+
+            Assert.Equal(BracketLeg.None, bracket.RoleOf("entry-1"));
+        }
+
+        [Fact]
+        public void RoleOf_AnOrderFromAnotherBracket_IsNone()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.Equal(BracketLeg.None, bracket.RoleOf("some-other-order"));
+        }
+
+        [Fact]
+        public void RoleOf_AFilledLeg_IsNone()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Equal(BracketLeg.None, bracket.RoleOf(bracket.Handle.StopOrderId));
+        }
+
+        [Fact]
+        public void IsLive_PendingBracket_IsTrue()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+
+            Assert.True(bracket.IsLive);
+        }
+
+        [Fact]
+        public void IsLive_ArmedBracketWithRestingLegs_IsTrue()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.True(bracket.IsLive);
+        }
+
+        [Fact]
+        public void IsLive_AfterOneLegOfTwoFills_IsFalse()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.False(bracket.IsLive);
+        }
+
+        [Fact]
+        public void IsLive_AfterTheLoneLegOfASingleLegBracketFills_IsFalse()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.False(bracket.IsLive);
+        }
+
+        [Fact]
+        public void IsLive_AfterBothLegsAreReleased_IsFalse()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Release(bracket.Handle.StopOrderId);
+            bracket.Release(bracket.Handle.TargetOrderId);
+
+            Assert.False(bracket.IsLive);
+        }
+
+        [Fact]
+        public void IsLive_AfterOnlyOneOfTwoLegsIsReleased_IsTrue()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Release(bracket.Handle.StopOrderId);
+
+            Assert.True(bracket.IsLive);
         }
 
         [Fact]
