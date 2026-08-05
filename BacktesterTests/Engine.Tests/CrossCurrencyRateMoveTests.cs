@@ -215,9 +215,8 @@ namespace BacktesterTests.Engine.Tests
                 }
 
                 _submitted = true;
-                broker.SubmitBracket(new BracketRequest
-                {
-                    Entry = new OrderRequest
+                broker.SubmitBracket(new BracketRequest(
+                    new OrderRequest
                     {
                         Symbol = symbol,
                         Side = OrderSide.Buy,
@@ -225,9 +224,8 @@ namespace BacktesterTests.Engine.Tests
                         Price = _entryStop,
                         Quantity = _quantity
                     },
-                    StopPrice = _protectiveStop,
-                    TargetPrice = _target
-                });
+                    stopLeg: BracketLegSpec.AtPrice(_protectiveStop),
+                    targetLeg: BracketLegSpec.AtPrice(_target)));
             }
         }
     }

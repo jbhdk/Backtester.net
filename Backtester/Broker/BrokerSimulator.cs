@@ -166,14 +166,15 @@ namespace Backtester.Broker
         /// <summary>
         /// Queues an entry order with one or two attached protective legs (a stop-loss and/or a
         /// take-profit). Returns a handle whose StopOrderId and TargetOrderId are populated once the
-        /// entry fills — each is null when its leg was not requested. Throws if the request attaches
-        /// neither leg (an unprotected entry is a plain <see cref="Submit"/>, not a bracket).
+        /// entry fills — each is null when its leg was not requested. A request that attaches neither leg
+        /// cannot be constructed (an unprotected entry is a plain <see cref="Submit"/>, not a bracket), so
+        /// every request that reaches here describes a legal bracket.
         /// </summary>
         public BracketHandle SubmitBracket(BracketRequest request)
         {
-            // The bracket carries its own validity rules, and they are applied before anything is submitted:
-            // a request that cannot form a legal bracket throws and leaves no working entry order behind.
-            Bracket bracket = Bracket.Create(request);
+            // A request that reaches here is a legal bracket already — it could not have been constructed
+            // otherwise — so the bracket is simply built from it.
+            Bracket bracket = new(request);
 
             // The stop offset is the per-share risk a risk-sizing model needs, but the sizing model only sees
             // the entry OrderRequest, not this bracket. Surface the offset on the entry so RiskPerTradeSizing
@@ -181,9 +182,9 @@ namespace Backtester.Broker
             // the fill later, ADR 0025). Left untouched when the caller already set an entry sizing distance.
             // The offset lands on the broker's own copy of the entry, never on the caller's request.
             OrderRequest entry = request.Entry.Copy();
-            if (request.StopOffset.HasValue && !entry.StopOffset.HasValue)
+            if (request.StopLeg?.Offset is decimal stopOffset && !entry.StopOffset.HasValue)
             {
-                entry.StopOffset = request.StopOffset;
+                entry.StopOffset = stopOffset;
             }
 
             string entryId = SubmitOwnedOrder(entry);

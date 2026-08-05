@@ -121,9 +121,8 @@ An entry order with one or two attached protective legs — a stop-loss and/or a
 both are present they form an OCO group (one filling cancels the other); with a single leg there is
 no sibling to cancel and the lone leg simply rests until filled or the position is closed by Signal.
 A Bracket must have at least one leg — an entry with neither is a plain Order, not a Bracket. Each
-leg is expressed either as an **absolute** price or as a fill-relative **offset** (a Stop distance /
-target offset the engine resolves against the actual fill when the entry fills) — one form per leg;
-setting both for the same leg is caller misuse. A symbol may carry several live Brackets at once — a
+leg is described by a **Leg spec**, which is where the choice between the absolute and the
+fill-relative form is made. A symbol may carry several live Brackets at once — a
 strategy can scale in with a second bracketed entry while the first still rests — and each answers
 only for its own legs; a Signal exit that flattens the position cancels the resting legs of all of
 them.
@@ -135,6 +134,16 @@ stop-loss and take-profit both filling in the same bar. Applies only to a two-le
 single-leg Bracket forms no OCO group. The group is per Bracket, not per symbol: where several
 Brackets are live on one symbol, a leg filling cancels only its own sibling.
 _Avoid_: bracket-cancel, linked orders.
+
+**Leg spec**:
+The entry-time specification of one of a Bracket's protective legs: either an **absolute** price the
+leg rests at, or a fill-relative **offset** — a positive per-share distance the engine applies to the
+actual fill, on the leg's protective side, when the entry fills. One form per leg, and which one is
+chosen when the spec is built, so a leg carrying both forms cannot be expressed. What a Bracket is
+*asked* for, so it is fixed for the life of the Bracket: distinct from **Bracket leg** (the *role* a
+leg plays — stop-loss or take-profit) and from **Bracket level** (the leg's *current* trigger price,
+which moves as the strategy trails it).
+_Avoid_: leg request, stop/target fields, absolute-or-offset pair.
 
 **Bracket level**:
 The current trigger price of a bracket's protective leg — its stop-loss or take-profit. It is a value

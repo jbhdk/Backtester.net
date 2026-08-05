@@ -8,8 +8,8 @@ namespace Backtester.Broker
     /// <summary>
     /// One submitted bracket: the entry order, the one or two protective legs attached to it, and the rules
     /// that place those legs once the entry fills. A bracket is created from a <see cref="BracketRequest"/>
-    /// at submit time — which is where a request that cannot form a legal bracket is rejected — stays pending
-    /// while its entry works, and arms its legs against the actual entry fill.
+    /// at submit time — one that is a legal bracket already, since a request that could not form one cannot
+    /// be constructed — stays pending while its entry works, and arms its legs against the actual entry fill.
     ///
     /// The bracket decides and the broker executes: <see cref="Arm"/> resolves each leg to an absolute price,
     /// mints the leg order IDs and completes the <see cref="BracketHandle"/>, but never touches the order
@@ -21,10 +21,8 @@ namespace Backtester.Broker
     internal sealed class Bracket
     {
         private readonly string _symbol;
-        private readonly decimal? _stopPrice;
-        private readonly decimal? _targetPrice;
-        private readonly decimal? _stopOffset;
-        private readonly decimal? _targetOffset;
+        private readonly BracketLegSpec _stopLeg;
+        private readonly BracketLegSpec _targetLeg;
         // key: order ID of a protective leg that is still resting → the role it plays. Holds the legs this
         // bracket armed and that have neither filled nor been cancelled, so it is at most two entries, and
         // one leg's sibling is simply the other one still in here.
@@ -32,13 +30,16 @@ namespace Backtester.Broker
         private string _entryOrderId;
         private int _quantity;
 
-        private Bracket(BracketRequest request)
+        /// <summary>
+        /// Creates the bracket a request describes. A request that reaches here is legal by construction —
+        /// the leg forms are exclusive by type and the at-least-one-leg rule is enforced when the
+        /// <see cref="BracketRequest"/> is built — so there is nothing left for the bracket to reject.
+        /// </summary>
+        internal Bracket(BracketRequest request)
         {
             _symbol = request.Entry.Symbol;
-            _stopPrice = request.StopPrice;
-            _targetPrice = request.TargetPrice;
-            _stopOffset = request.StopOffset;
-            _targetOffset = request.TargetOffset;
+            _stopLeg = request.StopLeg;
+            _targetLeg = request.TargetLeg;
             Handle = new BracketHandle();
         }
 
@@ -66,41 +67,6 @@ namespace Backtester.Broker
         /// the bracket releases them.
         /// </summary>
         internal IReadOnlyList<string> RestingLegOrderIds => _restingLegs.Keys.ToList();
-
-        /// <summary>
-        /// Creates the bracket a request describes, rejecting a request that cannot form a legal bracket:
-        /// a leg given in both the absolute and the fill-relative form, a non-positive offset, or a request
-        /// with no leg at all (an unprotected entry is a plain order, not a bracket). This is caller misuse
-        /// and throws, unlike the funds rejection that declines an order by returning null.
-        /// </summary>
-        internal static Bracket Create(BracketRequest request)
-        {
-            if (request.StopPrice.HasValue && request.StopOffset.HasValue)
-            {
-                throw new ArgumentException("The stop leg cannot be given as both an absolute price and an offset.", nameof(request));
-            }
-            if (request.TargetPrice.HasValue && request.TargetOffset.HasValue)
-            {
-                throw new ArgumentException("The target leg cannot be given as both an absolute price and an offset.", nameof(request));
-            }
-            if (request.StopOffset.HasValue && request.StopOffset.Value <= 0m)
-            {
-                throw new ArgumentException("The stop offset must be greater than zero.", nameof(request));
-            }
-            if (request.TargetOffset.HasValue && request.TargetOffset.Value <= 0m)
-            {
-                throw new ArgumentException("The target offset must be greater than zero.", nameof(request));
-            }
-
-            bool hasStop = request.StopPrice.HasValue || request.StopOffset.HasValue;
-            bool hasTarget = request.TargetPrice.HasValue || request.TargetOffset.HasValue;
-            if (!hasStop && !hasTarget)
-            {
-                throw new ArgumentException("A bracket must have at least one leg (a stop-loss and/or a take-profit).", nameof(request));
-            }
-
-            return new Bracket(request);
-        }
 
         /// <summary>
         /// Binds the accepted entry order to this bracket and records the size its legs will cover — the
@@ -191,8 +157,8 @@ namespace Backtester.Broker
         {
             bool isLongEntry = entrySide == OrderSide.Buy;
             OrderSide legSide = isLongEntry ? OrderSide.Sell : OrderSide.Buy;
-            decimal? stopPrice = ResolveLegPrice(_stopPrice, _stopOffset, fillPrice, isLongEntry ? -1m : 1m);
-            decimal? targetPrice = ResolveLegPrice(_targetPrice, _targetOffset, fillPrice, isLongEntry ? 1m : -1m);
+            decimal? stopPrice = _stopLeg?.Resolve(fillPrice, isLongEntry ? -1m : 1m);
+            decimal? targetPrice = _targetLeg?.Resolve(fillPrice, isLongEntry ? 1m : -1m);
 
             List<BracketLegPlacement> placements = new(2);
             if (stopPrice.HasValue)
@@ -229,25 +195,6 @@ namespace Backtester.Broker
             _restingLegs[placement.OrderId] = leg;
 
             return placement;
-        }
-
-        /// <summary>
-        /// Resolves one leg to an absolute trigger price: the absolute price when one was given, otherwise
-        /// the fill-relative offset applied to the actual fill on the protective side
-        /// (<paramref name="offsetSign"/> is -1/+1 to subtract or add), or null when the leg was not
-        /// requested in either form.
-        /// </summary>
-        private static decimal? ResolveLegPrice(decimal? absolutePrice, decimal? offset, decimal fillPrice, decimal offsetSign)
-        {
-            if (absolutePrice.HasValue)
-            {
-                return absolutePrice.Value;
-            }
-            if (offset.HasValue)
-            {
-                return fillPrice + offsetSign * offset.Value;
-            }
-            return null;
         }
     }
 }

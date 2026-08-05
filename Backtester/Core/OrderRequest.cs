@@ -26,8 +26,8 @@ namespace Backtester.Core
         /// <summary>
         /// Gets or sets the intended per-share stop distance for risk-per-trade sizing when the protective
         /// stop is fill-relative and its absolute price is not yet known at submit time (a bracket entry
-        /// whose stop is a <see cref="BracketRequest.StopOffset"/>). A positive distance; the broker copies
-        /// the bracket's stop offset here before sizing. Preferred over <see cref="StopPrice"/> for sizing,
+        /// whose stop leg is a <see cref="BracketLegSpec.OffsetFromFill"/> spec). A positive distance; the
+        /// broker copies the bracket stop leg's offset here before sizing. Preferred over <see cref="StopPrice"/> for sizing,
         /// since a fill-relative stop has no absolute anchor to measure against yet.
         /// </summary>
         public decimal? StopOffset { get; set; }

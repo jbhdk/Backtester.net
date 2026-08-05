@@ -1,35 +1,44 @@
+using System;
+
 namespace Backtester.Core
 {
     /// <summary>
     /// An entry order with one or two attached protective legs for bracket order submission: a
-    /// stop-loss and/or a take-profit. At least one leg must be set (a request with neither is a plain
-    /// order, not a bracket). When both are set they form an OCO group; a single leg simply rests until
-    /// it fills or the position is closed by a signal exit.
+    /// stop-loss and/or a take-profit. At least one leg must be given (a request with neither is a plain
+    /// order, not a bracket), which is what construction enforces. When both are given they form an OCO
+    /// group; a single leg simply rests until it fills or the position is closed by a signal exit.
     /// </summary>
     public class BracketRequest
     {
-        /// <summary>Gets or sets the entry order details.</summary>
-        public OrderRequest Entry { get; set; }
-
-        /// <summary>Gets or sets the stop-loss price for the protective stop leg, or null to attach no stop.</summary>
-        public decimal? StopPrice { get; set; }
-
-        /// <summary>Gets or sets the take-profit price for the protective limit leg, or null to attach no target.</summary>
-        public decimal? TargetPrice { get; set; }
-
         /// <summary>
-        /// Gets or sets the stop-loss as a fill-relative offset: a positive per-share distance the engine
-        /// subtracts from (long) or adds to (short) the actual fill at fill time to place the stop on the
-        /// protective side. Must be greater than zero. Mutually exclusive with <see cref="StopPrice"/> —
-        /// setting both for the stop leg is caller misuse.
+        /// Creates the request for a bracketed entry, rejecting one that cannot form a legal bracket: a
+        /// request with no leg at all, an unprotected entry being a plain order rather than a bracket
+        /// (ADR 0002). Each leg is given as a <see cref="BracketLegSpec"/>, which is where the choice
+        /// between an absolute and a fill-relative form is made, or left null to attach no such leg.
         /// </summary>
-        public decimal? StopOffset { get; set; }
+        public BracketRequest(OrderRequest entry, BracketLegSpec stopLeg = null, BracketLegSpec targetLeg = null)
+        {
+            if (entry == null)
+            {
+                throw new ArgumentNullException(nameof(entry), "A bracket must have an entry order.");
+            }
+            if (stopLeg == null && targetLeg == null)
+            {
+                throw new ArgumentException("A bracket must have at least one leg (a stop-loss and/or a take-profit).");
+            }
 
-        /// <summary>
-        /// Gets or sets the take-profit as a fill-relative offset: a positive per-share distance the engine
-        /// adds to (long) or subtracts from (short) the actual fill at fill time. Must be greater than zero.
-        /// Mutually exclusive with <see cref="TargetPrice"/> — setting both for the target leg is caller misuse.
-        /// </summary>
-        public decimal? TargetOffset { get; set; }
+            Entry = entry;
+            StopLeg = stopLeg;
+            TargetLeg = targetLeg;
+        }
+
+        /// <summary>Gets the entry order details.</summary>
+        public OrderRequest Entry { get; }
+
+        /// <summary>Gets the protective stop leg, or null when this bracket attaches no stop.</summary>
+        public BracketLegSpec StopLeg { get; }
+
+        /// <summary>Gets the take-profit leg, or null when this bracket attaches no target.</summary>
+        public BracketLegSpec TargetLeg { get; }
     }
 }

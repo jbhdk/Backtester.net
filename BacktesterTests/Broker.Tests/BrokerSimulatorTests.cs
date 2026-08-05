@@ -465,12 +465,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: Market entry fills at Open=100
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -489,12 +487,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 110m,   // stop-loss ABOVE entry for a short
-                TargetPrice = 90m   // take-profit BELOW entry
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(110m),   // stop-loss ABOVE entry for a short
+                targetLeg: BracketLegSpec.AtPrice(90m))); // take-profit BELOW entry
 
             // Bar 1: market short entry fills at Open=100
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -513,12 +509,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: entry fills
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -535,12 +529,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: entry fills, stop (90) and target (120) armed
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -562,12 +554,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: Low=85, stop at 90 triggers
@@ -582,12 +572,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: High=125, target limit at 120 triggers
@@ -602,12 +590,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: the market entry fills at Open=100; its own bracket stop sits at 90.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -622,12 +608,10 @@ namespace BacktesterTests.Broker.Tests
 
             // The entry declares a sizing stop at 85 but also arms a bracket whose stop sits at 90. The
             // armed bracket stop is the real protective level and must win over the sizing-stop fallback.
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -667,12 +651,10 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: the market entry fills at Open=100; its own bracket target sits at 120.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -685,11 +667,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
 
             // No target leg armed, so the entry declares no initial target.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -702,11 +682,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // The lone target leg defines the initial target even though there is no stop.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -768,12 +746,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: entry fills at Open=100; stop (90) and target (120) arm.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -796,12 +772,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 });
@@ -818,22 +792,18 @@ namespace BacktesterTests.Broker.Tests
         {
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             // Bar 1: the first bracket's entry fills at Open=100 and its legs (90/120) arm.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // A second bracket scales into the same symbol; its legs arm alongside the first bracket's.
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 92m,
-                TargetPrice = 118m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(92m),
+                targetLeg: BracketLegSpec.AtPrice(118m)));
             // Bar 2: the second entry fills at Open=100; Low=99/High=105 trigger no leg of either bracket.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
 
@@ -852,19 +822,15 @@ namespace BacktesterTests.Broker.Tests
         {
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 92m,
-                TargetPrice = 118m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(92m),
+                targetLeg: BracketLegSpec.AtPrice(118m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 20 });
             broker.ProcessBar(SliceAt("AAPL", 100m, 104m, 98m, 101m, T0.AddHours(2)));
@@ -880,22 +846,18 @@ namespace BacktesterTests.Broker.Tests
         {
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             // Bar 1: the first bracket's entry fills at Open=100 and its legs (90/120) arm.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // A second bracket scales in, with wider legs so one bar can trigger the first bracket's stop alone.
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 85m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(85m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
             // Bar 2: the second entry fills at Open=100; the position is 20 shares under two brackets.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
 
@@ -929,28 +891,13 @@ namespace BacktesterTests.Broker.Tests
         // --- Single-leg brackets ---
 
         [Fact]
-        public void SubmitBracket_NoLegs_Throws()
-        {
-            BrokerSimulator broker = new(new Portfolio(10_000m));
-
-            // A bracket with neither a stop nor a target is caller misuse — an unprotected entry is a
-            // plain Submit, not a bracket.
-            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 }
-            }));
-        }
-
-        [Fact]
         public void SubmitBracket_StopOnly_HandlePopulatesStopButNotTarget()
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
 
             // Entry fills at Open=100; only the stop leg arms.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -964,11 +911,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: Low=85, stop at 90 triggers.
@@ -984,11 +929,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: a large upward spike — a stop-only bracket has no take-profit leg to fill against it.
@@ -1002,11 +945,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
 
             // The armed stop defines initial risk exactly as a two-legged bracket does.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -1019,11 +960,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             Assert.Single(broker.BracketLevelChanges);
@@ -1035,11 +974,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m)));
 
             // Bar 1: entry fills at Open=100; the lone stop (90) arms.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -1059,11 +996,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
@@ -1076,11 +1011,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: High=125, target limit at 120 triggers.
@@ -1096,11 +1029,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // No armed stop leg, so the round trip has no initial risk and no R.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
@@ -1116,11 +1047,9 @@ namespace BacktesterTests.Broker.Tests
             // The entry declares a sizing stop, but the bracket arms no protective stop leg. Per the
             // ADR 0023 amendment, a bracketed entry's initial risk comes from the armed stop only — the
             // sizing-stop fallback is for a non-bracketed entry — so this target-only bracket has no R.
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10, StopPrice = 85m },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1132,11 +1061,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             Assert.Single(broker.BracketLevelChanges);
@@ -1148,11 +1075,9 @@ namespace BacktesterTests.Broker.Tests
         {
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: entry fills at Open=100; the lone target (120) arms.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -1175,12 +1100,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Entry fills at Open=100 on this bar; the protective legs arm here, recording their initial levels.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -1203,12 +1126,10 @@ namespace BacktesterTests.Broker.Tests
             BrokerSimulator broker = new(portfolio);
 
             // A resting limit entry that the bar does not reach, so the entry never fills and no legs arm.
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 10 },
-                StopPrice = 40m,
-                TargetPrice = 70m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Limit, Price = 50m, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(40m),
+                targetLeg: BracketLegSpec.AtPrice(70m)));
 
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
@@ -1221,12 +1142,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Bar 1: entry fills, stop (90) and target (120) armed at T0.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
@@ -1306,12 +1225,10 @@ namespace BacktesterTests.Broker.Tests
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10, Priority = 1 });
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 110m,   // stop-loss ABOVE entry for a short
-                TargetPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(110m),  // stop-loss ABOVE entry for a short
+                targetLeg: BracketLegSpec.AtPrice(90m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0.AddHours(1)));
 
             Position position = Assert.Single(portfolio.Positions);
@@ -1331,12 +1248,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 95m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(95m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
 
             // Arming bar opens at 90 (gapped below the 95 stop); the entry fills at 90 and the stop with it.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0)).ToList();
@@ -1354,12 +1269,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 103m,   // above the pre-fill reference, but the entry gaps up past it
-                TargetPrice = 90m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(103m),  // above the pre-fill reference, but the entry gaps up past it
+                targetLeg: BracketLegSpec.AtPrice(90m)));
 
             // Arming bar opens at 105, above the 103 stop; the short fills at 105 and covers at 105.
             broker.ProcessBar(SliceAt("AAPL", 105m, 107m, 104m, 106m, T0));
@@ -1379,12 +1292,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             // Arming bar opens at 125 (gapped above the 120 target); the entry fills at 125 and the target with it.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 125m, 127m, 123m, 126m, T0)).ToList();
@@ -1402,12 +1313,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
 
             // Open=100 (between the legs), Low=85 (trades through the 90 stop after the open).
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 85m, 95m, T0)).ToList();
@@ -1425,12 +1334,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 95m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(95m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
 
             // Arming bar opens at 90 (below the 95 stop): entry and stop both fill here, cancelling the target.
             broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
@@ -1449,12 +1356,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 95m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(95m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
 
             broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
 
@@ -1469,12 +1374,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 95m,
-                TargetPrice = 130m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(95m),
+                targetLeg: BracketLegSpec.AtPrice(130m)));
 
             broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0));
 
@@ -1490,12 +1393,10 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetPrice = 120m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.AtPrice(120m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1512,11 +1413,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 95m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(95m)));
 
             // Arming bar opens at 90 (below the 95 stop): entry and lone stop both fill here.
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 90m, 92m, 88m, 91m, T0)).ToList();
@@ -1534,11 +1433,9 @@ namespace BacktesterTests.Broker.Tests
             // against the actual fill (open 100), placing the stop 5 below the fill on the protective side.
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1551,11 +1448,9 @@ namespace BacktesterTests.Broker.Tests
             // A short's protective stop belongs ABOVE the fill; the offset is added to the fill.
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1568,11 +1463,9 @@ namespace BacktesterTests.Broker.Tests
             // A long's take-profit belongs ABOVE the fill; the target offset is added to the fill.
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetOffset = 10m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.OffsetFromFill(10m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1587,11 +1480,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             // Entry fills at 100; offset stop resolves to 95 (below), so it rests rather than firing.
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
@@ -1610,11 +1501,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio);
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             // Bar 2: Low=94 reaches the resolved 95 stop.
@@ -1633,12 +1522,10 @@ namespace BacktesterTests.Broker.Tests
             // own rule — the absolute stop to itself (90), the target offset to fill + 10 (110).
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                TargetOffset = 10m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.AtPrice(90m),
+                targetLeg: BracketLegSpec.OffsetFromFill(10m)));
 
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
@@ -1653,71 +1540,13 @@ namespace BacktesterTests.Broker.Tests
             // forms) and arms just the stop leg.
             BrokerSimulator broker = new(new Portfolio(10_000m));
 
-            BracketHandle handle = broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 5m
-            });
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             Assert.NotNull(handle.StopOrderId);
             Assert.Null(handle.TargetOrderId);
-        }
-
-        [Fact]
-        public void SubmitBracket_StopGivenAsBothPriceAndOffset_Throws()
-        {
-            // Specifying both the absolute and the offset form for the stop leg is contradictory caller
-            // misuse — the engine cannot know which anchor to use.
-            BrokerSimulator broker = new(new Portfolio(10_000m));
-
-            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopPrice = 90m,
-                StopOffset = 5m
-            }));
-        }
-
-        [Fact]
-        public void SubmitBracket_TargetGivenAsBothPriceAndOffset_Throws()
-        {
-            // The same contradiction on the target leg is likewise caller misuse.
-            BrokerSimulator broker = new(new Portfolio(10_000m));
-
-            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetPrice = 120m,
-                TargetOffset = 10m
-            }));
-        }
-
-        [Fact]
-        public void SubmitBracket_NonPositiveStopOffset_Throws()
-        {
-            // A zero or negative offset would place the stop on the fill (zero risk, undefined R) or the
-            // wrong side — caller misuse rejected at submit.
-            BrokerSimulator broker = new(new Portfolio(10_000m));
-
-            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                StopOffset = 0m
-            }));
-        }
-
-        [Fact]
-        public void SubmitBracket_NonPositiveTargetOffset_Throws()
-        {
-            // A non-positive target offset is likewise misuse.
-            BrokerSimulator broker = new(new Portfolio(10_000m));
-
-            Assert.Throws<ArgumentException>(() => broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
-                TargetOffset = -5m
-            }));
         }
 
         [Fact]
@@ -1729,11 +1558,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             List<Trade> trades = broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0)).ToList();
 
             Assert.Equal(20, trades[0].Quantity);
@@ -1748,11 +1575,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });
@@ -1814,7 +1639,7 @@ namespace BacktesterTests.Broker.Tests
             BrokerSimulator broker = new(new Portfolio(10_000m));
             OrderRequest entry = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 };
 
-            broker.SubmitBracket(new BracketRequest { Entry = entry, StopOffset = 5m });
+            broker.SubmitBracket(new BracketRequest(entry, stopLeg: BracketLegSpec.OffsetFromFill(5m)));
 
             Assert.Null(entry.StopOffset);
         }
@@ -1846,11 +1671,9 @@ namespace BacktesterTests.Broker.Tests
             Portfolio portfolio = new(10_000m);
             BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
 
-            broker.SubmitBracket(new BracketRequest
-            {
-                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
-                StopOffset = 5m
-            });
+            broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                stopLeg: BracketLegSpec.OffsetFromFill(5m)));
             broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
 
             broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Backtester.Broker;
@@ -11,10 +10,10 @@ namespace BacktesterTests.Broker.Tests
     {
         private const string Symbol = "AAPL";
 
-        private static Bracket AttachedBracket(BracketRequest request, int quantity = 100)
+        private static Bracket AttachedBracket(BracketLegSpec stopLeg = null, BracketLegSpec targetLeg = null, int quantity = 100)
         {
-            request.Entry = new OrderRequest { Symbol = Symbol, Side = OrderSide.Buy, Type = OrderType.Market };
-            Bracket bracket = Bracket.Create(request);
+            OrderRequest entry = new() { Symbol = Symbol, Side = OrderSide.Buy, Type = OrderType.Market };
+            Bracket bracket = new(new BracketRequest(entry, stopLeg, targetLeg));
             bracket.AttachEntry("entry-1", quantity);
             return bracket;
         }
@@ -24,9 +23,9 @@ namespace BacktesterTests.Broker.Tests
             return placements.FirstOrDefault(placement => placement.Leg == leg);
         }
 
-        private static Bracket ArmedBracket(BracketRequest request)
+        private static Bracket ArmedBracket(BracketLegSpec stopLeg = null, BracketLegSpec targetLeg = null)
         {
-            Bracket bracket = AttachedBracket(request);
+            Bracket bracket = AttachedBracket(stopLeg, targetLeg);
             bracket.Arm(100m, OrderSide.Buy);
             return bracket;
         }
@@ -34,7 +33,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_AbsoluteStopLeg_RestsAtItsOwnPrice()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(101.25m, OrderSide.Buy);
 
@@ -44,7 +43,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_OffsetStopLegOnLongEntry_RestsBelowTheFillByTheOffset()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopOffset = 2m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.OffsetFromFill(2m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(101.25m, OrderSide.Buy);
 
@@ -54,7 +53,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_OffsetStopLegOnShortEntry_RestsAboveTheFillByTheOffset()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopOffset = 2m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.OffsetFromFill(2m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(101.25m, OrderSide.Sell);
 
@@ -64,7 +63,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_OffsetTargetLegOnLongEntry_RestsAboveTheFillByTheOffset()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { TargetOffset = 3m });
+            Bracket bracket = AttachedBracket(targetLeg: BracketLegSpec.OffsetFromFill(3m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(101.25m, OrderSide.Buy);
 
@@ -74,7 +73,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_OffsetTargetLegOnShortEntry_RestsBelowTheFillByTheOffset()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { TargetOffset = 3m });
+            Bracket bracket = AttachedBracket(targetLeg: BracketLegSpec.OffsetFromFill(3m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(101.25m, OrderSide.Sell);
 
@@ -84,7 +83,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_LongEntry_ArmsSellLegs()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -94,7 +93,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_ShortEntry_ArmsBuyLegs()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 105m, TargetPrice = 90m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(105m), targetLeg: BracketLegSpec.AtPrice(90m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Sell);
 
@@ -104,7 +103,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_StopLeg_IsAStopOrder()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -114,7 +113,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_TargetLeg_IsALimitOrder()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(targetLeg: BracketLegSpec.AtPrice(110m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -124,7 +123,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_StopOnlyBracket_PlacesOnlyTheStopLeg()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -134,7 +133,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_TargetOnlyBracket_PlacesOnlyTheTargetLeg()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(targetLeg: BracketLegSpec.AtPrice(110m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -144,7 +143,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_LegsCoverTheAttachedEntryQuantity()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m }, quantity: 37);
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m), quantity: 37);
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -154,7 +153,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_TwoLeggedBracket_GivesEachLegItsOwnOrderId()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -164,7 +163,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_PopulatesTheHandleWithTheLegOrderIds()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             IReadOnlyList<BracketLegPlacement> legs = bracket.Arm(100m, OrderSide.Buy);
 
@@ -175,7 +174,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Arm_StopOnlyBracket_LeavesTheHandlesTargetOrderIdNull()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             bracket.Arm(100m, OrderSide.Buy);
 
@@ -185,7 +184,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void AttachEntry_PutsTheEntryOrderIdOnTheHandle()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.Equal("entry-1", bracket.Handle.EntryOrderId);
         }
@@ -193,7 +192,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_PendingBracket_OwnsItsEntryOrderId()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.True(bracket.Owns("entry-1"));
         }
@@ -201,7 +200,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_PendingBracket_DoesNotOwnAnotherOrderId()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.False(bracket.Owns("some-other-order"));
         }
@@ -209,7 +208,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_ArmedBracket_NoLongerOwnsItsEntryOrderId()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             bracket.Arm(100m, OrderSide.Buy);
 
@@ -219,7 +218,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_ArmedBracket_OwnsTheStopLegItPlaced()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.True(bracket.Owns(bracket.Handle.StopOrderId));
         }
@@ -227,7 +226,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_ArmedBracket_OwnsTheTargetLegItPlaced()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.True(bracket.Owns(bracket.Handle.TargetOrderId));
         }
@@ -235,7 +234,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_FilledLeg_IsNoLongerOwned()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -245,7 +244,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_SiblingOfAFilledLeg_IsNoLongerOwned()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -255,7 +254,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Owns_ReleasedLeg_IsNoLongerOwned()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Release(bracket.Handle.StopOrderId);
 
@@ -265,7 +264,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_TheEntryOrder_IsReportedAsTheEntry()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill("entry-1");
 
@@ -275,7 +274,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_TheEntryOrder_CarriesNoLegRole()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill("entry-1");
 
@@ -285,7 +284,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_TheEntryOrder_CancelsNothing()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill("entry-1");
 
@@ -295,7 +294,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_StopLegOfATwoLeggedBracket_CancelsTheTargetLeg()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -305,7 +304,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_TargetLegOfATwoLeggedBracket_CancelsTheStopLeg()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.TargetOrderId);
 
@@ -315,7 +314,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_LoneLegOfASingleLegBracket_CancelsNothing()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -325,7 +324,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_LegWhoseSiblingWasAlreadyReleased_CancelsNothing()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
             bracket.Release(bracket.Handle.TargetOrderId);
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
@@ -336,7 +335,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_StopLeg_ReportsTheStopLossRole()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -346,7 +345,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_TargetLeg_ReportsTheTakeProfitRole()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.TargetOrderId);
 
@@ -356,7 +355,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Fill_AProtectiveLeg_IsNotReportedAsTheEntry()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             BracketFillOutcome outcome = bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -366,7 +365,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RoleOf_StopLeg_IsStopLoss()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(BracketLeg.StopLoss, bracket.RoleOf(bracket.Handle.StopOrderId));
         }
@@ -374,7 +373,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RoleOf_TargetLeg_IsTakeProfit()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(BracketLeg.TakeProfit, bracket.RoleOf(bracket.Handle.TargetOrderId));
         }
@@ -382,7 +381,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RoleOf_TheEntryOrder_IsNone()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.Equal(BracketLeg.None, bracket.RoleOf("entry-1"));
         }
@@ -390,7 +389,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RoleOf_AnOrderFromAnotherBracket_IsNone()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(BracketLeg.None, bracket.RoleOf("some-other-order"));
         }
@@ -398,7 +397,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RoleOf_AFilledLeg_IsNone()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -408,7 +407,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_BracketWhoseEntryIsStillWorking_IsPending()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.Equal(BracketState.Pending, bracket.State);
         }
@@ -416,7 +415,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_BracketWhoseLegsAreResting_IsArmed()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(BracketState.Armed, bracket.State);
         }
@@ -424,7 +423,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_AfterOneLegOfTwoFills_IsRetired()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -434,7 +433,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_AfterTheLoneLegOfASingleLegBracketFills_IsRetired()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -444,7 +443,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_AfterEveryRestingLegIsReleased_IsRetired()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Release(bracket.Handle.StopOrderId);
             bracket.Release(bracket.Handle.TargetOrderId);
@@ -455,7 +454,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_AfterOnlyOneOfTwoLegsIsReleased_IsStillArmed()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Release(bracket.Handle.StopOrderId);
 
@@ -465,7 +464,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void State_AfterReleasingTheEntryOfAPendingBracket_IsStillPending()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             bracket.Release("entry-1");
 
@@ -475,7 +474,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_PendingBracket_IsEmpty()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Empty(bracket.RestingLegOrderIds);
         }
@@ -483,7 +482,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_ArmedTwoLeggedBracket_HoldsBothLegs()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(
                 new[] { bracket.Handle.StopOrderId, bracket.Handle.TargetOrderId }.OrderBy(id => id),
@@ -493,7 +492,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_ArmedSingleLegBracket_HoldsOnlyTheLegItPlaced()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(targetLeg: BracketLegSpec.AtPrice(110m));
 
             Assert.Equal(bracket.Handle.TargetOrderId, Assert.Single(bracket.RestingLegOrderIds));
         }
@@ -501,7 +500,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_AfterOneLegIsReleased_HoldsOnlyTheOther()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Release(bracket.Handle.StopOrderId);
 
@@ -511,7 +510,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_AfterALegFills_IsEmpty()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
@@ -521,7 +520,7 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void RestingLegOrderIds_IsASnapshot_SoEveryLegCanBeReleasedWhileWalkingIt()
         {
-            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+            Bracket bracket = ArmedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));
 
             int released = 0;
             foreach (string legOrderId in bracket.RestingLegOrderIds)
@@ -536,69 +535,10 @@ namespace BacktesterTests.Broker.Tests
         [Fact]
         public void Symbol_IsTheSymbolOfTheEntryItBrackets()
         {
-            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
 
             Assert.Equal(Symbol, bracket.Symbol);
         }
-
-        [Fact]
-        public void Create_StopLegGivenInBothForms_Throws()
-        {
-            BracketRequest request = new() { StopPrice = 95m, StopOffset = 2m };
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.StartsWith("The stop leg cannot be given as both an absolute price and an offset.", exception.Message);
-        }
-
-        [Fact]
-        public void Create_TargetLegGivenInBothForms_Throws()
-        {
-            BracketRequest request = new() { TargetPrice = 110m, TargetOffset = 3m };
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.StartsWith("The target leg cannot be given as both an absolute price and an offset.", exception.Message);
-        }
-
-        [Fact]
-        public void Create_NonPositiveStopOffset_Throws()
-        {
-            BracketRequest request = new() { StopOffset = 0m };
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.StartsWith("The stop offset must be greater than zero.", exception.Message);
-        }
-
-        [Fact]
-        public void Create_NonPositiveTargetOffset_Throws()
-        {
-            BracketRequest request = new() { TargetOffset = -1m };
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.StartsWith("The target offset must be greater than zero.", exception.Message);
-        }
-
-        [Fact]
-        public void Create_RequestWithNoLeg_Throws()
-        {
-            BracketRequest request = new();
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.StartsWith("A bracket must have at least one leg (a stop-loss and/or a take-profit).", exception.Message);
-        }
-
-        [Fact]
-        public void Create_IllegalRequest_NamesTheRequestParameter()
-        {
-            BracketRequest request = new();
-
-            ArgumentException exception = Assert.Throws<ArgumentException>(() => Bracket.Create(request));
-
-            Assert.Equal("request", exception.ParamName);
-        }
     }
 }
+

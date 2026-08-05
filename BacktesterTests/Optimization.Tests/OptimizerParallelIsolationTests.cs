@@ -192,12 +192,9 @@ namespace BacktesterTests.Optimization.Tests
                 {
                     // Open with a bracket: a market buy plus a protective stop 50 below the fill, far enough
                     // below the rising series that it never triggers — the flatten closes the trade instead.
-                    broker.SubmitBracket(new BracketRequest
-                    {
-                        Entry = new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 },
-                        StopOffset = 50m,
-                        TargetPrice = null
-                    });
+                    broker.SubmitBracket(new BracketRequest(
+                        new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 1 },
+                        stopLeg: BracketLegSpec.OffsetFromFill(50m)));
                 }
                 else
                 {

@@ -88,12 +88,10 @@ namespace Backtester.Strategies
             {
                 decimal stop = bar.Close - _stopAtrMultiple * atr;
                 decimal target = bar.Close + _targetAtrMultiple * atr;
-                BracketHandle handle = broker.SubmitBracket(new BracketRequest
-                {
-                    Entry = new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market },
-                    StopPrice = stop,
-                    TargetPrice = target
-                });
+                BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                    new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market },
+                    stopLeg: BracketLegSpec.AtPrice(stop),
+                    targetLeg: BracketLegSpec.AtPrice(target)));
                 
                 if (handle != null)
                 {

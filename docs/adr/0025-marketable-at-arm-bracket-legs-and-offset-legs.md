@@ -78,6 +78,30 @@ risk sizing to fill-relative stops without reintroducing the pre-fill absolute s
 entry's sizing offset is used only to size and does not affect the armed stop or the stamped
 `EntryStopPrice`, which still resolve against the fill.
 
+## Amendment: the leg forms become a type, and misuse surfaces at construction (2026-08)
+
+The two forms above were four independent nullable fields on `BracketRequest` — `StopPrice`,
+`StopOffset`, `TargetPrice`, `TargetOffset` — so "one form per leg" was a rule the *validation* stated
+and the *type* did not. A leg is now a **Leg spec** (`BracketLegSpec`), built either as
+`AtPrice(price)` or as `OffsetFromFill(offset)`, and a `BracketRequest` carries an entry plus an
+optional stop leg and an optional target leg.
+
+Two of the three submit-time throws this ADR listed therefore no longer exist as throws:
+
+- **Both forms on one leg** is now *unrepresentable* — there is no value that carries both, so there is
+  nothing to reject.
+- **A non-positive offset** is rejected by `OffsetFromFill` itself, with an `ArgumentOutOfRangeException`
+  (an `ArgumentException`) naming `offset` rather than `request`.
+- **A zero-leg request** is rejected by the `BracketRequest` constructor (ADR 0002's rule, unmoved in
+  substance).
+
+So caller misuse now surfaces where the offending value is written rather than at `SubmitBracket`,
+which is earlier and closer to the mistake: a strategy cannot hold an illegal bracket request at all.
+`Bracket` keeps no validation — a request that reaches it is legal by construction — and resolution of
+a leg against the fill moves onto the spec, which is the only thing that knows which form it holds.
+This is a breaking change to a strategy-facing type; every construction site takes the constructor form
+(see the README example).
+
 The offset is carried on the entry the **broker submits**, which is a copy — the broker never writes it
 onto the caller's `OrderRequest` (nor the quantity it sizes). The decision above is unchanged: the offset
 is still the per-share risk, and it still reaches the sizer through the entry. Only the object written to

@@ -26,9 +26,12 @@ stop each bar (it knows the current ATR).
 `BracketRequest.StopPrice` and `TargetPrice` are now nullable: a Bracket may attach a stop-loss
 **and/or** a take-profit. The **OCO group is conditional on two legs** — with a single leg there is
 no sibling to cancel, so the lone leg simply rests until it fills or a Signal exit cancels it. A
-Bracket must have **at least one** leg; `SubmitBracket` throws `ArgumentException` on a zero-leg
-request (caller misuse, distinct from the funds rejection that returns null — an entry with no
-protection is a plain `Submit`). The glossary's `Bracket` and `OCO` entries are updated to match.
+Bracket must have **at least one** leg; a zero-leg request throws `ArgumentException` (caller misuse,
+distinct from the funds rejection that returns null — an entry with no protection is a plain
+`Submit`). The glossary's `Bracket` and `OCO` entries are updated to match.
+
+*(The throw moved from `SubmitBracket` to `BracketRequest`'s constructor when the request was
+reshaped; see the ADR 0025 amendment of 2026-08. The rule is unchanged.)*
 
 ## Amendment: several Brackets may be live on one symbol (2026-08)
 

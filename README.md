@@ -223,11 +223,19 @@ public class BreakoutStrategy : StrategyBase
 ```
 
 The broker exposes four actions: `Submit`, `SubmitBracket`, `Cancel`, and `Modify`. A
-`BracketRequest` attaches a stop-loss and/or a take-profit, each given either as an absolute price
-(`StopPrice`/`TargetPrice`) or as a fill-relative offset (`StopOffset`/`TargetOffset`, resolved
-against the actual fill on the protective side) — leave a leg's fields null to arm just one leg (at
-least one is required; setting both forms for the same leg, or a non-positive offset, throws). When a
-strategy submits several orders that fill on
+`BracketRequest` attaches a stop-loss and/or a take-profit, each described by a `BracketLegSpec` built
+either as an absolute price (`BracketLegSpec.AtPrice(95m)`) or as a fill-relative offset
+(`BracketLegSpec.OffsetFromFill(2m)`, resolved against the actual fill on the protective side) —
+leave a leg out to arm just one leg (at least one is required, and a request with neither throws):
+
+```csharp
+broker.SubmitBracket(new BracketRequest(
+    new OrderRequest { Symbol = symbol, Side = OrderSide.Buy, Type = OrderType.Market },
+    stopLeg:   BracketLegSpec.OffsetFromFill(2m),
+    targetLeg: BracketLegSpec.AtPrice(120m)));
+```
+
+When a strategy submits several orders that fill on
 the same bar, set `OrderRequest.Priority` (higher fills sooner) to control the order they are applied
 — for a single-bar reversal, give the flatten a higher priority than the reversing entry so the entry
 opens from flat with its stop attached. For a worked example of bracket orders and a trailing
