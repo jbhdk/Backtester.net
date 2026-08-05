@@ -1,0 +1,600 @@
+Backtester.Broker.BrokerSimulator
+Backtester.Broker.BrokerSimulator.BracketLevelChanges.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.BracketLevelChange>
+Backtester.Broker.BrokerSimulator.BrokerSimulator(Backtester.Core.Portfolio portfolio, Backtester.Broker.IFillModel fillModel = null, Backtester.ExecutionModels.Commission.ICommissionModel commissionModel = null, Backtester.ExecutionModels.Slippage.ISlippageModel slippageModel = null, Backtester.ExecutionModels.Sizing.ISizingModel sizingModel = null) -> void
+Backtester.Broker.BrokerSimulator.Cancel(string orderId) -> void
+Backtester.Broker.BrokerSimulator.Modify(string orderId, decimal newPrice) -> void
+Backtester.Broker.BrokerSimulator.ProcessBar(Backtester.Core.MarketSlice slice) -> System.Collections.Generic.IEnumerable<Backtester.Core.Trade>
+Backtester.Broker.BrokerSimulator.RejectedOrders.get -> System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder>
+Backtester.Broker.BrokerSimulator.Submit(Backtester.Core.OrderRequest request) -> string
+Backtester.Broker.BrokerSimulator.SubmitBracket(Backtester.Core.BracketRequest request) -> Backtester.Core.BracketHandle
+Backtester.Broker.BrokerSimulator.SubmitOrder(Backtester.Core.OrderRequest request) -> string
+Backtester.Broker.FillModel_OHLCHeuristic
+Backtester.Broker.FillModel_OHLCHeuristic.DetermineFills(System.Collections.Generic.IEnumerable<Backtester.Core.Order> orders, Backtester.Core.Candle bar) -> System.Collections.Generic.IEnumerable<Backtester.Broker.FillResult>
+Backtester.Broker.FillModel_OHLCHeuristic.FillModel_OHLCHeuristic() -> void
+Backtester.Broker.FillResult
+Backtester.Broker.FillResult.FillResult() -> void
+Backtester.Broker.FillResult.OrderId.get -> string
+Backtester.Broker.FillResult.OrderId.set -> void
+Backtester.Broker.FillResult.Price.get -> decimal
+Backtester.Broker.FillResult.Price.set -> void
+Backtester.Broker.FillResult.Quantity.get -> int
+Backtester.Broker.FillResult.Quantity.set -> void
+Backtester.Broker.FillResult.TradeId.get -> string
+Backtester.Broker.FillResult.TradeId.set -> void
+Backtester.Broker.IBroker
+Backtester.Broker.IBroker.Cancel(string orderId) -> void
+Backtester.Broker.IBroker.Modify(string orderId, decimal newPrice) -> void
+Backtester.Broker.IBroker.Submit(Backtester.Core.OrderRequest request) -> string
+Backtester.Broker.IBroker.SubmitBracket(Backtester.Core.BracketRequest request) -> Backtester.Core.BracketHandle
+Backtester.Broker.IBrokerSimulator
+Backtester.Broker.IBrokerSimulator.BracketLevelChanges.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.BracketLevelChange>
+Backtester.Broker.IBrokerSimulator.ProcessBar(Backtester.Core.MarketSlice slice) -> System.Collections.Generic.IEnumerable<Backtester.Core.Trade>
+Backtester.Broker.IBrokerSimulator.RejectedOrders.get -> System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder>
+Backtester.Broker.IBrokerSimulator.SubmitOrder(Backtester.Core.OrderRequest request) -> string
+Backtester.Broker.IFillModel
+Backtester.Broker.IFillModel.DetermineFills(System.Collections.Generic.IEnumerable<Backtester.Core.Order> orders, Backtester.Core.Candle bar) -> System.Collections.Generic.IEnumerable<Backtester.Broker.FillResult>
+Backtester.Broker.RejectedOrder
+Backtester.Broker.RejectedOrder.Price.get -> decimal
+Backtester.Broker.RejectedOrder.Price.set -> void
+Backtester.Broker.RejectedOrder.Quantity.get -> int
+Backtester.Broker.RejectedOrder.Quantity.set -> void
+Backtester.Broker.RejectedOrder.Reason.get -> string
+Backtester.Broker.RejectedOrder.Reason.set -> void
+Backtester.Broker.RejectedOrder.RejectedOrder() -> void
+Backtester.Broker.RejectedOrder.Side.get -> Backtester.Core.OrderSide
+Backtester.Broker.RejectedOrder.Side.set -> void
+Backtester.Broker.RejectedOrder.Symbol.get -> string
+Backtester.Broker.RejectedOrder.Symbol.set -> void
+Backtester.Broker.RejectedOrder.Timestamp.get -> System.DateTime
+Backtester.Broker.RejectedOrder.Timestamp.set -> void
+Backtester.Core.BracketHandle
+Backtester.Core.BracketHandle.BracketHandle() -> void
+Backtester.Core.BracketHandle.EntryOrderId.get -> string
+Backtester.Core.BracketHandle.EntryOrderId.set -> void
+Backtester.Core.BracketHandle.State.get -> Backtester.Core.BracketState
+Backtester.Core.BracketHandle.StopOrderId.get -> string
+Backtester.Core.BracketHandle.StopOrderId.set -> void
+Backtester.Core.BracketHandle.TargetOrderId.get -> string
+Backtester.Core.BracketHandle.TargetOrderId.set -> void
+Backtester.Core.BracketLeg
+Backtester.Core.BracketLeg.None = 0 -> Backtester.Core.BracketLeg
+Backtester.Core.BracketLeg.StopLoss = 1 -> Backtester.Core.BracketLeg
+Backtester.Core.BracketLeg.TakeProfit = 2 -> Backtester.Core.BracketLeg
+Backtester.Core.BracketLegSpec
+Backtester.Core.BracketLevelChange
+Backtester.Core.BracketLevelChange.BracketLevelChange() -> void
+Backtester.Core.BracketLevelChange.Leg.get -> Backtester.Core.BracketLeg
+Backtester.Core.BracketLevelChange.Leg.set -> void
+Backtester.Core.BracketLevelChange.OrderId.get -> string
+Backtester.Core.BracketLevelChange.OrderId.set -> void
+Backtester.Core.BracketLevelChange.Price.get -> decimal
+Backtester.Core.BracketLevelChange.Price.set -> void
+Backtester.Core.BracketLevelChange.Symbol.get -> string
+Backtester.Core.BracketLevelChange.Symbol.set -> void
+Backtester.Core.BracketLevelChange.Timestamp.get -> System.DateTime
+Backtester.Core.BracketLevelChange.Timestamp.set -> void
+Backtester.Core.BracketRequest
+Backtester.Core.BracketRequest.BracketRequest(Backtester.Core.OrderRequest entry, Backtester.Core.BracketLegSpec stopLeg = null, Backtester.Core.BracketLegSpec targetLeg = null) -> void
+Backtester.Core.BracketRequest.Entry.get -> Backtester.Core.OrderRequest
+Backtester.Core.BracketRequest.StopLeg.get -> Backtester.Core.BracketLegSpec
+Backtester.Core.BracketRequest.TargetLeg.get -> Backtester.Core.BracketLegSpec
+Backtester.Core.BracketState
+Backtester.Core.BracketState.Armed = 1 -> Backtester.Core.BracketState
+Backtester.Core.BracketState.Pending = 0 -> Backtester.Core.BracketState
+Backtester.Core.BracketState.Retired = 2 -> Backtester.Core.BracketState
+Backtester.Core.Candle
+Backtester.Core.Candle.Candle() -> void
+Backtester.Core.Candle.Close.get -> decimal
+Backtester.Core.Candle.Close.set -> void
+Backtester.Core.Candle.High.get -> decimal
+Backtester.Core.Candle.High.set -> void
+Backtester.Core.Candle.Low.get -> decimal
+Backtester.Core.Candle.Low.set -> void
+Backtester.Core.Candle.Open.get -> decimal
+Backtester.Core.Candle.Open.set -> void
+Backtester.Core.Candle.Timestamp.get -> System.DateTime
+Backtester.Core.Candle.Timestamp.set -> void
+Backtester.Core.Candle.Volume.get -> decimal
+Backtester.Core.Candle.Volume.set -> void
+Backtester.Core.ConversionOperation
+Backtester.Core.ConversionOperation.Divide = 0 -> Backtester.Core.ConversionOperation
+Backtester.Core.ConversionOperation.Multiply = 1 -> Backtester.Core.ConversionOperation
+Backtester.Core.CurrencyConverter
+Backtester.Core.CurrencyConverter.ConversionSymbols.get -> System.Collections.Generic.IReadOnlyCollection<string>
+Backtester.Core.CurrencyConverter.CurrencyConverter(string accountCurrency, Backtester.Core.Instrument[] instruments) -> void
+Backtester.Core.CurrencyConverter.ObserveRate(string conversionSymbol, decimal close) -> void
+Backtester.Core.CurrencyConverter.ToAccountCurrency(string symbol, decimal nativeAmount) -> decimal
+Backtester.Core.EquitySnapshot
+Backtester.Core.EquitySnapshot.Cash.get -> decimal
+Backtester.Core.EquitySnapshot.Cash.set -> void
+Backtester.Core.EquitySnapshot.EquityBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, decimal>
+Backtester.Core.EquitySnapshot.EquityBySymbol.set -> void
+Backtester.Core.EquitySnapshot.EquitySnapshot() -> void
+Backtester.Core.EquitySnapshot.HeldInitialMargin.get -> decimal
+Backtester.Core.EquitySnapshot.HeldInitialMargin.set -> void
+Backtester.Core.EquitySnapshot.HeldMarginBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, decimal>
+Backtester.Core.EquitySnapshot.HeldMarginBySymbol.set -> void
+Backtester.Core.EquitySnapshot.MarkedEquity.get -> decimal
+Backtester.Core.EquitySnapshot.MarkedEquity.set -> void
+Backtester.Core.EquitySnapshot.PositionValueBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, decimal>
+Backtester.Core.EquitySnapshot.PositionValueBySymbol.set -> void
+Backtester.Core.EquitySnapshot.RealizedPnL.get -> decimal
+Backtester.Core.EquitySnapshot.RealizedPnL.set -> void
+Backtester.Core.EquitySnapshot.Timestamp.get -> System.DateTime
+Backtester.Core.EquitySnapshot.Timestamp.set -> void
+Backtester.Core.EquitySnapshot.UnrealizedPnL.get -> decimal
+Backtester.Core.EquitySnapshot.UnrealizedPnL.set -> void
+Backtester.Core.ExitReason
+Backtester.Core.ExitReason.Signal = 0 -> Backtester.Core.ExitReason
+Backtester.Core.ExitReason.StopLoss = 2 -> Backtester.Core.ExitReason
+Backtester.Core.ExitReason.TakeProfit = 1 -> Backtester.Core.ExitReason
+Backtester.Core.Indicator
+Backtester.Core.Indicator.Indicator(string name, Backtester.Core.IndicatorPane pane, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorSeries> series) -> void
+Backtester.Core.Indicator.Indicator(string name, string symbol, Backtester.Core.IndicatorPane pane, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorSeries> series) -> void
+Backtester.Core.Indicator.Name.get -> string
+Backtester.Core.Indicator.Pane.get -> Backtester.Core.IndicatorPane
+Backtester.Core.Indicator.Series.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorSeries>
+Backtester.Core.Indicator.Symbol.get -> string
+Backtester.Core.IndicatorPane
+Backtester.Core.IndicatorPane.PriceOverlay = 0 -> Backtester.Core.IndicatorPane
+Backtester.Core.IndicatorPane.SeparatePane = 1 -> Backtester.Core.IndicatorPane
+Backtester.Core.IndicatorPoint
+Backtester.Core.IndicatorPoint.IndicatorPoint() -> void
+Backtester.Core.IndicatorPoint.Timestamp.get -> System.DateTime
+Backtester.Core.IndicatorPoint.Timestamp.set -> void
+Backtester.Core.IndicatorPoint.Value.get -> decimal
+Backtester.Core.IndicatorPoint.Value.set -> void
+Backtester.Core.IndicatorSeries
+Backtester.Core.IndicatorSeries.IndicatorSeries(string name, Backtester.Core.IndicatorShape shape, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorPoint> points) -> void
+Backtester.Core.IndicatorSeries.Name.get -> string
+Backtester.Core.IndicatorSeries.Points.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorPoint>
+Backtester.Core.IndicatorSeries.Shape.get -> Backtester.Core.IndicatorShape
+Backtester.Core.IndicatorShape
+Backtester.Core.IndicatorShape.Area = 1 -> Backtester.Core.IndicatorShape
+Backtester.Core.IndicatorShape.Histogram = 2 -> Backtester.Core.IndicatorShape
+Backtester.Core.IndicatorShape.Line = 0 -> Backtester.Core.IndicatorShape
+Backtester.Core.Instrument
+Backtester.Core.Instrument.ConversionOperation.get -> Backtester.Core.ConversionOperation
+Backtester.Core.Instrument.ConversionOperation.set -> void
+Backtester.Core.Instrument.ConversionSymbol.get -> string
+Backtester.Core.Instrument.ConversionSymbol.set -> void
+Backtester.Core.Instrument.Instrument() -> void
+Backtester.Core.Instrument.MarginRate.get -> decimal?
+Backtester.Core.Instrument.MarginRate.set -> void
+Backtester.Core.Instrument.QuoteCurrency.get -> string
+Backtester.Core.Instrument.QuoteCurrency.set -> void
+Backtester.Core.Instrument.Symbol.get -> string
+Backtester.Core.Instrument.Symbol.set -> void
+Backtester.Core.InstrumentDeclarationException
+Backtester.Core.InstrumentDeclarationException.InstrumentDeclarationException(string symbol, string problem) -> void
+Backtester.Core.InstrumentDeclarationException.Symbol.get -> string
+Backtester.Core.MarketSlice
+Backtester.Core.MarketSlice.BarsBySymbol.get -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.Candle>
+Backtester.Core.MarketSlice.BarsBySymbol.set -> void
+Backtester.Core.MarketSlice.HasBar(string symbol) -> bool
+Backtester.Core.MarketSlice.HasRealBar(string symbol) -> bool
+Backtester.Core.MarketSlice.MarketSlice() -> void
+Backtester.Core.MarketSlice.Timestamp.get -> System.DateTime
+Backtester.Core.MarketSlice.Timestamp.set -> void
+Backtester.Core.MissingConversionRateException
+Backtester.Core.MissingConversionRateException.ConversionSymbol.get -> string
+Backtester.Core.MissingConversionRateException.MissingConversionRateException(string symbol, string conversionSymbol) -> void
+Backtester.Core.MissingConversionRateException.Symbol.get -> string
+Backtester.Core.Order
+Backtester.Core.Order.Id.get -> string
+Backtester.Core.Order.Id.set -> void
+Backtester.Core.Order.Order() -> void
+Backtester.Core.Order.Price.get -> decimal?
+Backtester.Core.Order.Price.set -> void
+Backtester.Core.Order.Priority.get -> int
+Backtester.Core.Order.Priority.set -> void
+Backtester.Core.Order.Quantity.get -> int
+Backtester.Core.Order.Quantity.set -> void
+Backtester.Core.Order.Sequence.get -> long
+Backtester.Core.Order.Sequence.set -> void
+Backtester.Core.Order.Side.get -> Backtester.Core.OrderSide
+Backtester.Core.Order.Side.set -> void
+Backtester.Core.Order.SubmittedAt.get -> System.DateTime
+Backtester.Core.Order.SubmittedAt.set -> void
+Backtester.Core.Order.Symbol.get -> string
+Backtester.Core.Order.Symbol.set -> void
+Backtester.Core.Order.Type.get -> Backtester.Core.OrderType
+Backtester.Core.Order.Type.set -> void
+Backtester.Core.OrderRequest
+Backtester.Core.OrderRequest.ClientMetadata.get -> object
+Backtester.Core.OrderRequest.ClientMetadata.set -> void
+Backtester.Core.OrderRequest.Copy() -> Backtester.Core.OrderRequest
+Backtester.Core.OrderRequest.OrderRequest() -> void
+Backtester.Core.OrderRequest.Price.get -> decimal?
+Backtester.Core.OrderRequest.Price.set -> void
+Backtester.Core.OrderRequest.Priority.get -> int
+Backtester.Core.OrderRequest.Priority.set -> void
+Backtester.Core.OrderRequest.Quantity.get -> int
+Backtester.Core.OrderRequest.Quantity.set -> void
+Backtester.Core.OrderRequest.Side.get -> Backtester.Core.OrderSide
+Backtester.Core.OrderRequest.Side.set -> void
+Backtester.Core.OrderRequest.StopOffset.get -> decimal?
+Backtester.Core.OrderRequest.StopOffset.set -> void
+Backtester.Core.OrderRequest.StopPrice.get -> decimal?
+Backtester.Core.OrderRequest.StopPrice.set -> void
+Backtester.Core.OrderRequest.Symbol.get -> string
+Backtester.Core.OrderRequest.Symbol.set -> void
+Backtester.Core.OrderRequest.Type.get -> Backtester.Core.OrderType
+Backtester.Core.OrderRequest.Type.set -> void
+Backtester.Core.OrderSide
+Backtester.Core.OrderSide.Buy = 0 -> Backtester.Core.OrderSide
+Backtester.Core.OrderSide.Sell = 1 -> Backtester.Core.OrderSide
+Backtester.Core.OrderType
+Backtester.Core.OrderType.Limit = 1 -> Backtester.Core.OrderType
+Backtester.Core.OrderType.Market = 0 -> Backtester.Core.OrderType
+Backtester.Core.OrderType.Stop = 2 -> Backtester.Core.OrderType
+Backtester.Core.PerformanceCalculator
+Backtester.Core.PerformanceStats
+Backtester.Core.PerformanceStats.AvgCapitalInvested.get -> decimal
+Backtester.Core.PerformanceStats.AvgCapitalInvested.set -> void
+Backtester.Core.PerformanceStats.AvgDrawdown.get -> decimal
+Backtester.Core.PerformanceStats.AvgDrawdown.set -> void
+Backtester.Core.PerformanceStats.AvgLeverage.get -> decimal
+Backtester.Core.PerformanceStats.AvgLeverage.set -> void
+Backtester.Core.PerformanceStats.AvgLoss.get -> decimal
+Backtester.Core.PerformanceStats.AvgLoss.set -> void
+Backtester.Core.PerformanceStats.AvgMarginUtilization.get -> decimal
+Backtester.Core.PerformanceStats.AvgMarginUtilization.set -> void
+Backtester.Core.PerformanceStats.AvgRMultiple.get -> decimal?
+Backtester.Core.PerformanceStats.AvgRMultiple.set -> void
+Backtester.Core.PerformanceStats.AvgTradeDuration.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.AvgTradeDuration.set -> void
+Backtester.Core.PerformanceStats.AvgWin.get -> decimal
+Backtester.Core.PerformanceStats.AvgWin.set -> void
+Backtester.Core.PerformanceStats.BreakEven.get -> int
+Backtester.Core.PerformanceStats.BreakEven.set -> void
+Backtester.Core.PerformanceStats.Cagr.get -> decimal
+Backtester.Core.PerformanceStats.Cagr.set -> void
+Backtester.Core.PerformanceStats.Calmar.get -> decimal
+Backtester.Core.PerformanceStats.Calmar.set -> void
+Backtester.Core.PerformanceStats.Expectancy.get -> decimal
+Backtester.Core.PerformanceStats.Expectancy.set -> void
+Backtester.Core.PerformanceStats.GrossLoss.get -> decimal
+Backtester.Core.PerformanceStats.GrossLoss.set -> void
+Backtester.Core.PerformanceStats.GrossProfit.get -> decimal
+Backtester.Core.PerformanceStats.GrossProfit.set -> void
+Backtester.Core.PerformanceStats.LargestLoss.get -> decimal
+Backtester.Core.PerformanceStats.LargestLoss.set -> void
+Backtester.Core.PerformanceStats.LargestWin.get -> decimal
+Backtester.Core.PerformanceStats.LargestWin.set -> void
+Backtester.Core.PerformanceStats.LongWinRate.get -> decimal
+Backtester.Core.PerformanceStats.LongWinRate.set -> void
+Backtester.Core.PerformanceStats.LongestTradeDuration.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.LongestTradeDuration.set -> void
+Backtester.Core.PerformanceStats.Losers.get -> int
+Backtester.Core.PerformanceStats.Losers.set -> void
+Backtester.Core.PerformanceStats.MarketExposure.get -> decimal
+Backtester.Core.PerformanceStats.MarketExposure.set -> void
+Backtester.Core.PerformanceStats.MaxCapitalInvested.get -> decimal
+Backtester.Core.PerformanceStats.MaxCapitalInvested.set -> void
+Backtester.Core.PerformanceStats.MaxConsecLosses.get -> int
+Backtester.Core.PerformanceStats.MaxConsecLosses.set -> void
+Backtester.Core.PerformanceStats.MaxConsecWins.get -> int
+Backtester.Core.PerformanceStats.MaxConsecWins.set -> void
+Backtester.Core.PerformanceStats.MaxDrawdown.get -> decimal
+Backtester.Core.PerformanceStats.MaxDrawdown.set -> void
+Backtester.Core.PerformanceStats.MaxDrawdownDuration.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.MaxDrawdownDuration.set -> void
+Backtester.Core.PerformanceStats.MedianTrade.get -> decimal
+Backtester.Core.PerformanceStats.MedianTrade.set -> void
+Backtester.Core.PerformanceStats.MedianTradeDuration.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.MedianTradeDuration.set -> void
+Backtester.Core.PerformanceStats.NetProfit.get -> decimal
+Backtester.Core.PerformanceStats.NetProfit.set -> void
+Backtester.Core.PerformanceStats.NetProfitLong.get -> decimal
+Backtester.Core.PerformanceStats.NetProfitLong.set -> void
+Backtester.Core.PerformanceStats.NetProfitShort.get -> decimal
+Backtester.Core.PerformanceStats.NetProfitShort.set -> void
+Backtester.Core.PerformanceStats.PeakLeverage.get -> decimal
+Backtester.Core.PerformanceStats.PeakLeverage.set -> void
+Backtester.Core.PerformanceStats.PeakMarginUtilization.get -> decimal
+Backtester.Core.PerformanceStats.PeakMarginUtilization.set -> void
+Backtester.Core.PerformanceStats.PerformanceStats() -> void
+Backtester.Core.PerformanceStats.ProfitFactor.get -> decimal
+Backtester.Core.PerformanceStats.ProfitFactor.set -> void
+Backtester.Core.PerformanceStats.RecoveryFactor.get -> decimal
+Backtester.Core.PerformanceStats.RecoveryFactor.set -> void
+Backtester.Core.PerformanceStats.RoundTrips.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip>
+Backtester.Core.PerformanceStats.RoundTrips.set -> void
+Backtester.Core.PerformanceStats.Sharpe.get -> decimal
+Backtester.Core.PerformanceStats.Sharpe.set -> void
+Backtester.Core.PerformanceStats.ShortWinRate.get -> decimal
+Backtester.Core.PerformanceStats.ShortWinRate.set -> void
+Backtester.Core.PerformanceStats.ShortestTradeDuration.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.ShortestTradeDuration.set -> void
+Backtester.Core.PerformanceStats.Sortino.get -> decimal
+Backtester.Core.PerformanceStats.Sortino.set -> void
+Backtester.Core.PerformanceStats.TimeToRecover.get -> System.TimeSpan
+Backtester.Core.PerformanceStats.TimeToRecover.set -> void
+Backtester.Core.PerformanceStats.Trades.get -> int
+Backtester.Core.PerformanceStats.Trades.set -> void
+Backtester.Core.PerformanceStats.WinRate.get -> decimal
+Backtester.Core.PerformanceStats.WinRate.set -> void
+Backtester.Core.PerformanceStats.Winners.get -> int
+Backtester.Core.PerformanceStats.Winners.set -> void
+Backtester.Core.Portfolio
+Backtester.Core.Portfolio.AccountCurrency.get -> string
+Backtester.Core.Portfolio.ApplyTrade(Backtester.Core.Trade trade) -> void
+Backtester.Core.Portfolio.BuyingPower.get -> decimal
+Backtester.Core.Portfolio.Cash.get -> decimal
+Backtester.Core.Portfolio.CommittedMargin.get -> decimal
+Backtester.Core.Portfolio.ConversionSymbols.get -> System.Collections.Generic.IReadOnlyCollection<string>
+Backtester.Core.Portfolio.EquityHistory.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot>
+Backtester.Core.Portfolio.GetPerformanceStats() -> Backtester.Core.PerformanceStats
+Backtester.Core.Portfolio.GetPerformanceStatsBySymbol() -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
+Backtester.Core.Portfolio.InitialMarginForOrder(Backtester.Core.OrderRequest request) -> decimal
+Backtester.Core.Portfolio.LongInitialMarginRate.get -> decimal
+Backtester.Core.Portfolio.LongInitialMarginRate.set -> void
+Backtester.Core.Portfolio.MarkedEquity.get -> decimal
+Backtester.Core.Portfolio.OpenQuantity(string symbol) -> int
+Backtester.Core.Portfolio.Portfolio(decimal startingCash, string accountCurrency = "USD", Backtester.Core.Instrument[] instruments = null) -> void
+Backtester.Core.Portfolio.Positions.get -> System.Collections.Generic.List<Backtester.Core.Position>
+Backtester.Core.Portfolio.RealizedEquity.get -> decimal
+Backtester.Core.Portfolio.RealizedPnL.get -> decimal
+Backtester.Core.Portfolio.RecordEquitySnapshot(Backtester.Core.MarketSlice slice) -> void
+Backtester.Core.Portfolio.ReducesOpenPosition(Backtester.Core.OrderRequest request) -> bool
+Backtester.Core.Portfolio.ReservedCash.get -> decimal
+Backtester.Core.Portfolio.RoundTrips.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip>
+Backtester.Core.Portfolio.ShortInitialMarginRate.get -> decimal
+Backtester.Core.Portfolio.ShortInitialMarginRate.set -> void
+Backtester.Core.Portfolio.SnapshotAt(System.DateTime timestamp) -> Backtester.Core.PortfolioSnapshot
+Backtester.Core.Portfolio.StartingCash.get -> decimal
+Backtester.Core.Portfolio.ToAccountCurrency(string symbol, decimal nativeAmount) -> decimal
+Backtester.Core.Portfolio.Trades.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Trade>
+Backtester.Core.Portfolio.ValuationPriceForOrder(Backtester.Core.OrderRequest request) -> decimal
+Backtester.Core.PortfolioSnapshot
+Backtester.Core.PortfolioSnapshot.Cash.get -> decimal
+Backtester.Core.PortfolioSnapshot.Cash.set -> void
+Backtester.Core.PortfolioSnapshot.CostBasisEquity.get -> decimal
+Backtester.Core.PortfolioSnapshot.CostBasisEquity.set -> void
+Backtester.Core.PortfolioSnapshot.PortfolioSnapshot() -> void
+Backtester.Core.PortfolioSnapshot.Positions.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Position>
+Backtester.Core.PortfolioSnapshot.Positions.set -> void
+Backtester.Core.PortfolioSnapshot.Timestamp.get -> System.DateTime
+Backtester.Core.PortfolioSnapshot.Timestamp.set -> void
+Backtester.Core.Position
+Backtester.Core.Position.AddTrade(Backtester.Core.Trade trade) -> void
+Backtester.Core.Position.AveragePrice.get -> decimal
+Backtester.Core.Position.AveragePrice.set -> void
+Backtester.Core.Position.EntryBarIndex.get -> int
+Backtester.Core.Position.EntryBarIndex.set -> void
+Backtester.Core.Position.EntryEquity.get -> decimal
+Backtester.Core.Position.EntryEquity.set -> void
+Backtester.Core.Position.EntryNotional.get -> decimal
+Backtester.Core.Position.EntryNotional.set -> void
+Backtester.Core.Position.EntryStopDistance.get -> decimal?
+Backtester.Core.Position.EntryStopDistance.set -> void
+Backtester.Core.Position.EntryStopPrice.get -> decimal?
+Backtester.Core.Position.EntryStopPrice.set -> void
+Backtester.Core.Position.EntryTargetPrice.get -> decimal?
+Backtester.Core.Position.EntryTargetPrice.set -> void
+Backtester.Core.Position.EntryTime.get -> System.DateTime
+Backtester.Core.Position.EntryTime.set -> void
+Backtester.Core.Position.Id.get -> string
+Backtester.Core.Position.Id.set -> void
+Backtester.Core.Position.Metadata.get -> Backtester.Core.PositionMetadata
+Backtester.Core.Position.Metadata.set -> void
+Backtester.Core.Position.Position() -> void
+Backtester.Core.Position.Quantity.get -> int
+Backtester.Core.Position.Quantity.set -> void
+Backtester.Core.Position.Symbol.get -> string
+Backtester.Core.Position.Symbol.set -> void
+Backtester.Core.Position.Trades.get -> System.Collections.Generic.List<Backtester.Core.Trade>
+Backtester.Core.PositionDirection
+Backtester.Core.PositionDirection.Long = 0 -> Backtester.Core.PositionDirection
+Backtester.Core.PositionDirection.Short = 1 -> Backtester.Core.PositionDirection
+Backtester.Core.PositionMetadata
+Backtester.Core.PositionMetadata.PositionMetadata() -> void
+Backtester.Core.RoundTrip
+Backtester.Core.RoundTrip.BarsHeld.get -> int
+Backtester.Core.RoundTrip.BarsHeld.set -> void
+Backtester.Core.RoundTrip.Direction.get -> Backtester.Core.PositionDirection
+Backtester.Core.RoundTrip.Direction.set -> void
+Backtester.Core.RoundTrip.EntryEquity.get -> decimal
+Backtester.Core.RoundTrip.EntryEquity.set -> void
+Backtester.Core.RoundTrip.EntryMargin.get -> decimal
+Backtester.Core.RoundTrip.EntryMargin.set -> void
+Backtester.Core.RoundTrip.EntryNotional.get -> decimal
+Backtester.Core.RoundTrip.EntryNotional.set -> void
+Backtester.Core.RoundTrip.EntryPrice.get -> decimal
+Backtester.Core.RoundTrip.EntryPrice.set -> void
+Backtester.Core.RoundTrip.EntryStopPrice.get -> decimal?
+Backtester.Core.RoundTrip.EntryStopPrice.set -> void
+Backtester.Core.RoundTrip.EntryTargetPrice.get -> decimal?
+Backtester.Core.RoundTrip.EntryTargetPrice.set -> void
+Backtester.Core.RoundTrip.EntryTime.get -> System.DateTime
+Backtester.Core.RoundTrip.EntryTime.set -> void
+Backtester.Core.RoundTrip.ExitPrice.get -> decimal
+Backtester.Core.RoundTrip.ExitPrice.set -> void
+Backtester.Core.RoundTrip.ExitReason.get -> Backtester.Core.ExitReason
+Backtester.Core.RoundTrip.ExitReason.set -> void
+Backtester.Core.RoundTrip.ExitTime.get -> System.DateTime
+Backtester.Core.RoundTrip.ExitTime.set -> void
+Backtester.Core.RoundTrip.InitialRisk.get -> decimal?
+Backtester.Core.RoundTrip.InitialRisk.set -> void
+Backtester.Core.RoundTrip.Quantity.get -> int
+Backtester.Core.RoundTrip.Quantity.set -> void
+Backtester.Core.RoundTrip.QuoteCurrency.get -> string
+Backtester.Core.RoundTrip.QuoteCurrency.set -> void
+Backtester.Core.RoundTrip.RealizedPnL.get -> decimal
+Backtester.Core.RoundTrip.RealizedPnL.set -> void
+Backtester.Core.RoundTrip.RoundTrip() -> void
+Backtester.Core.RoundTrip.Symbol.get -> string
+Backtester.Core.RoundTrip.Symbol.set -> void
+Backtester.Core.Trade
+Backtester.Core.Trade.Commission.get -> decimal
+Backtester.Core.Trade.Commission.set -> void
+Backtester.Core.Trade.EntryStopPrice.get -> decimal?
+Backtester.Core.Trade.EntryStopPrice.set -> void
+Backtester.Core.Trade.EntryTargetPrice.get -> decimal?
+Backtester.Core.Trade.EntryTargetPrice.set -> void
+Backtester.Core.Trade.Id.get -> string
+Backtester.Core.Trade.Id.set -> void
+Backtester.Core.Trade.Leg.get -> Backtester.Core.BracketLeg
+Backtester.Core.Trade.Leg.set -> void
+Backtester.Core.Trade.OrderId.get -> string
+Backtester.Core.Trade.OrderId.set -> void
+Backtester.Core.Trade.PositionId.get -> string
+Backtester.Core.Trade.PositionId.set -> void
+Backtester.Core.Trade.Price.get -> decimal
+Backtester.Core.Trade.Price.set -> void
+Backtester.Core.Trade.Quantity.get -> int
+Backtester.Core.Trade.Quantity.set -> void
+Backtester.Core.Trade.Side.get -> Backtester.Core.OrderSide
+Backtester.Core.Trade.Side.set -> void
+Backtester.Core.Trade.Slippage.get -> decimal
+Backtester.Core.Trade.Slippage.set -> void
+Backtester.Core.Trade.Symbol.get -> string
+Backtester.Core.Trade.Symbol.set -> void
+Backtester.Core.Trade.Timestamp.get -> System.DateTime
+Backtester.Core.Trade.Timestamp.set -> void
+Backtester.Core.Trade.Trade() -> void
+Backtester.Data.CoverageFloorLoader
+Backtester.Data.CoverageFloorLoader.CoverageFloorLoader() -> void
+Backtester.Data.CoverageFloorLoader.FileName(string symbol, string interval) -> string
+Backtester.Data.CoverageFloorLoader.Lower(string path, System.DateTime candidateFromUtc) -> void
+Backtester.Data.CoverageFloorLoader.Read(string path) -> System.DateTime?
+Backtester.Data.CoverageFloorLoader.Write(string path, System.DateTime floorUtc) -> void
+Backtester.Data.CsvBarLoader
+Backtester.Data.CsvBarLoader.AppendAndMerge(string path, System.Collections.Generic.IEnumerable<Backtester.Core.Candle> additional) -> void
+Backtester.Data.CsvBarLoader.CsvBarLoader() -> void
+Backtester.Data.CsvBarLoader.GetLatestTimestamp(string path) -> System.DateTime?
+Backtester.Data.CsvBarLoader.ReadAll(string path) -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>
+Backtester.Data.CsvBarLoader.WriteAll(string path, System.Collections.Generic.IEnumerable<Backtester.Core.Candle> candles) -> void
+Backtester.Data.CsvHistoricalDataFetcher
+Backtester.Data.CsvHistoricalDataFetcher.CsvHistoricalDataFetcher(string dataFolder) -> void
+Backtester.Data.CsvHistoricalDataFetcher.FetchAsync(string symbol, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>>
+Backtester.Data.DataCoverageException
+Backtester.Data.DataCoverageException.CoverageFloorUtc.get -> System.DateTime
+Backtester.Data.DataCoverageException.DataCoverageException(string symbol, System.DateTime requestedFromUtc, System.DateTime coverageFloorUtc, string interval) -> void
+Backtester.Data.DataCoverageException.Interval.get -> string
+Backtester.Data.DataCoverageException.RequestedFromUtc.get -> System.DateTime
+Backtester.Data.DataCoverageException.Symbol.get -> string
+Backtester.Data.HistoricalDataFetcher
+Backtester.Data.HistoricalDataFetcher.FetchAsync(string symbol, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>>
+Backtester.Data.HistoricalDataFetcher.HistoricalDataFetcher(Backtester.Data.IHistoricalDataProvider provider, string dataFolder = null) -> void
+Backtester.Data.HistoricalDataFetcher.PrimeAsync(string[] symbols, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task
+Backtester.Data.HistoricalDataFetcher.ResolveWarmupStartAsync(string symbol, System.DateTime testFrom, int warmupBars, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTime>
+Backtester.Data.IDataPrimer
+Backtester.Data.IDataPrimer.PrimeAsync(string[] symbols, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task
+Backtester.Data.IHistoricalDataFetcher
+Backtester.Data.IHistoricalDataFetcher.FetchAsync(string symbol, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>>
+Backtester.Data.IHistoricalDataProvider
+Backtester.Data.IHistoricalDataProvider.FetchAsync(string symbol, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<Backtester.Core.Candle>>
+Backtester.Data.IWarmupResolvingFetcher
+Backtester.Data.IWarmupResolvingFetcher.ResolveWarmupStartAsync(string symbol, System.DateTime testFrom, int warmupBars, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTime>
+Backtester.Data.InsufficientWarmupBarsException
+Backtester.Data.InsufficientWarmupBarsException.AvailableBars.get -> int
+Backtester.Data.InsufficientWarmupBarsException.InsufficientWarmupBarsException(string symbol, int requestedBars, int availableBars, string interval) -> void
+Backtester.Data.InsufficientWarmupBarsException.Interval.get -> string
+Backtester.Data.InsufficientWarmupBarsException.RequestedBars.get -> int
+Backtester.Data.InsufficientWarmupBarsException.Symbol.get -> string
+Backtester.Engine.BacktestResult
+Backtester.Engine.BacktestResult.BacktestResult(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> candleHistory, Backtester.Core.Portfolio portfolio, System.Collections.Generic.IReadOnlyList<Backtester.Core.Indicator> indicators, System.Collections.Generic.IReadOnlyList<string> symbols, string interval, System.DateTime fromUtc, System.DateTime toUtc, System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder> rejectedOrders, System.Collections.Generic.IReadOnlyList<Backtester.Core.BracketLevelChange> bracketLevelChanges) -> void
+Backtester.Engine.BacktestResult.BracketLevelChanges.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.BracketLevelChange>
+Backtester.Engine.BacktestResult.CandleHistory.get -> System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>>
+Backtester.Engine.BacktestResult.FromUtc.get -> System.DateTime
+Backtester.Engine.BacktestResult.Indicators.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Indicator>
+Backtester.Engine.BacktestResult.Interval.get -> string
+Backtester.Engine.BacktestResult.Portfolio.get -> Backtester.Core.Portfolio
+Backtester.Engine.BacktestResult.RejectedOrders.get -> System.Collections.Generic.IReadOnlyList<Backtester.Broker.RejectedOrder>
+Backtester.Engine.BacktestResult.StartingEquity.get -> decimal
+Backtester.Engine.BacktestResult.Symbols.get -> System.Collections.Generic.IReadOnlyList<string>
+Backtester.Engine.BacktestResult.ToUtc.get -> System.DateTime
+Backtester.Engine.Engine
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.DateTime warmupStart, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, System.TimeSpan warmup, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IHistoricalDataFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher, string[] symbols, System.DateTime testFrom, System.DateTime testTo, int warmupBars, string interval, Backtester.Strategies.IStrategy strategy, Backtester.Broker.IBrokerSimulator broker, Backtester.Core.Portfolio portfolio) -> void
+Backtester.Engine.Engine.StartAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Backtester.Engine.BacktestResult>
+Backtester.Engine.Engine.Stop() -> void
+Backtester.Engine.IEngine
+Backtester.Engine.IEngine.StartAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Backtester.Engine.BacktestResult>
+Backtester.Engine.IEngine.Stop() -> void
+Backtester.ExecutionModels.Commission.FixedCommission
+Backtester.ExecutionModels.Commission.FixedCommission.Amount.get -> decimal
+Backtester.ExecutionModels.Commission.FixedCommission.Amount.set -> void
+Backtester.ExecutionModels.Commission.FixedCommission.Calculate(decimal notional, int quantity) -> decimal
+Backtester.ExecutionModels.Commission.FixedCommission.FixedCommission() -> void
+Backtester.ExecutionModels.Commission.ICommissionModel
+Backtester.ExecutionModels.Commission.ICommissionModel.Calculate(decimal notional, int quantity) -> decimal
+Backtester.ExecutionModels.Commission.PerShareCommission
+Backtester.ExecutionModels.Commission.PerShareCommission.Calculate(decimal notional, int quantity) -> decimal
+Backtester.ExecutionModels.Commission.PerShareCommission.PerShare.get -> decimal
+Backtester.ExecutionModels.Commission.PerShareCommission.PerShare.set -> void
+Backtester.ExecutionModels.Commission.PerShareCommission.PerShareCommission() -> void
+Backtester.ExecutionModels.Commission.PercentCommission
+Backtester.ExecutionModels.Commission.PercentCommission.Calculate(decimal notional, int quantity) -> decimal
+Backtester.ExecutionModels.Commission.PercentCommission.Percent.get -> decimal
+Backtester.ExecutionModels.Commission.PercentCommission.Percent.set -> void
+Backtester.ExecutionModels.Commission.PercentCommission.PercentCommission() -> void
+Backtester.ExecutionModels.Sizing.FixedRiskSizing
+Backtester.ExecutionModels.Sizing.FixedRiskSizing.FixedRiskSizing() -> void
+Backtester.ExecutionModels.Sizing.FixedRiskSizing.RiskAmount.get -> decimal
+Backtester.ExecutionModels.Sizing.FixedRiskSizing.RiskAmount.set -> void
+Backtester.ExecutionModels.Sizing.FixedRiskSizing.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
+Backtester.ExecutionModels.Sizing.FixedSizeModel
+Backtester.ExecutionModels.Sizing.FixedSizeModel.FixedSize.get -> int
+Backtester.ExecutionModels.Sizing.FixedSizeModel.FixedSize.set -> void
+Backtester.ExecutionModels.Sizing.FixedSizeModel.FixedSizeModel() -> void
+Backtester.ExecutionModels.Sizing.FixedSizeModel.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
+Backtester.ExecutionModels.Sizing.ISizingModel
+Backtester.ExecutionModels.Sizing.ISizingModel.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
+Backtester.ExecutionModels.Sizing.OrderStopDistance
+Backtester.ExecutionModels.Sizing.PercentNotionalSizing
+Backtester.ExecutionModels.Sizing.PercentNotionalSizing.Percent.get -> decimal
+Backtester.ExecutionModels.Sizing.PercentNotionalSizing.Percent.set -> void
+Backtester.ExecutionModels.Sizing.PercentNotionalSizing.PercentNotionalSizing() -> void
+Backtester.ExecutionModels.Sizing.PercentNotionalSizing.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
+Backtester.ExecutionModels.Sizing.RiskPerTradeSizing
+Backtester.ExecutionModels.Sizing.RiskPerTradeSizing.RiskFraction.get -> decimal
+Backtester.ExecutionModels.Sizing.RiskPerTradeSizing.RiskFraction.set -> void
+Backtester.ExecutionModels.Sizing.RiskPerTradeSizing.RiskPerTradeSizing() -> void
+Backtester.ExecutionModels.Sizing.RiskPerTradeSizing.Size(Backtester.Core.OrderRequest request, Backtester.Core.Portfolio portfolio) -> int
+Backtester.ExecutionModels.Slippage.FixedSlippage
+Backtester.ExecutionModels.Slippage.FixedSlippage.Amount.get -> decimal
+Backtester.ExecutionModels.Slippage.FixedSlippage.Amount.set -> void
+Backtester.ExecutionModels.Slippage.FixedSlippage.Apply(decimal price, Backtester.Core.OrderSide side) -> decimal
+Backtester.ExecutionModels.Slippage.FixedSlippage.FixedSlippage() -> void
+Backtester.ExecutionModels.Slippage.ISlippageModel
+Backtester.ExecutionModels.Slippage.ISlippageModel.Apply(decimal price, Backtester.Core.OrderSide side) -> decimal
+Backtester.ExecutionModels.Slippage.PercentSlippage
+Backtester.ExecutionModels.Slippage.PercentSlippage.Apply(decimal price, Backtester.Core.OrderSide side) -> decimal
+Backtester.ExecutionModels.Slippage.PercentSlippage.Percent.get -> decimal
+Backtester.ExecutionModels.Slippage.PercentSlippage.Percent.set -> void
+Backtester.ExecutionModels.Slippage.PercentSlippage.PercentSlippage() -> void
+Backtester.Strategies.AtrBracketStrategy
+Backtester.Strategies.AtrBracketStrategy.AtrBracketStrategy(int atrPeriod = 14, decimal stopAtrMultiple = 1, decimal targetAtrMultiple = 2) -> void
+Backtester.Strategies.IIndicatorSource
+Backtester.Strategies.IIndicatorSource.Indicators.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Indicator>
+Backtester.Strategies.IRoundTripObserver
+Backtester.Strategies.IRoundTripObserver.OnRoundTripClosed(Backtester.Core.RoundTrip roundTrip) -> void
+Backtester.Strategies.IStrategy
+Backtester.Strategies.IStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
+Backtester.Strategies.IStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
+Backtester.Strategies.MovingAverageCrossStrategy
+Backtester.Strategies.MovingAverageCrossStrategy.MovingAverageCrossStrategy(int fastPeriod, int slowPeriod) -> void
+Backtester.Strategies.StrategyBase
+Backtester.Strategies.StrategyBase.Indicators.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.Indicator>
+Backtester.Strategies.StrategyBase.RecordIndicator(Backtester.Core.Indicator indicator) -> void
+Backtester.Strategies.StrategyBase.RecordIndicator(string name, Backtester.Core.IndicatorPane pane, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorPoint> points) -> void
+Backtester.Strategies.StrategyBase.RecordIndicator(string name, string symbol, Backtester.Core.IndicatorPane pane, System.Collections.Generic.IReadOnlyList<Backtester.Core.IndicatorPoint> points) -> void
+Backtester.Strategies.StrategyBase.StrategyBase() -> void
+abstract Backtester.Strategies.StrategyBase.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
+override Backtester.Strategies.AtrBracketStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
+override Backtester.Strategies.AtrBracketStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
+override Backtester.Strategies.MovingAverageCrossStrategy.OnBar(string symbol, Backtester.Core.Candle bar, Backtester.Core.PortfolioSnapshot snapshot, Backtester.Broker.IBroker broker) -> void
+override Backtester.Strategies.MovingAverageCrossStrategy.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
+static Backtester.Core.BracketLegSpec.AtPrice(decimal price) -> Backtester.Core.BracketLegSpec
+static Backtester.Core.BracketLegSpec.OffsetFromFill(decimal offset) -> Backtester.Core.BracketLegSpec
+static Backtester.Core.PerformanceCalculator.Calculate(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> Backtester.Core.PerformanceStats
+static Backtester.Core.PerformanceCalculator.CalculateBySymbol(System.Collections.Generic.IReadOnlyList<Backtester.Core.RoundTrip> roundTrips, System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot> equityHistory, decimal startingCash) -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
+static Backtester.Data.CsvBarLoader.FileName(string symbol, string interval) -> string
+static Backtester.ExecutionModels.Sizing.OrderStopDistance.For(Backtester.Core.OrderRequest request) -> decimal
+virtual Backtester.Strategies.StrategyBase.OnRoundTripClosed(Backtester.Core.RoundTrip roundTrip) -> void
+virtual Backtester.Strategies.StrategyBase.OnStart(System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyList<Backtester.Core.Candle>> history) -> void
