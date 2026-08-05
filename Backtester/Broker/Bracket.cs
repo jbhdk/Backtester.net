@@ -15,10 +15,12 @@ namespace Backtester.Broker
     /// mints the leg order IDs and completes the <see cref="BracketHandle"/>, but never touches the order
     /// book. Turning each placement into a working order is the broker's job, which is what lets a bracket be
     /// driven with no broker, no portfolio and no market data. Once armed the bracket keeps answering for its
-    /// legs — their roles, and which sibling a fill cancels — until none is left resting.
+    /// legs — their roles, which sibling a fill cancels, and which of them still rest — until none is left,
+    /// at which point it retires itself and the broker forgets it.
     /// </summary>
     internal sealed class Bracket
     {
+        private readonly string _symbol;
         private readonly decimal? _stopPrice;
         private readonly decimal? _targetPrice;
         private readonly decimal? _stopOffset;
@@ -29,10 +31,10 @@ namespace Backtester.Broker
         private readonly Dictionary<string, BracketLeg> _restingLegs = new();
         private string _entryOrderId;
         private int _quantity;
-        private bool _armed;
 
         private Bracket(BracketRequest request)
         {
+            _symbol = request.Entry.Symbol;
             _stopPrice = request.StopPrice;
             _targetPrice = request.TargetPrice;
             _stopOffset = request.StopOffset;
@@ -48,10 +50,22 @@ namespace Backtester.Broker
         internal BracketHandle Handle { get; }
 
         /// <summary>
-        /// Gets whether this bracket still has an order in play — an entry that has not filled, or at least
-        /// one protective leg still resting. A bracket that has neither can answer for nothing more.
+        /// Gets the symbol this bracket trades — its entry's, and therefore its legs' and the position they
+        /// protect. It is how the broker finds the bracket guarding a position that something else closed.
         /// </summary>
-        internal bool IsLive => (!_armed && _entryOrderId != null) || _restingLegs.Count > 0;
+        internal string Symbol => _symbol;
+
+        /// <summary>
+        /// Gets where this bracket stands: waiting on its entry, protecting an open position, or done.
+        /// </summary>
+        internal BracketState State { get; private set; } = BracketState.Pending;
+
+        /// <summary>
+        /// Gets a snapshot of the order IDs of the protective legs still resting — none once the bracket has
+        /// retired, and at most two before that. A snapshot, so the caller can cancel each one in turn while
+        /// the bracket releases them.
+        /// </summary>
+        internal IReadOnlyList<string> RestingLegOrderIds => _restingLegs.Keys.ToList();
 
         /// <summary>
         /// Creates the bracket a request describes, rejecting a request that cannot form a legal bracket:
@@ -108,7 +122,8 @@ namespace Backtester.Broker
         /// </summary>
         internal bool Owns(string orderId)
         {
-            return (!_armed && _entryOrderId != null && _entryOrderId == orderId) || _restingLegs.ContainsKey(orderId);
+            return (State == BracketState.Pending && _entryOrderId != null && _entryOrderId == orderId)
+                || _restingLegs.ContainsKey(orderId);
         }
 
         /// <summary>
@@ -133,10 +148,12 @@ namespace Backtester.Broker
             if (_restingLegs.TryGetValue(orderId, out BracketLeg leg))
             {
                 // At most one other leg can be resting, so the sibling is whatever remains once the filled
-                // leg is taken out — and nothing rests afterwards either way.
+                // leg is taken out — and nothing rests afterwards either way, which resolves the position
+                // this bracket protected and retires it.
                 _restingLegs.Remove(orderId);
                 string siblingOrderId = _restingLegs.Keys.FirstOrDefault();
                 _restingLegs.Clear();
+                State = BracketState.Retired;
 
                 return new BracketFillOutcome { Leg = leg, SiblingOrderId = siblingOrderId };
             }
@@ -147,11 +164,16 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Drops a leg the broker cancelled: it can no longer fill, and it is no longer a sibling for the
-        /// remaining leg to cancel. A bracket's entry is not a leg, so cancelling that leaves it pending.
+        /// remaining leg to cancel. Releasing the last resting leg leaves nothing guarding the position, so
+        /// the bracket retires. A bracket's entry is not a leg, so cancelling that leaves it pending.
         /// </summary>
         internal void Release(string orderId)
         {
             _restingLegs.Remove(orderId);
+            if (State == BracketState.Armed && _restingLegs.Count == 0)
+            {
+                State = BracketState.Retired;
+            }
         }
 
         /// <summary>
@@ -184,7 +206,7 @@ namespace Backtester.Broker
                 Handle.TargetOrderId = placements[placements.Count - 1].OrderId;
             }
 
-            _armed = true;
+            State = BracketState.Armed;
             return placements;
         }
 

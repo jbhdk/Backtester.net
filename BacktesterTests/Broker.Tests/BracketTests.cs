@@ -9,8 +9,11 @@ namespace BacktesterTests.Broker.Tests
 {
     public class BracketTests
     {
+        private const string Symbol = "AAPL";
+
         private static Bracket AttachedBracket(BracketRequest request, int quantity = 100)
         {
+            request.Entry = new OrderRequest { Symbol = Symbol, Side = OrderSide.Buy, Type = OrderType.Market };
             Bracket bracket = Bracket.Create(request);
             bracket.AttachEntry("entry-1", quantity);
             return bracket;
@@ -403,60 +406,139 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
-        public void IsLive_PendingBracket_IsTrue()
+        public void State_BracketWhoseEntryIsStillWorking_IsPending()
         {
             Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
 
-            Assert.True(bracket.IsLive);
+            Assert.Equal(BracketState.Pending, bracket.State);
         }
 
         [Fact]
-        public void IsLive_ArmedBracketWithRestingLegs_IsTrue()
+        public void State_BracketWhoseLegsAreResting_IsArmed()
         {
             Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
 
-            Assert.True(bracket.IsLive);
+            Assert.Equal(BracketState.Armed, bracket.State);
         }
 
         [Fact]
-        public void IsLive_AfterOneLegOfTwoFills_IsFalse()
+        public void State_AfterOneLegOfTwoFills_IsRetired()
         {
             Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
-            Assert.False(bracket.IsLive);
+            Assert.Equal(BracketState.Retired, bracket.State);
         }
 
         [Fact]
-        public void IsLive_AfterTheLoneLegOfASingleLegBracketFills_IsFalse()
+        public void State_AfterTheLoneLegOfASingleLegBracketFills_IsRetired()
         {
             Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m });
 
             bracket.Fill(bracket.Handle.StopOrderId);
 
-            Assert.False(bracket.IsLive);
+            Assert.Equal(BracketState.Retired, bracket.State);
         }
 
         [Fact]
-        public void IsLive_AfterBothLegsAreReleased_IsFalse()
+        public void State_AfterEveryRestingLegIsReleased_IsRetired()
         {
             Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
 
             bracket.Release(bracket.Handle.StopOrderId);
             bracket.Release(bracket.Handle.TargetOrderId);
 
-            Assert.False(bracket.IsLive);
+            Assert.Equal(BracketState.Retired, bracket.State);
         }
 
         [Fact]
-        public void IsLive_AfterOnlyOneOfTwoLegsIsReleased_IsTrue()
+        public void State_AfterOnlyOneOfTwoLegsIsReleased_IsStillArmed()
         {
             Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
 
             bracket.Release(bracket.Handle.StopOrderId);
 
-            Assert.True(bracket.IsLive);
+            Assert.Equal(BracketState.Armed, bracket.State);
+        }
+
+        [Fact]
+        public void State_AfterReleasingTheEntryOfAPendingBracket_IsStillPending()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+
+            bracket.Release("entry-1");
+
+            Assert.Equal(BracketState.Pending, bracket.State);
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_PendingBracket_IsEmpty()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.Empty(bracket.RestingLegOrderIds);
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_ArmedTwoLeggedBracket_HoldsBothLegs()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            Assert.Equal(
+                new[] { bracket.Handle.StopOrderId, bracket.Handle.TargetOrderId }.OrderBy(id => id),
+                bracket.RestingLegOrderIds.OrderBy(id => id));
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_ArmedSingleLegBracket_HoldsOnlyTheLegItPlaced()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { TargetPrice = 110m });
+
+            Assert.Equal(bracket.Handle.TargetOrderId, Assert.Single(bracket.RestingLegOrderIds));
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_AfterOneLegIsReleased_HoldsOnlyTheOther()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Release(bracket.Handle.StopOrderId);
+
+            Assert.Equal(bracket.Handle.TargetOrderId, Assert.Single(bracket.RestingLegOrderIds));
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_AfterALegFills_IsEmpty()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            bracket.Fill(bracket.Handle.StopOrderId);
+
+            Assert.Empty(bracket.RestingLegOrderIds);
+        }
+
+        [Fact]
+        public void RestingLegOrderIds_IsASnapshot_SoEveryLegCanBeReleasedWhileWalkingIt()
+        {
+            Bracket bracket = ArmedBracket(new BracketRequest { StopPrice = 95m, TargetPrice = 110m });
+
+            int released = 0;
+            foreach (string legOrderId in bracket.RestingLegOrderIds)
+            {
+                bracket.Release(legOrderId);
+                released++;
+            }
+
+            Assert.Equal(2, released);
+        }
+
+        [Fact]
+        public void Symbol_IsTheSymbolOfTheEntryItBrackets()
+        {
+            Bracket bracket = AttachedBracket(new BracketRequest { StopPrice = 95m });
+
+            Assert.Equal(Symbol, bracket.Symbol);
         }
 
         [Fact]

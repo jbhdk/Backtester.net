@@ -20,15 +20,11 @@ namespace Backtester.Broker
         private readonly ISizingModel _sizingModel;
         // key: order ID → working order (GTC until filled or cancelled)
         private readonly Dictionary<string, Order> _orderBook = new();
-        // The live brackets, in submission order. Each Bracket answers whether it owns a given order ID out
-        // of its own state — its pending entry, or a protective leg it armed and that still rests — so there
-        // is no index to keep in step with the order IDs a bracket mints, and the leg roles and OCO pairings
-        // live with the bracket that decided them rather than in maps kept in step by hand.
+        // The brackets still in play, in submission order. Each Bracket answers out of its own state — which
+        // order IDs it owns, what role each leg plays, which sibling a fill cancels, which legs still rest
+        // and which symbol they guard — so the broker keeps no bracket-keyed maps to hold in step. A bracket
+        // retires once the position it protected is resolved, and is dropped from this list there and then.
         private readonly List<Bracket> _brackets = new();
-        // key: symbol → the OCO protective legs (stop + target order IDs) currently resting against that
-        // symbol's open bracketed position. Lets the broker cancel them when the position is closed by an
-        // order that is not itself a leg (e.g. a strategy Signal exit), not only when a sibling fills.
-        private readonly Dictionary<string, (string stopOrderId, string targetOrderId)> _bracketLegsBySymbol = new();
         // key: entry order ID → the sizing stop (OrderRequest.StopPrice) a risk-sized entry declared but
         // did not arm as a bracket. Stamped onto the entry fill as its EntryStopPrice when the entry armed
         // no bracket, so a signal-exit strategy that risk-sizes still reports R (ADR 0023).
@@ -272,13 +268,9 @@ namespace Backtester.Broker
             {
                 _orderBook.Remove(outcome.SiblingOrderId);
             }
-            if (leg != BracketLeg.None)
-            {
-                // A protective leg filled and closed the position it guarded, so this bracket has nothing
-                // resting against the symbol any more and nothing left to answer for at all.
-                _bracketLegsBySymbol.Remove(symbol);
-                RetireIfDone(bracket);
-            }
+            // A protective leg fill closes the position both legs guarded, so its bracket has retired itself
+            // and leaves the live list; an entry fill leaves the bracket armed and still answering.
+            DropIfRetired(bracket);
 
             decimal rawPrice = fill.Price;
             decimal adjustedPrice = _slippageModel?.Apply(rawPrice, filledOrder.Side) ?? rawPrice;
@@ -326,22 +318,19 @@ namespace Backtester.Broker
             // A fill that is not itself a protective leg but flattens the position (a strategy
             // Signal exit) leaves the bracket's stop and target resting; cancel them so they can
             // never fill from flat on a later bar and open a phantom position.
-            if (leg == BracketLeg.None
-                && IsFlat(symbol)
-                && _bracketLegsBySymbol.TryGetValue(symbol, out (string stopOrderId, string targetOrderId) restingLegs))
+            if (leg == BracketLeg.None && IsFlat(symbol))
             {
-                CancelBracketLegs(symbol, restingLegs);
+                CancelRestingLegs(symbol, bracket);
             }
 
             if (outcome.IsEntry)
             {
                 // Book the legs the bracket decided on — a single-leg bracket placed only the leg it
-                // declared, so the absent leg's order ID stays null. The bracket stays live and holds the
-                // legs itself, so the OCO pairing needs no map: whichever leg fills, the sibling is the
-                // other one the bracket still has resting.
+                // declared, so the absent leg's order ID stays null. The bracket holds the legs itself, so
+                // neither the OCO pairing nor the resting set needs a map: whichever leg fills, the sibling
+                // is the other one the bracket still has resting, and a signal exit asks it what is left.
                 string stopId = stopLeg != null ? PlaceLeg(symbol, stopLeg) : null;
                 string targetId = targetLeg != null ? PlaceLeg(symbol, targetLeg) : null;
-                _bracketLegsBySymbol[symbol] = (stopId, targetId);
 
                 TryFillMarketableLegsAtArm(stopId, targetId, candle, timestamp, trades);
             }
@@ -357,12 +346,45 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Drops a bracket that has no order left in play, so the live list holds only brackets that can
-        /// still answer for one.
+        /// Cancels whatever protective legs still rest against a symbol whose position has just been closed
+        /// by something that was not one of those legs. The bracket guarding the symbol is the one that knows
+        /// them, and releasing its last leg retires it, so no separate per-symbol tracking is kept.
+        ///
+        /// <paramref name="arming"/> is the bracket whose entry just filled, if any: its legs are only now
+        /// being armed and guard the position that fill opened, so it is never the one being closed out.
         /// </summary>
-        private void RetireIfDone(Bracket bracket)
+        private void CancelRestingLegs(string symbol, Bracket arming)
         {
-            if (!bracket.IsLive)
+            Bracket bracket = ArmedBracketOn(symbol, arming);
+            if (bracket == null)
+            {
+                return;
+            }
+
+            foreach (string legOrderId in bracket.RestingLegOrderIds)
+            {
+                Cancel(legOrderId);
+            }
+        }
+
+        /// <summary>
+        /// Returns the bracket whose legs currently guard the given symbol, or null when none does. The most
+        /// recently armed one answers: an earlier bracket whose legs still rest on the same symbol was already
+        /// orphaned when this one armed, and stays orphaned (#132).
+        /// </summary>
+        private Bracket ArmedBracketOn(string symbol, Bracket excluded)
+        {
+            return _brackets.LastOrDefault(candidate =>
+                candidate != excluded && candidate.State == BracketState.Armed && candidate.Symbol == symbol);
+        }
+
+        /// <summary>
+        /// Drops a bracket that has retired — its position resolved, no leg resting, nothing left to answer
+        /// for — so the live list holds only brackets still in play. No-ops for anything else.
+        /// </summary>
+        private void DropIfRetired(Bracket bracket)
+        {
+            if (bracket != null && bracket.State == BracketState.Retired)
             {
                 _brackets.Remove(bracket);
             }
@@ -456,24 +478,6 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Cancels a bracket's resting protective legs and forgets the per-symbol tracking, used when the
-        /// position they protected was closed by an order that is not a leg. A single-leg bracket leaves the
-        /// absent leg's order ID null, so each leg is guarded.
-        /// </summary>
-        private void CancelBracketLegs(string symbol, (string stopOrderId, string targetOrderId) legs)
-        {
-            if (legs.stopOrderId != null)
-            {
-                Cancel(legs.stopOrderId);
-            }
-            if (legs.targetOrderId != null)
-            {
-                Cancel(legs.targetOrderId);
-            }
-            _bracketLegsBySymbol.Remove(symbol);
-        }
-
-        /// <summary>
         /// Appends a protective leg's level at the current bar to the ledger: its initial level when armed
         /// or a trailed/moved level on a modify.
         /// </summary>
@@ -502,7 +506,7 @@ namespace Backtester.Broker
             if (bracket != null)
             {
                 bracket.Release(orderId);
-                RetireIfDone(bracket);
+                DropIfRetired(bracket);
             }
             _sizingStops.Remove(orderId);
         }
