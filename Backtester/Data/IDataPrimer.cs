@@ -9,7 +9,7 @@ namespace Backtester.Data
     /// served entirely from the Cache without contacting the Provider. Separate from
     /// <see cref="IHistoricalDataFetcher"/> so the engine's fetch seam is unaffected (ISP).
     /// </summary>
-    public interface IDataPrimer
+    internal interface IDataPrimer
     {
         /// <summary>
         /// Fetches the full range for each symbol from the Provider, merges it into the Cache, and lowers each

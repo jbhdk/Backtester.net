@@ -35,7 +35,7 @@ namespace Backtester.Data
         private static string BuildMessage(string symbol, int requestedBars, int availableBars, string interval)
         {
             return $"{symbol} {interval}: warmup requested {requestedBars} bars before the Test range start but only " +
-                $"{availableBars} are available above the Coverage floor. Prime an earlier range via IDataPrimer.PrimeAsync " +
+                $"{availableBars} are available above the Coverage floor. Prime an earlier range via HistoricalDataFetcher.PrimeAsync " +
                 $"so at least {requestedBars} warmup bars exist, or request fewer warmup bars.";
         }
     }

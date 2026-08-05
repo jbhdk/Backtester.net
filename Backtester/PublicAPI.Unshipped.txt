@@ -58,3 +58,5 @@ Backtester.Engine.Engine.Engine(Backtester.Data.IWarmupResolvingFetcher fetcher,
 *REMOVED*Backtester.Core.Portfolio.EquityHistory.get -> System.Collections.Generic.IReadOnlyList<Backtester.Core.EquitySnapshot>
 *REMOVED*Backtester.Core.Portfolio.GetPerformanceStats() -> Backtester.Core.PerformanceStats
 *REMOVED*Backtester.Core.Portfolio.GetPerformanceStatsBySymbol() -> System.Collections.Generic.IReadOnlyDictionary<string, Backtester.Core.PerformanceStats>
+*REMOVED*Backtester.Data.IDataPrimer
+*REMOVED*Backtester.Data.IDataPrimer.PrimeAsync(string[] symbols, System.DateTime fromUtc, System.DateTime toUtc, string interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task
