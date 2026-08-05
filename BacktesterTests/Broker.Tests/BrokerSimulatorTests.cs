@@ -1678,6 +1678,86 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(70, portfolio.OpenQuantity("AAPL"));
         }
 
+        [Fact]
+        public void SubmitOrder_WithSizingModel_LeavesCallerRequestedQuantityUnchanged()
+        {
+            // The broker sizes onto its own copy. A strategy that holds a request and reuses it across bars
+            // must not find the sized quantity written back into it: the caller asked for 10 and still has 10,
+            // even though the fixed-size model sized the submission to 100.
+            BrokerSimulator broker = new(new Portfolio(100_000m), sizingModel: new FixedSizeModel { FixedSize = 100 });
+            OrderRequest request = MarketBuy("AAPL", 10);
+
+            broker.SubmitOrder(request);
+
+            Assert.Equal(10, request.Quantity);
+        }
+
+        [Fact]
+        public void SubmitOrder_WithSizingModel_WorkingOrderStillCarriesSizedQuantity()
+        {
+            // The other half of the copy: the submission the broker works is the sized one, so the fill is 100
+            // even though the caller's object still reads 10.
+            BrokerSimulator broker = new(new Portfolio(100_000m), sizingModel: new FixedSizeModel { FixedSize = 100 });
+
+            broker.SubmitOrder(MarketBuy("AAPL", 10));
+            List<Trade> trades = broker.ProcessBar(SliceWithBar("AAPL", 50m)).ToList();
+
+            Assert.Equal(100, Assert.Single(trades).Quantity);
+        }
+
+        [Fact]
+        public void SubmitBracket_OffsetStop_LeavesCallerEntryWithoutSizingOffset()
+        {
+            // The bracket's stop offset reaches the sizer through the entry (ADR 0025 amendment), but it is the
+            // broker's annotation, not the caller's. The strategy's entry request comes back as it went in.
+            BrokerSimulator broker = new(new Portfolio(10_000m));
+            OrderRequest entry = new() { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 };
+
+            broker.SubmitBracket(new BracketRequest { Entry = entry, StopOffset = 5m });
+
+            Assert.Null(entry.StopOffset);
+        }
+
+        [Fact]
+        public void SubmitOrder_QuantitylessReducingOrder_LeavesCallerRequestedQuantityUnchanged()
+        {
+            // A quantity-less close is filled out to the whole open position on the broker's copy. The caller's
+            // request keeps the zero it declared, so the same object can flatten again on a later bar.
+            Portfolio portfolio = new(100_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new FixedSizeModel { FixedSize = 100 });
+            broker.SubmitOrder(MarketBuy("AAPL", 100));
+            broker.ProcessBar(SliceAt("AAPL", 50m, 51m, 49m, 50m, T0));
+
+            OrderRequest flatten = new() { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market };
+            broker.SubmitOrder(flatten);
+            List<Trade> exitTrades = broker.ProcessBar(SliceAt("AAPL", 50m, 51m, 49m, 50m, T0.AddHours(1))).ToList();
+
+            Assert.Equal(0, flatten.Quantity);
+            Assert.Equal(100, Assert.Single(exitTrades).Quantity);
+        }
+
+        [Fact]
+        public void SubmitBracket_RiskSizedOffsetEntry_RoundTripInitialRiskEqualsRiskBudget()
+        {
+            // End to end through the copy: the offset sizes the entry to 20 shares (1% of $10,000 over a $5
+            // offset), and the stop resolved against the fill freezes initial risk at 20 × $5 = $100 — the risk
+            // budget the sizer was given. Sizing and the armed stop stay wired together across the copy.
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio, sizingModel: new RiskPerTradeSizing { RiskFraction = 0.01m });
+
+            broker.SubmitBracket(new BracketRequest
+            {
+                Entry = new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market },
+                StopOffset = 5m
+            });
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            broker.SubmitOrder(new OrderRequest { Symbol = "AAPL", Side = OrderSide.Sell, Type = OrderType.Market });
+            broker.ProcessBar(SliceAt("AAPL", 110m, 112m, 108m, 111m, T0.AddHours(1)));
+
+            Assert.Equal(100m, Assert.Single(portfolio.RoundTrips).InitialRisk);
+        }
+
         /// <summary>Captures every order passed to DetermineFills for inspection; never produces fills.</summary>
         private class CapturingFillModel : IFillModel
         {

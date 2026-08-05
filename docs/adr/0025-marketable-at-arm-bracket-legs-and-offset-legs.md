@@ -77,3 +77,9 @@ preferred when both are present, being the exact realized risk rather than a pre
 risk sizing to fill-relative stops without reintroducing the pre-fill absolute stop this ADR removed; the
 entry's sizing offset is used only to size and does not affect the armed stop or the stamped
 `EntryStopPrice`, which still resolve against the fill.
+
+The offset is carried on the entry the **broker submits**, which is a copy — the broker never writes it
+onto the caller's `OrderRequest` (nor the quantity it sizes). The decision above is unchanged: the offset
+is still the per-share risk, and it still reaches the sizer through the entry. Only the object written to
+is stated precisely, so a Strategy that holds a request and reuses it across bars cannot silently acquire
+a sizing distance or a size it never set.

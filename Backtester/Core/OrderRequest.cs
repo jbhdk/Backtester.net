@@ -37,5 +37,16 @@ namespace Backtester.Core
 
         /// <summary>Gets or sets arbitrary strategy-supplied metadata for this order.</summary>
         public object ClientMetadata { get; set; }
+
+        /// <summary>
+        /// Returns a shallow copy of this request, letting the broker apply its own decisions (the sized
+        /// quantity, a bracket's sizing offset) without writing into an object the caller still holds and
+        /// may reuse on a later bar. Every property carries over, including any added later.
+        /// <see cref="ClientMetadata"/> is shared by reference: the broker never clones a caller's object graph.
+        /// </summary>
+        public OrderRequest Copy()
+        {
+            return (OrderRequest)MemberwiseClone();
+        }
     }
 }

@@ -82,6 +82,16 @@ namespace Backtester.Broker
         /// </summary>
         public string SubmitOrder(OrderRequest request)
         {
+            return SubmitOwnedOrder(request.Copy());
+        }
+
+        /// <summary>
+        /// Submits a request the broker owns outright and may write to — the sized quantity and, for a
+        /// bracket entry, the sizing offset. Every public submission path hands this a copy, so the object
+        /// a strategy holds is never mutated by a submission.
+        /// </summary>
+        private string SubmitOwnedOrder(OrderRequest request)
+        {
             if (_sizingModel != null)
             {
                 if (_portfolio.ReducesOpenPosition(request))
@@ -197,12 +207,14 @@ namespace Backtester.Broker
             // the entry OrderRequest, not this bracket. Surface the offset on the entry so RiskPerTradeSizing
             // can size a fill-relative bracket entry, whose absolute stop is not yet known (it resolves against
             // the fill later, ADR 0025). Left untouched when the caller already set an entry sizing distance.
-            if (request.StopOffset.HasValue && !request.Entry.StopOffset.HasValue)
+            // The offset lands on the broker's own copy of the entry, never on the caller's request.
+            OrderRequest entry = request.Entry.Copy();
+            if (request.StopOffset.HasValue && !entry.StopOffset.HasValue)
             {
-                request.Entry.StopOffset = request.StopOffset;
+                entry.StopOffset = request.StopOffset;
             }
 
-            string entryId = SubmitOrder(request.Entry);
+            string entryId = SubmitOwnedOrder(entry);
             if (entryId == null)
             {
                 return null;
