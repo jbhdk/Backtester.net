@@ -18,9 +18,10 @@ namespace Backtester.Stops
     /// price runs to the <c>trailTightenR x R</c> reference and never loosening; break-even acts as a floor
     /// under the trail. That reference is deliberately independent of the take-profit target: a trade can be
     /// told to reach full stop-tightness well before (or after) its target. Every distance is frozen at entry
-    /// in units of R — the manager reads no ATR and does not adapt to later volatility. A tiny state machine
-    /// (awaiting fill, open, finished) makes the manager robust to the engine's fill/OnBar ordering and lets
-    /// the owning strategy avoid entering on top of a submitted but not-yet-filled bracket.
+    /// in units of R — the manager reads no ATR and does not adapt to later volatility. Where the trade stands
+    /// is the bracket's own business: the manager reads it off the <see cref="BracketHandle"/> rather than
+    /// keeping flags of its own, which makes it robust to the engine's fill/OnBar ordering and lets the owning
+    /// strategy ask the same handle whether it may enter again.
     /// </summary>
     public sealed class TrailingStopManager
     {
@@ -35,8 +36,6 @@ namespace Backtester.Stops
         private readonly bool _enableManagement;
 
         private decimal _initialStopPrice;
-        private bool _opened;
-        private bool _finished;
         private bool _reanchored;
         private bool _armed;
         private decimal _currentStop;
@@ -92,45 +91,38 @@ namespace Backtester.Stops
             _currentStop = initialStopPrice;
         }
 
-        /// <summary>True once the managed trade has opened and then closed; the owner should drop the manager.</summary>
-        public bool IsFinished => _finished;
+        /// <summary>
+        /// True once the bracket has retired — its position resolved by a leg filling or by a signal exit
+        /// cancelling what rested — so the owner should drop the manager. This is the bracket's own
+        /// transition read from the handle, not a flag kept alongside it.
+        /// </summary>
+        public bool IsFinished => _handle.State == BracketState.Retired;
 
         /// <summary>
-        /// Drives the protective-stop lifecycle for the current bar. Records the open transition, re-anchors both
-        /// protective legs onto the fill price the first bar the position is open, detects the close, and — once
-        /// the profit reaches <c>triggerR x R</c> — moves the stop to break-even and arms the ratcheting trail.
-        /// Acting on the bar close introduces no lookahead: a modified stop becomes active on the following bar.
+        /// Drives the protective-stop lifecycle for the current bar. Re-anchors both protective legs onto the
+        /// fill price the first bar the bracket is armed, and — once the profit reaches <c>triggerR x R</c> —
+        /// moves the stop to break-even and arms the ratcheting trail. Acting on the bar close introduces no
+        /// lookahead: a modified stop becomes active on the following bar.
+        ///
+        /// The bracket's own state says when there is anything to do: nothing while it is pending and its
+        /// entry still works, nothing once it has retired and the trade is over.
         /// </summary>
-        /// <param name="inPosition">Whether an open position exists for the trade's symbol on this bar.</param>
         /// <param name="close">The current bar's close, against which profit and the trail are measured.</param>
-        /// <param name="averagePrice">The position's average entry price; ignored while flat.</param>
+        /// <param name="averagePrice">The position's average entry price.</param>
         /// <param name="broker">The broker used to modify the resting stop order.</param>
-        public void OnBar(bool inPosition, decimal close, decimal averagePrice, IBroker broker)
+        public void OnBar(decimal close, decimal averagePrice, IBroker broker)
         {
-            if (_finished)
+            if (_handle.State != BracketState.Armed)
             {
-                return;
-            }
-
-            if (!_opened)
-            {
-                // Still waiting for the entry market order to fill; nothing to manage until it does.
-                if (!inPosition)
-                {
-                    return;
-                }
-
-                _opened = true;
-            }
-            else if (!inPosition)
-            {
-                // The trade opened and has now closed (stop or target hit); retire the manager.
-                _finished = true;
+                // Pending: the entry is still working, so there is no position and no leg to move. Retired:
+                // the position is resolved and the legs are gone.
                 return;
             }
 
             if (_handle.StopOrderId is null)
             {
+                // A target-only bracket arms no stop, so a stop manager has nothing to manage on this trade —
+                // including the re-anchor, which exists to correct the stop and target it would move.
                 return;
             }
 

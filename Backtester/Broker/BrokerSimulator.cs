@@ -165,8 +165,11 @@ namespace Backtester.Broker
 
         /// <summary>
         /// Queues an entry order with one or two attached protective legs (a stop-loss and/or a
-        /// take-profit). Returns a handle whose StopOrderId and TargetOrderId are populated once the
-        /// entry fills — each is null when its leg was not requested. A request that attaches neither leg
+        /// take-profit). Returns the bracket's handle: it reports the bracket's state — pending until the
+        /// entry fills, armed while its legs rest, retired once the position is resolved — and carries the
+        /// order IDs the legs were booked under, each null when its leg was not requested. Ask the state, not
+        /// an ID, whether the entry has filled: a target-only bracket never gets a stop order ID at all. A
+        /// request that attaches neither leg
         /// cannot be constructed (an unprotected entry is a plain <see cref="Submit"/>, not a bracket), so
         /// every request that reaches here describes a legal bracket.
         /// </summary>

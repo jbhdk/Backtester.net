@@ -472,6 +472,14 @@ namespace BacktesterTests.Broker.Tests
         }
 
         [Fact]
+        public void Handle_OfABracketWhoseEntryIsStillWorking_ReportsPending()
+        {
+            Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m));
+
+            Assert.Equal(BracketState.Pending, bracket.Handle.State);
+        }
+
+        [Fact]
         public void RestingLegOrderIds_PendingBracket_IsEmpty()
         {
             Bracket bracket = AttachedBracket(stopLeg: BracketLegSpec.AtPrice(95m), targetLeg: BracketLegSpec.AtPrice(110m));

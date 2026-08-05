@@ -44,9 +44,11 @@ namespace Backtester.Broker
         }
 
         /// <summary>
-        /// Gets the handle held by the strategy that submitted this bracket. Its entry order ID is set when
-        /// the entry is accepted; its stop and target order IDs are filled in by <see cref="Arm"/>, and each
-        /// stays null for a leg this bracket was never given.
+        /// Gets the handle held by the strategy that submitted this bracket — its view onto this bracket from
+        /// outside the broker. It holds this bracket's <see cref="State"/>, so the strategy reads the very
+        /// state the bracket moves through. Its entry order ID is set when the entry is accepted; its stop and
+        /// target order IDs are filled in by <see cref="Arm"/>, and each stays null for a leg this bracket was
+        /// never given.
         /// </summary>
         internal BracketHandle Handle { get; }
 
@@ -57,9 +59,15 @@ namespace Backtester.Broker
         internal string Symbol => _symbol;
 
         /// <summary>
-        /// Gets where this bracket stands: waiting on its entry, protecting an open position, or done.
+        /// Gets where this bracket stands: waiting on its entry, protecting an open position, or done. It is
+        /// stored on the handle rather than beside it, so the strategy holding the handle reads this very
+        /// state and not a copy that could fall behind it.
         /// </summary>
-        internal BracketState State { get; private set; } = BracketState.Pending;
+        internal BracketState State
+        {
+            get => Handle.State;
+            private set => Handle.State = value;
+        }
 
         /// <summary>
         /// Gets a snapshot of the order IDs of the protective legs still resting — none once the bracket has

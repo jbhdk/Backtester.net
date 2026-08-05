@@ -56,15 +56,24 @@ TrailingStopManager manager = new TrailingStopManager(
     enableManagement: true);
 
 // Each bar, for the managed symbol:
-manager.OnBar(inPosition, bar.Close, averageEntryPrice, broker);
+manager.OnBar(bar.Close, averageEntryPrice, broker);
 if (manager.IsFinished)
 {
-    // The trade opened and has closed; drop the manager and become eligible to re-enter.
+    // The bracket has retired; drop the manager and become eligible to re-enter.
 }
 ```
 
+The manager takes the trade's lifecycle from the handle's `State` — it does nothing while the bracket is
+`Pending`, manages the stop while it is `Armed`, and reports `IsFinished` once it is `Retired`. Ask the
+handle the same question before re-entering, rather than testing whether an order id happens to be set.
+
 `enableManagement: false` keeps the bracket fully **static** after re-anchoring — no break-even, no trail —
 so an entry signal's edge can be measured against an unmanaged exit.
+
+## Upgrading within 2.x
+
+`OnBar` no longer takes an `inPosition` flag: the bracket's handle now reports its own state, so the
+caller no longer has to tell the manager whether a position is open. Drop the argument at each call site.
 
 ## Upgrading from 1.x
 

@@ -13,8 +13,8 @@ namespace Backtester.Broker
         string Submit(OrderRequest request);
 
         /// <summary>
-        /// Queues an entry order with attached stop-loss and take-profit. Returns a handle whose
-        /// StopOrderId and TargetOrderId are populated once the entry fills.
+        /// Queues an entry order with attached stop-loss and take-profit. Returns a handle that reports where
+        /// the bracket stands — pending, armed, retired — and carries the order IDs of the legs it armed.
         /// </summary>
         BracketHandle SubmitBracket(BracketRequest request);
 

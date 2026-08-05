@@ -128,6 +128,23 @@ only for its own legs; a Signal exit that flattens the position cancels the rest
 them.
 _Avoid_: OTO, parent/child order.
 
+**Bracket state**:
+Where a Bracket stands in its lifecycle, and the question a strategy asks of one. It is **Pending**
+while its entry works and no leg exists, **Armed** once the entry has filled and at least one leg
+rests, and **Retired** once nothing rests and the position is resolved — by a leg filling, by that
+leg's sibling being taken out with it, or by a Signal exit cancelling what rested. It moves forward
+only. A Bracket owns its state and a strategy reads it from the **Bracket handle**, the same value
+rather than a copy. Never infer it from a leg's order id being populated: a target-only Bracket arms
+no stop leg, so its stop order id is null for the whole life of its position.
+_Avoid_: filled/open/closed (those describe an Order or a Position), active bracket.
+
+**Bracket handle**:
+What submitting a Bracket returns: the strategy's view onto it from outside the broker. It reports
+the **Bracket state** and carries the order ids of the entry and of whichever legs were armed, so a
+strategy asks it the lifecycle question and uses the ids only to move a leg it knows exists. The
+Bracket keeps its state on the handle, so the two cannot drift apart.
+_Avoid_: order ticket, bracket reference, order id bag.
+
 **OCO** (one-cancels-other):
 A group of orders in which one filling automatically cancels the siblings. Prevents the
 stop-loss and take-profit both filling in the same bar. Applies only to a two-legged Bracket; a

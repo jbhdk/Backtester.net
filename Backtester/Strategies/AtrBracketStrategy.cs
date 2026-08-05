@@ -75,10 +75,11 @@ namespace Backtester.Strategies
 
             bool hasPosition = snapshot.Positions.Any(p => p.Symbol == symbol && p.Quantity > 0);
 
-            // Round trip complete: entry had filled (StopOrderId set) but position is now flat
+            // Round trip complete: the bracket's entry had filled (it is no longer pending) but the position
+            // is now flat, so the handle has nothing left to say and the symbol is free to re-enter.
             if (!hasPosition
                 && _handles.TryGetValue(symbol, out BracketHandle existing)
-                && existing.StopOrderId != null)
+                && existing.State != BracketState.Pending)
             {
                 _handles.Remove(symbol);
                 _trailingStop.Remove(symbol);
@@ -99,9 +100,11 @@ namespace Backtester.Strategies
                     _trailingStop[symbol] = stop;
                 }
             }
+            // The stop can only be trailed once the bracket has armed it; this strategy always requests a stop
+            // leg, so an armed bracket of its own always has one resting.
             else if (hasPosition
                      && _handles.TryGetValue(symbol, out BracketHandle h)
-                     && h.StopOrderId != null)
+                     && h.State == BracketState.Armed)
             {
                 decimal newStop = Math.Max(_trailingStop[symbol], bar.Low - _stopAtrMultiple * atr);
                 if (newStop > _trailingStop[symbol])

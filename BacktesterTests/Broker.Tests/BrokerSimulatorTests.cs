@@ -481,6 +481,26 @@ namespace BacktesterTests.Broker.Tests
             Assert.Equal(90m, trades[0].Price);
         }
 
+        /// <summary>
+        /// The handle reports the bracket's own lifecycle, so a target-only bracket — which arms no stop leg
+        /// and therefore never gets a stop order id — still says its entry filled and its leg rests.
+        /// </summary>
+        [Fact]
+        public void SubmitBracket_TargetOnlyEntryFills_HandleReportsArmedWithNoStopOrderId()
+        {
+            Portfolio portfolio = new(10_000m);
+            BrokerSimulator broker = new(portfolio);
+            BracketHandle handle = broker.SubmitBracket(new BracketRequest(
+                new OrderRequest { Symbol = "AAPL", Side = OrderSide.Buy, Type = OrderType.Market, Quantity = 10 },
+                targetLeg: BracketLegSpec.AtPrice(120m)));
+
+            // Market entry fills at Open=100, arming the lone target leg.
+            broker.ProcessBar(SliceAt("AAPL", 100m, 105m, 99m, 103m, T0));
+
+            Assert.Equal(BracketState.Armed, handle.State);
+            Assert.Null(handle.StopOrderId);
+        }
+
         [Fact]
         public void SubmitBracket_ShortEntry_ArmsBuyProtectiveLegs_StopFillsAsBuyCover()
         {
