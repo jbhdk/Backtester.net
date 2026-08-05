@@ -34,3 +34,19 @@ This mirrors ADR 0013: the broker stamps neutral facts about execution; the repo
 - One active bracket per position is assumed for rendering. `OrderId` is carried on each change-point
   so concurrent brackets (scaling in) can be split per-order later without a data migration; until
   then, concurrent brackets within one round trip may draw oddly — a documented limitation.
+
+## Amendment: the Bracket answers for its legs (2026-08)
+
+The decision is unchanged — the broker still appends the same neutral ledger, with the same entries
+in the same order — but two Consequences above describe a broker that no longer exists.
+
+`_legRoles` is gone. The leg-role map, the OCO sibling map and the per-symbol resting-leg map were
+folded into the `Bracket` itself, which owns the legs it armed and the roles it gave them. `Modify`
+now asks the bracket that owns an order for its role, and records a level only when there is one, so
+a plain working order is still ignored. The rule the bullet states holds; only the place the role is
+kept has moved.
+
+A Signal exit *does* cancel the resting legs now: the broker asks the bracket guarding the flattened
+symbol what still rests and cancels each one, so a leg cannot fill from flat and open a phantom
+position. The report's clamp to `ExitTime` is therefore no longer load-bearing, but it stays — a
+round trip's series should end at the round trip regardless of when the legs stop emitting.
