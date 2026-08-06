@@ -100,7 +100,7 @@ namespace BacktesterTests.Data.Tests
         }
 
         [Fact]
-        public async Task FetchAsync_RequestsCandlesEndpoint_WithFromAndToRange()
+        public async Task FetchAsync_RequestsCandlesEndpoint_FromRangeStart()
         {
             StubHttpHandler stub = new(EmptyCandlesJson);
             OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
@@ -108,7 +108,76 @@ namespace BacktesterTests.Data.Tests
             await provider.FetchAsync("EUR_USD", From, To, "1h");
 
             Assert.Contains("from=2021-05-03T00%3A00%3A00", stub.LastRequestUri);
-            Assert.Contains("to=2021-05-04T00%3A00%3A00", stub.LastRequestUri);
+        }
+
+        /// <summary>
+        /// Pages are bounded by count, never by the caller's range end. Oanda derives an implied count from a
+        /// from/to span and rejects the request outright once that span exceeds the cap, so sending the
+        /// caller's own end makes every wide range fail on its very first request.
+        /// </summary>
+        [Fact]
+        public async Task FetchAsync_RequestsCandlesEndpoint_WithCountCapAndNoRangeEnd()
+        {
+            StubHttpHandler stub = new(EmptyCandlesJson);
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
+
+            await provider.FetchAsync("EUR_USD", From, To, "1h");
+
+            Assert.Contains("count=5000", stub.LastRequestUri);
+            Assert.DoesNotContain("to=", stub.LastRequestUri);
+        }
+
+        /// <summary>
+        /// A range far wider than the cap is still requested a page at a time, so it never trips Oanda's
+        /// implied-count limit. Six years of hourly bars is the case that motivated paging by count.
+        /// </summary>
+        [Fact]
+        public async Task FetchAsync_RangeFarWiderThanTheCap_KeepsEveryRequestWithinTheCap()
+        {
+            DateTime baseTime = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            SequencedStubHttpHandler stub = new(
+                BuildCandlesJson(baseTime, count: 5000, stepMinutes: 60),
+                BuildCandlesJson(baseTime.AddHours(5000), count: 3, stepMinutes: 60));
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
+
+            await provider.FetchAsync("EUR_USD", baseTime, baseTime.AddYears(6), "1h");
+
+            Assert.All(stub.RequestUris, uri => Assert.Contains("count=5000", uri));
+            Assert.All(stub.RequestUris, uri => Assert.DoesNotContain("to=", uri));
+        }
+
+        /// <summary>
+        /// Paging by count overshoots the caller's range end, so candles past it are dropped rather than
+        /// returned — the caller asked for a range, not for whole pages.
+        /// </summary>
+        [Fact]
+        public async Task FetchAsync_PageOvershootsRangeEnd_TrimsCandlesPastIt()
+        {
+            DateTime baseTime = new(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            StubHttpHandler stub = new(BuildCandlesJson(baseTime, count: 10, stepMinutes: 60));
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
+
+            List<Candle> candles = new(await provider.FetchAsync("EUR_USD", baseTime, baseTime.AddHours(4), "1h"));
+
+            Assert.Equal(4, candles.Count);
+            Assert.Equal(baseTime.AddHours(3), candles[^1].Timestamp);
+        }
+
+        /// <summary>
+        /// A full page that already reaches the range end ends the walk. Asking again would return the same
+        /// final page for ever, since every candle past the end is trimmed away.
+        /// </summary>
+        [Fact]
+        public async Task FetchAsync_FullPageReachesRangeEnd_StopsRequesting()
+        {
+            DateTime baseTime = new(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            SequencedStubHttpHandler stub = new(BuildCandlesJson(baseTime, count: 5000, stepMinutes: 1));
+            OandaHistoricalDataProvider provider = new(new HttpClient(stub), "test-token");
+
+            List<Candle> candles = new(await provider.FetchAsync("EUR_USD", baseTime, baseTime.AddMinutes(10), "1m"));
+
+            Assert.Single(stub.RequestUris);
+            Assert.Equal(10, candles.Count);
         }
 
         [Fact]

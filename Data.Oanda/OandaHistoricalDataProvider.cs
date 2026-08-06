@@ -15,7 +15,7 @@ namespace Backtester.Data.Oanda
     /// Fetches historical OHLCV candle data for forex instruments from Oanda's v20 REST API.
     /// Targets the Practice environment and requests Mid-price candles by default, both
     /// overridable via <see cref="OandaEnvironment"/> and <see cref="PriceComponent"/>. Wide date
-    /// ranges are chunked to Oanda's 5000-candle-per-response cap and walked until the full range
+    /// ranges are paged to Oanda's 5000-candle-per-request cap and walked until the full range
     /// is covered. <see cref="Candle.Volume"/> is Oanda's per-candle tick count, not consolidated
     /// traded volume — forex spot is decentralized, so no such figure exists.
     /// </summary>
@@ -78,45 +78,62 @@ namespace Backtester.Data.Oanda
         /// <summary>
         /// Fetches candles for the instrument from Oanda's v20 candles endpoint and maps them to
         /// <see cref="Candle"/>. The <paramref name="symbol"/> is used verbatim as Oanda's instrument
-        /// name (e.g. <c>EUR_USD</c>). Oanda caps each response at
+        /// name (e.g. <c>EUR_USD</c>). Oanda caps each request at
         /// <see cref="MaxCandlesPerRequest"/> candles and offers no page-token concept, so a full
         /// response is treated as a signal that more candles remain: <paramref name="fromUtc"/> is
-        /// advanced to just after the last returned candle's timestamp and the chunk is re-requested,
+        /// advanced to just after the last returned candle's timestamp and the next page is requested,
         /// continuing until a short response is seen or <paramref name="toUtc"/> is reached.
+        /// <para>
+        /// Pages are requested by <c>count</c> rather than by a <c>from</c>/<c>to</c> window. Oanda derives
+        /// an implied count from a from/to span and rejects the whole request with
+        /// <c>"Maximum value for 'count' exceeded"</c> when that span covers more than the cap — so a wide
+        /// range cannot be asked for directly, not even to be truncated. Paging by count means the request
+        /// is always within the cap by construction, and candles overshooting <paramref name="toUtc"/> are
+        /// trimmed here instead.
+        /// </para>
         /// </summary>
         public async Task<IEnumerable<Candle>> FetchAsync(string symbol, DateTime fromUtc, DateTime toUtc, string interval, CancellationToken ct = default)
         {
             string granularity = ParseGranularity(interval);
 
             List<Candle> candles = new();
-            DateTime chunkFrom = fromUtc;
-            while (chunkFrom < toUtc)
+            DateTime pageFrom = fromUtc;
+            while (pageFrom < toUtc)
             {
-                List<Candle> chunk = await FetchChunkAsync(symbol, granularity, chunkFrom, toUtc, ct).ConfigureAwait(false);
-                if (chunk.Count == 0)
+                List<Candle> page = await FetchPageAsync(symbol, granularity, pageFrom, ct).ConfigureAwait(false);
+                if (page.Count == 0)
                 {
                     break;
                 }
 
-                candles.AddRange(chunk);
-                if (chunk.Count < MaxCandlesPerRequest)
+                candles.AddRange(page.Where(candle => candle.Timestamp < toUtc));
+
+                // A short page means the instrument has no candles left; a full page whose last candle
+                // already sits at or past the requested end means the range is covered. Either way there is
+                // nothing further to ask for, and asking anyway would loop on the same final page.
+                if (page.Count < MaxCandlesPerRequest || page[^1].Timestamp >= toUtc)
                 {
                     break;
                 }
 
-                chunkFrom = chunk[^1].Timestamp.AddTicks(1);
+                pageFrom = page[^1].Timestamp.AddTicks(1);
             }
 
             return candles;
         }
 
-        /// <summary>Requests a single chunk of candles covering at most <see cref="MaxCandlesPerRequest"/> candles.</summary>
-        private async Task<List<Candle>> FetchChunkAsync(string symbol, string granularity, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
+        /// <summary>
+        /// Requests one page of at most <see cref="MaxCandlesPerRequest"/> candles starting at
+        /// <paramref name="fromUtc"/>. No range end is sent: Oanda accepts only two of
+        /// <c>from</c>/<c>to</c>/<c>count</c>, and pairing <c>from</c> with <c>count</c> is what keeps every
+        /// request inside the cap regardless of how wide the caller's range is. The caller trims the
+        /// overshoot.
+        /// </summary>
+        private async Task<List<Candle>> FetchPageAsync(string symbol, string granularity, DateTime fromUtc, CancellationToken ct)
         {
             string from = Uri.EscapeDataString(FormatTimestamp(fromUtc));
-            string to = Uri.EscapeDataString(FormatTimestamp(toUtc));
             string priceParam = PriceQueryParam(_priceComponent);
-            string url = $"{_baseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price={priceParam}&granularity={granularity}&from={from}&to={to}";
+            string url = $"{_baseUrl}/v3/instruments/{Uri.EscapeDataString(symbol)}/candles?price={priceParam}&granularity={granularity}&from={from}&count={MaxCandlesPerRequest}";
 
             using HttpRequestMessage request = new(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
